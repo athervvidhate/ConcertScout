@@ -2,12 +2,10 @@
 
 import { type SubmitEvent, useState } from "react";
 
-import { ConcertList } from "@/components/concert-list";
+import { Poster } from "@/components/poster";
 import { formatInterpreted } from "@/lib/format";
 import { useSearch } from "@/lib/use-search";
 
-// The most names the loader shows. See docs/specs/04-interface.md.
-const MAX_NAMES = 38;
 
 export function Search() {
   const [text, setText] = useState("");
@@ -19,6 +17,7 @@ export function Search() {
     total,
     candidates,
     recommendations,
+    hasPoster,
     error,
     retryable,
     search,
@@ -62,9 +61,6 @@ export function Search() {
             Showing {recommendations.length} of {total.toLocaleString("en-US")} Concerts
           </p>
         )}
-        {candidates && candidates.names.length > 0 && (
-          <p>Close matches: {candidates.names.slice(0, MAX_NAMES).join(", ")}</p>
-        )}
         {phase === "finished" && !error && recommendations.length === 0 && (
           <p>Nothing qualifies for this Search. Try wider dates or a nearby city.</p>
         )}
@@ -81,7 +77,7 @@ export function Search() {
         </div>
       )}
 
-      <ConcertList recommendations={recommendations} />
+      <Poster candidates={candidates} recommendations={recommendations} searching={phase === "searching"} hasPoster={hasPoster} />
     </>
   );
 }

@@ -16,6 +16,7 @@ export type SearchState = {
   total: number | null;
   candidates: Candidates | null;
   recommendations: Recommendation[];
+  hasPoster: boolean;
   error: string | null;
   retryable: boolean;
 };
@@ -28,6 +29,7 @@ const IDLE: SearchState = {
   total: null,
   candidates: null,
   recommendations: [],
+  hasPoster: false,
   error: null,
   retryable: true,
 };
@@ -61,7 +63,7 @@ export function useSearch() {
         } else if (event === "candidates") {
           setState((state) => ({ ...state, candidates: data }));
         } else if (event === "poster") {
-          setState((state) => ({ ...state, recommendations: data.recommendations }));
+          setState((state) => ({ ...state, hasPoster: true, recommendations: data.recommendations }));
         } else if (event === "done") {
           finished = true;
         } else if (event === "error") {
