@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -281,7 +282,7 @@ def test_candidate_names_use_the_matched_artist_once_then_the_lineup_then_the_co
 
 
 def test_matching_imports_nothing_that_can_reach_a_network() -> None:
-    source = open(matching.__file__, encoding="utf-8").read()  # noqa: SIM115
+    source = Path(matching.__file__).read_text(encoding="utf-8")
 
     assert "import httpx" not in source
     assert "redis" not in source
