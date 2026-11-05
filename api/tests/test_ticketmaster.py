@@ -6,6 +6,7 @@ import pytest
 
 from concert_scout.models import Price
 from concert_scout.sources import ticketmaster
+from concert_scout.sources.http import USER_AGENT
 from concert_scout.sources.ticketmaster import (
     TicketmasterError,
     find_concerts,
@@ -13,7 +14,7 @@ from concert_scout.sources.ticketmaster import (
     parse_concert,
     parse_concerts,
 )
-from tests.conftest import tm_body, tm_record
+from tests.conftest import CHICAGO, tm_body, tm_record
 
 
 def with_start(**start: Any) -> dict[str, Any]:
@@ -93,7 +94,7 @@ def test_a_city_with_no_listings_has_no_concerts() -> None:
     assert parse_concerts(tm_body()) == []
 
 
-async def test_find_concerts_queries_music_in_the_city_and_identifies_the_app() -> None:
+async def test_find_concerts_queries_music_around_the_place_and_identifies_the_app() -> None:
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -101,20 +102,45 @@ async def test_find_concerts_queries_music_in_the_city_and_identifies_the_app() 
         return httpx.Response(200, json=tm_body(tm_record()))
 
     async with make_client("test-key", httpx.MockTransport(handler)) as client:
-        concerts = await find_concerts(client, "Chicago")
+        concerts = await find_concerts(client, CHICAGO)
 
     assert len(concerts) == 1
     request = requests[0]
     assert request.url.path == "/discovery/v2/events.json"
     assert dict(request.url.params) == {
         "apikey": "test-key",
-        "city": "Chicago",
+        "geoPoint": "dp3wnp1yf",
+        "radius": "50",
+        "unit": "miles",
         "segmentName": "Music",
         "size": str(ticketmaster.PAGE_SIZE),
         "sort": "date,asc",
     }
-    assert request.headers["user-agent"] == ticketmaster.USER_AGENT
+    assert request.headers["user-agent"] == USER_AGENT
     assert "@" not in request.headers["user-agent"]
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "window"),
+    [
+        (dt.date(2026, 11, 6), dt.date(2026, 11, 15), "2026-11-06T00:00:00,2026-11-15T23:59:59"),
+        (dt.date(2026, 11, 6), None, "2026-11-06T00:00:00,*"),
+        (None, dt.date(2026, 11, 15), "*,2026-11-15T23:59:59"),
+    ],
+)
+async def test_find_concerts_filters_on_the_venues_local_dates(
+    start: dt.date | None, end: dt.date | None, window: str
+) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=tm_body())
+
+    async with make_client("test-key", httpx.MockTransport(handler)) as client:
+        await find_concerts(client, CHICAGO, start, end)
+
+    assert requests[0].url.params["localStartDateTime"] == window
 
 
 async def test_find_concerts_retries_a_temporary_failure() -> None:
@@ -124,7 +150,7 @@ async def test_find_concerts_retries_a_temporary_failure() -> None:
         return next(responses)
 
     async with make_client("test-key", httpx.MockTransport(handler)) as client:
-        concerts = await find_concerts(client, "Chicago")
+        concerts = await find_concerts(client, CHICAGO)
 
     assert len(concerts) == 1
 
@@ -135,7 +161,7 @@ async def test_find_concerts_reports_failures_without_the_api_key() -> None:
 
     async with make_client("test-key", httpx.MockTransport(handler)) as client:
         with pytest.raises(TicketmasterError) as caught:
-            await find_concerts(client, "Chicago")
+            await find_concerts(client, CHICAGO)
 
     assert "test-key" not in str(caught.value)
     assert caught.value.__cause__ is None
@@ -147,4 +173,4 @@ async def test_find_concerts_reports_an_unreadable_response() -> None:
 
     async with make_client("test-key", httpx.MockTransport(handler)) as client:
         with pytest.raises(TicketmasterError):
-            await find_concerts(client, "Chicago")
+            await find_concerts(client, CHICAGO)
