@@ -2,7 +2,7 @@
 
 import math
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
@@ -22,10 +22,14 @@ NARROW_GENRE_WEIGHT = 0.3
 NARROW_GENRE_ARTISTS = 30
 SHORTLIST_SIZE = 60
 
-ERA_TAG = re.compile(r"\d{2,4}s?( music)?|(19|20)\d\d.*|\w+ies")
+ERA_TAG = re.compile(r"\d{2,4}s?( music)?|(19|20)\d\d.*|(fif|six|seven|eigh|nine)ties")
 BLOCKED_TAGS = {
     "gen z",
     "seen live",
+    "top 100",
+    "queer",
+    "female vocals",
+    "male vocals",
     "american",
     "australian",
     "belgian",
@@ -46,6 +50,8 @@ BLOCKED_TAGS = {
     "spanish",
     "swedish",
     "uk",
+    "united kingdom",
+    "united states",
     "usa",
     "welsh",
 }
@@ -75,11 +81,15 @@ class Taste:
 
 
 class Match(BaseModel):
-    """Why a Concert scored. `via` names the seed behind the signal, when there is one."""
+    """Why a Concert scored. `via` names the seed behind the signal, when there is one.
+
+    `score` is the best signal alone. `support` adds up every signal the Artist has, to order ties.
+    """
 
     artist: str
     signal: Signal
     score: float
+    support: float = 0
     via: str | None = None
 
 
@@ -112,18 +122,20 @@ def score_concerts(
             _tag_match(artist, tags.get(artist.mbid or "", set()), tag_sets, weights),
             _genre_match(artist, genres, sizes),
         ]
-        return max((m for m in options if m), key=lambda m: m.score, default=None)
+        matches = [m for m in options if m]
+        top = max(matches, key=lambda m: m.score, default=None)
+        return top and top.model_copy(update={"support": sum(m.score for m in matches)})
 
     def candidate(concert: Concert) -> Candidate:
         matches = (m for m in map(best, concert.artists) if m)
-        return Candidate(concert=concert, match=max(matches, key=lambda m: m.score, default=None))
+        return Candidate(concert=concert, match=max(matches, key=_rank, default=None))
 
     return [candidate(concert) for concert in concerts]
 
 
 def shortlist(candidates: Sequence[Candidate]) -> list[Candidate]:
     """The top Concerts by score. Ties keep their order, so with no Taste the soonest stay first."""
-    ranked = sorted(candidates, key=lambda c: c.match.score if c.match else 0, reverse=True)
+    ranked = sorted(candidates, key=lambda c: _rank(c.match), reverse=True)
     return ranked[:SHORTLIST_SIZE]
 
 
@@ -140,28 +152,42 @@ def candidate_names(candidates: Sequence[Candidate]) -> list[str]:
     return list(dict.fromkeys(names))
 
 
+def _rank(match: Match | None) -> tuple[float, float]:
+    return (match.score, match.support) if match else (0, 0)
+
+
 def _key(artist: Artist) -> str:
     return artist.mbid or normalize(artist.name)
 
 
 def _known_artists(taste: Taste) -> dict[str, Match]:
-    """The seeds and their neighbours, under both ID and normalized name, best score kept."""
-    matches: list[tuple[str | None, Match]] = [
-        (seed.mbid, Match(artist=seed.name, signal="seed", score=SEED_WEIGHT, via=seed.name))
-        for seed in taste.seeds
-    ]
-    for neighbour in taste.neighbours:
-        signal: Signal = "one_hop" if neighbour.hops == 1 else "two_hops"
-        weight = ONE_HOP_WEIGHT if neighbour.hops == 1 else TWO_HOP_WEIGHT
-        score = weight * neighbour.closeness
-        match = Match(artist=neighbour.name, signal=signal, score=score, via=neighbour.seed)
-        matches.append((neighbour.mbid, match))
+    """The seeds and their neighbours, under both ID and normalized name, best score kept.
 
+    Listening counts fall off fast, so one hop takes a square root to keep good neighbours in
+    range. A lone two-hop path is often noise, so two hops add up every path to the Artist.
+    """
     known: dict[str, Match] = {}
-    for mbid, match in matches:
+
+    def keep(mbid: str | None, match: Match) -> None:
         for key in (mbid, normalize(match.artist)):
             if key and (key not in known or known[key].score < match.score):
                 known[key] = match
+
+    paths: defaultdict[str, list[Neighbour]] = defaultdict(list)
+    for seed in taste.seeds:
+        keep(seed.mbid, Match(artist=seed.name, signal="seed", score=SEED_WEIGHT, via=seed.name))
+    for neighbour in taste.neighbours:
+        if neighbour.hops == 1:
+            score = ONE_HOP_WEIGHT * math.sqrt(neighbour.closeness)
+            match = Match(artist=neighbour.name, signal="one_hop", score=score, via=neighbour.seed)
+            keep(neighbour.mbid, match)
+        else:
+            paths[neighbour.mbid or normalize(neighbour.name)].append(neighbour)
+    for group in paths.values():
+        strongest = max(group, key=lambda n: n.closeness)
+        score = TWO_HOP_WEIGHT * min(1, sum(n.closeness for n in group))
+        match = Match(artist=strongest.name, signal="two_hops", score=score, via=strongest.seed)
+        keep(strongest.mbid, match)
     return known
 
 
@@ -198,9 +224,10 @@ def _tag_match(
         shared = tags & wanted
         if not shared:
             continue
-        # Rarity counts twice: what share of the Taste is met, and how much that tag says at all.
+        # How much of the Taste is met, discounted by how much the rarest shared tag says at all.
         total = sum(weights[tag] for tag in wanted) or 1
-        score = TAGS_WEIGHT * sum(weights[tag] ** 2 for tag in shared) / total
+        met = sum(weights[tag] for tag in shared) / total
+        score = TAGS_WEIGHT * met * max(weights[tag] for tag in shared)
         if score > 0 and (best is None or score > best.score):
             best = Match(artist=artist.name, signal="tags", score=score, via=via)
     return best
