@@ -138,3 +138,9 @@ api/concert_scout/
 ```
 
 `matching.py` makes no network calls, so tests can run it on fixtures.
+
+### Qualification and place-only Searches
+
+The ranker omits poor fits and assembly excludes scores below 50. If ranking fails, only matches with a score strictly greater than 0.3 qualify; genre-only and unmatched Concerts do not fill a Poster. Neutral fallback reasons describe the actual match signal. These thresholds are initial values for evaluation.
+
+For a place-only Search, use Concerts whose headliner has a MusicBrainz ID in Ticketmaster as a practical proxy for notability. Keep the first Concert per headliner, soonest first, up to eight. This proxy may omit notable Artists without linked IDs.

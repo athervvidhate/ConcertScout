@@ -172,7 +172,9 @@ def model_returning(*outputs: dict[str, Any]) -> FunctionModel:
     """A model that answers each request with the next output, without any network."""
     remaining = iter(outputs)
 
-    def respond(_: list[ModelMessage], __: AgentInfo) -> ModelResponse:
+    def respond(_: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        if info.instructions and "Choose the Concerts" in info.instructions:
+            raise RuntimeError("ranker unavailable")
         return ModelResponse(parts=[TextPart(json.dumps(next(remaining)))])
 
     return FunctionModel(respond)
