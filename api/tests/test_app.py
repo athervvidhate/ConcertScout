@@ -14,11 +14,16 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from concert_scout import limits
 from concert_scout.app import create_app
 from concert_scout.config import Settings
-from concert_scout.pipeline import POSTER_SIZE
+from concert_scout.matching import SHORTLIST_SIZE
 from tests.conftest import (
+    TYLER_MBID,
     UPCOMING,
     geoapify_result,
     interpretation,
+    lastfm_similar,
+    lb_metadata,
+    lb_similar,
+    mb_artist,
     model_returning,
     tm_body,
     upcoming_record,
@@ -34,22 +39,36 @@ def routed(
     geoapify: dict[str, Any] | None = None,
     tm_status: int = 200,
     geo_status: int = 200,
+    musicbrainz: dict[str, Any] | None = None,
+    similar: list[dict[str, Any]] | None = None,
+    tags: list[dict[str, Any]] | None = None,
+    listenbrainz_status: int = 200,
 ) -> Handler:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.host == "api.geoapify.com":
             return httpx.Response(geo_status, json=geoapify or {"results": [geoapify_result()]})
+        if request.url.host == "musicbrainz.org":
+            return httpx.Response(200, json=musicbrainz or {"artists": []})
+        if request.url.host == "labs.api.listenbrainz.org":
+            return httpx.Response(listenbrainz_status, json=similar or [])
+        if request.url.host == "api.listenbrainz.org":
+            return httpx.Response(listenbrainz_status, json=tags or [])
         return httpx.Response(tm_status, json=ticketmaster or tm_body(upcoming_record()))
 
     return handler
 
 
 def api_for(
-    handler: Handler, model: Model | None = None, redis: FakeAsyncRedis | None = None
+    handler: Handler,
+    model: Model | None = None,
+    redis: FakeAsyncRedis | None = None,
+    lastfm_key: str | None = None,
 ) -> httpx.AsyncClient:
     settings = Settings(
         tm_key=SecretStr("test-key"),
         anthropic_api_key=SecretStr("test-key"),
         geoapify_key=SecretStr("test-key"),
+        lastfm_key=SecretStr(lastfm_key) if lastfm_key else None,
         cors_origins=[ALLOWED_ORIGIN],
     )
     model = model or model_returning(interpretation(place="Chicago"))
@@ -102,14 +121,19 @@ async def test_search_streams_each_step_then_the_poster() -> None:
         "interpreted",
         "status",
         "status",
+        "status",
         "pool",
+        "status",
+        "candidates",
         "poster",
         "done",
     ]
     assert [data["step"] for name, data in events if name == "status"] == [
         "interpret",
         "resolve",
+        "resolve",
         "pool",
+        "match",
     ]
     assert events[1][1] == {
         "place": "Chicago",
@@ -117,16 +141,18 @@ async def test_search_streams_each_step_then_the_poster() -> None:
         "end": str(UPCOMING),
         "artists": ["Khruangbin"],
     }
-    assert events[3][1] == {
+    assert events[3][1]["message"] == "Finding Artists like Khruangbin"
+    assert events[4][1] == {
         "step": "pool",
         "message": "Looking for Concerts near Chicago, IL, United States of America",
     }
-    assert events[4][1] == {"total": 1}
-    assert events[5][1]["recommendations"][0]["concert"] == {
+    assert events[5][1] == {"total": 1}
+    assert events[7][1] == {"names": ["Khruangbin"], "total": 1}
+    assert events[8][1]["recommendations"][0]["concert"] == {
         "id": "vvG18Z_ueUZbii",
         "name": "Khruangbin: The Ether Tour",
         "url": "https://www.ticketmaster.com/event/040064D0B6018B2C",
-        "artists": ["Khruangbin", "Men I Trust"],
+        "artists": [{"name": "Khruangbin"}, {"name": "Men I Trust"}],
         "date": str(UPCOMING),
         "time": "19:30:00",
         "venue": "The Salt Shed",
@@ -134,8 +160,8 @@ async def test_search_streams_each_step_then_the_poster() -> None:
         "region": "IL",
         "price": {"min": 45.5, "max": 120.0, "currency": "USD"},
     }
-    assert events[6][1] == {}
-    params = [request.url.params for request in requests[1:]]
+    assert events[9][1] == {}
+    params = [r.url.params for r in requests if r.url.host == "app.ticketmaster.com"]
     assert sorted("keyword" in p for p in params) == [False, True]
     assert all(p["geoPoint"] == "dp3wn" for p in params)
 
@@ -160,7 +186,7 @@ async def test_a_repeat_search_makes_no_ticketmaster_calls() -> None:
     assert dict(parse_sse(second.text))["poster"] == dict(parse_sse(first.text))["poster"]
 
 
-async def test_the_poster_stays_small_while_the_pool_event_counts_everything() -> None:
+async def test_the_shortlist_cuts_the_pool_while_the_pool_event_counts_everything() -> None:
     records = [upcoming_record(id=str(n)) for n in range(120)]
 
     async with api_for(routed(tm_body(*records))) as api:
@@ -168,7 +194,184 @@ async def test_the_poster_stays_small_while_the_pool_event_counts_everything() -
 
     events = dict(parse_sse(response.text))
     assert events["pool"] == {"total": 120}
-    assert len(events["poster"]["recommendations"]) == POSTER_SIZE
+    assert events["candidates"]["total"] == SHORTLIST_SIZE
+    assert len(events["poster"]["recommendations"]) == SHORTLIST_SIZE
+
+
+async def test_a_search_with_no_taste_calls_no_similarity_source() -> None:
+    hosts: set[str] = set()
+    respond = routed()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        hosts.add(request.url.host)
+        return respond(request)
+
+    async with api_for(handler) as api:
+        response = await api.post("/search", json={"text": "Chicago"})
+
+    assert hosts == {"api.geoapify.com", "app.ticketmaster.com"}
+    steps = [data["step"] for name, data in parse_sse(response.text) if name == "status"]
+    assert "match" not in steps
+
+
+def attraction(name: str, mbid: str | None = None, subgenre: str | None = None) -> dict[str, Any]:
+    fields: dict[str, Any] = {"name": name}
+    if mbid:
+        fields["externalLinks"] = {"musicbrainz": [{"id": mbid}]}
+    if subgenre:
+        fields["classifications"] = [{"subGenre": {"name": subgenre}}]
+    return fields
+
+
+def concert_of(id: str, *attractions: dict[str, Any]) -> dict[str, Any]:
+    record = upcoming_record(id=id, name=f"Concert {id}")
+    record["_embedded"]["attractions"] = list(attractions)
+    return record
+
+
+def poster_ids(events: list[tuple[str, Any]]) -> list[str]:
+    return [r["concert"]["id"] for r in dict(events)["poster"]["recommendations"]]
+
+
+TYLER_SEARCH = interpretation(artists=["Tyler Childers"], place="Chicago")
+TYLER_POOL = tm_body(
+    concert_of("radio", attraction("Generic Radio Act", "radio-mbid")),
+    concert_of("tagged", attraction("The Jayhawks", "jayhawks-mbid")),
+    concert_of("similar", attraction("Hiss Golden Messenger", "hiss-mbid")),
+    concert_of("by-name", attraction("Colter Wall")),
+    concert_of("unrelated", attraction("Unrelated")),
+)
+
+
+async def test_a_taste_orders_the_shortlist_and_fills_candidates() -> None:
+    similar = lb_similar(("Hiss Golden Messenger", "hiss-mbid"), ("Colter Wall", "colter-mbid"))
+    respond = routed(
+        TYLER_POOL,
+        musicbrainz={"artists": [mb_artist()]},
+        similar=similar,
+        tags=lb_metadata(
+            **{
+                "jayhawks-mbid": ["alternative country", "americana", "2020s"],
+                "radio-mbid": ["country", "seen live"],
+                "hiss-mbid": ["americana"],
+                "other": ["pop"],
+            }
+        ),
+    )
+
+    async with api_for(respond, model_returning(TYLER_SEARCH)) as api:
+        response = await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+
+    events = parse_sse(response.text)
+    ids = poster_ids(events)
+    assert ids[:2] == ["similar", "by-name"]
+    assert ids.index("tagged") < ids.index("radio") < ids.index("unrelated")
+    assert dict(events)["candidates"]["names"][0] == "Hiss Golden Messenger"
+    assert dict(events)["candidates"]["total"] == 5
+
+
+async def test_with_listenbrainz_down_a_search_still_shortlists() -> None:
+    respond = routed(
+        tm_body(
+            concert_of("seed", attraction("Tyler Childers", subgenre="Americana")),
+            concert_of("genre", attraction("Lydia Loveless", subgenre="Americana")),
+            concert_of("other", attraction("Unrelated", subgenre="Metal")),
+        ),
+        musicbrainz={"artists": [mb_artist()]},
+        listenbrainz_status=404,
+    )
+
+    async with api_for(respond, model_returning(TYLER_SEARCH)) as api:
+        response = await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+
+    events = parse_sse(response.text)
+    assert "error" not in dict(events)
+    assert poster_ids(events) == ["seed", "genre", "other"]
+
+
+async def test_with_listenbrainz_down_last_fm_supplies_the_neighbours() -> None:
+    respond = routed(TYLER_POOL, musicbrainz={"artists": [mb_artist()]}, listenbrainz_status=404)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "ws.audioscrobbler.com":
+            return httpx.Response(200, json=lastfm_similar("Colter Wall"))
+        return respond(request)
+
+    model = model_returning(TYLER_SEARCH)
+    async with api_for(handler, model, lastfm_key="lastfm-key") as api:
+        response = await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+
+    assert poster_ids(parse_sse(response.text))[0] == "by-name"
+    assert "lastfm-key" not in response.text
+
+
+async def test_with_musicbrainz_down_the_seed_still_joins_by_name() -> None:
+    respond = routed(tm_body(concert_of("seed", attraction("Tyler Childers"))))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "musicbrainz.org":
+            return httpx.Response(404)
+        return respond(request)
+
+    async with api_for(handler, model_returning(TYLER_SEARCH)) as api:
+        response = await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+
+    events = parse_sse(response.text)
+    assert "error" not in dict(events)
+    assert dict(events)["candidates"]["names"] == ["Tyler Childers"]
+
+
+async def test_a_repeat_search_asks_no_similarity_source_again() -> None:
+    calls: list[str] = []
+    respond = routed(
+        TYLER_POOL,
+        musicbrainz={"artists": [mb_artist()]},
+        similar=lb_similar(("Colter Wall", "colter-mbid")),
+        tags=lb_metadata(**{"jayhawks-mbid": ["americana"]}),
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.host)
+        return respond(request)
+
+    model = model_returning(TYLER_SEARCH, TYLER_SEARCH)
+    async with api_for(handler, model) as api:
+        await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+        first = len(calls)
+        await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+
+    assert len(calls) == first
+
+
+async def test_a_taste_with_no_place_looks_up_the_top_fifteen_similar_artists() -> None:
+    similar = lb_similar(*((f"Artist {n}", f"m{n}") for n in range(20)))
+    requests: list[httpx.Request] = []
+    respond = routed(tm_body(), musicbrainz={"artists": [mb_artist()]}, similar=similar)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return respond(request)
+
+    model = model_returning(interpretation(artists=["Tyler Childers"]))
+    async with api_for(handler, model) as api:
+        response = await api.post("/search", json={"text": "Tyler Childers"})
+
+    keywords = [r.url.params["keyword"] for r in requests if r.url.host == "app.ticketmaster.com"]
+    assert sorted(keywords) == sorted(["Tyler Childers", *(f"Artist {n}" for n in range(15))])
+    assert len(requests) == 1 + 16 + len(keywords)  # MusicBrainz, every hop, then Ticketmaster
+    assert "error" not in dict(parse_sse(response.text))
+
+
+async def test_the_app_starts_and_serves_with_no_last_fm_key() -> None:
+    respond = routed(TYLER_POOL, musicbrainz={"artists": [mb_artist(id=TYLER_MBID)]})
+
+    async with api_for(respond, model_returning(TYLER_SEARCH)) as api:
+        response = await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+
+    assert "error" not in dict(parse_sse(response.text))
+
+
+POOL_MESSAGE = "Looking for Concerts by Khruangbin and similar Artists"
 
 
 async def test_an_artist_with_no_place_is_looked_up_directly_anywhere() -> None:
@@ -184,11 +387,12 @@ async def test_an_artist_with_no_place_is_looked_up_directly_anywhere() -> None:
         response = await api.post("/search", json={"text": "Khruangbin"})
 
     events = parse_sse(response.text)
-    assert [name for name, _ in events][-3:] == ["pool", "poster", "done"]
-    assert dict(events)["status"]["message"] == "Looking for Concerts by Khruangbin"
+    assert [name for name, _ in events][-3:] == ["candidates", "poster", "done"]
+    assert ("status", {"step": "pool", "message": POOL_MESSAGE}) in events
     assert dict(events)["pool"] == {"total": 1}
-    assert len(requests) == 1
-    assert "geoPoint" not in requests[0].url.params
+    ticketmaster = [r for r in requests if r.url.host == "app.ticketmaster.com"]
+    assert len(ticketmaster) == 1
+    assert "geoPoint" not in ticketmaster[0].url.params
 
 
 async def test_the_daily_limit_says_when_to_come_back_and_calls_ticketmaster_no_more() -> None:

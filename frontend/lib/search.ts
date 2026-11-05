@@ -4,12 +4,14 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 export type Price = { min: number; max: number; currency: string };
 
+export type Artist = { name: string };
+
 // A Concert's facts. Anything the source does not report is left out.
 export type Concert = {
   id: string;
   name: string;
   url: string;
-  artists: string[];
+  artists: Artist[];
   date?: string;
   time?: string;
   venue?: string;
@@ -23,6 +25,9 @@ export type Recommendation = { concert: Concert };
 // What the interpreter read from a Search. Anything it did not find is left out.
 export type Interpreted = { place?: string; start?: string; end?: string; artists: string[] };
 
+// Who made the shortlist. `total` counts Concerts, and an Artist's names appear once.
+export type Candidates = { names: string[]; total: number };
+
 export type SearchError = { code: string; message: string; retry_after?: number };
 
 // The visitor has to change these Searches, so running one again cannot help.
@@ -32,6 +37,7 @@ export type SearchEvent =
   | { event: "status"; data: { step: string; message: string } }
   | { event: "interpreted"; data: Interpreted }
   | { event: "pool"; data: { total: number } }
+  | { event: "candidates"; data: Candidates }
   | { event: "poster"; data: { recommendations: Recommendation[] } }
   | { event: "error"; data: SearchError }
   | { event: "done"; data: Record<string, never> };

@@ -54,3 +54,20 @@ async def test_the_last_call_of_the_day_is_allowed_and_the_next_is_refused() -> 
 
 async def test_a_redis_outage_never_stops_a_search() -> None:
     await limits.ticketmaster_call(BrokenRedis())
+
+
+async def test_musicbrainz_calls_keep_a_full_gap_across_callers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(limits, "MUSICBRAINZ_GAP", dt.timedelta(milliseconds=30))
+    redis = FakeAsyncRedis()
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+
+    await asyncio.gather(*(limits.musicbrainz_call(redis) for _ in range(4)))
+
+    assert loop.time() - started >= 3 * 0.03 - 0.01
+
+
+async def test_musicbrainz_calls_pace_themselves_without_redis() -> None:
+    await limits.musicbrainz_call(BrokenRedis())

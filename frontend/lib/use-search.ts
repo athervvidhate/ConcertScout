@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  type Candidates,
   type Interpreted,
   NEEDS_A_NEW_SEARCH,
   type Recommendation,
@@ -13,6 +14,7 @@ export type SearchState = {
   status: string | null;
   interpreted: Interpreted | null;
   total: number | null;
+  candidates: Candidates | null;
   recommendations: Recommendation[];
   error: string | null;
   retryable: boolean;
@@ -24,6 +26,7 @@ const IDLE: SearchState = {
   status: null,
   interpreted: null,
   total: null,
+  candidates: null,
   recommendations: [],
   error: null,
   retryable: true,
@@ -55,6 +58,8 @@ export function useSearch() {
           setState((state) => ({ ...state, interpreted: data }));
         } else if (event === "pool") {
           setState((state) => ({ ...state, total: data.total }));
+        } else if (event === "candidates") {
+          setState((state) => ({ ...state, candidates: data }));
         } else if (event === "poster") {
           setState((state) => ({ ...state, recommendations: data.recommendations }));
         } else if (event === "error") {

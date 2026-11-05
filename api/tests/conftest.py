@@ -15,12 +15,14 @@ from concert_scout.sources import ticketmaster
 models.ALLOW_MODEL_REQUESTS = False
 
 UPCOMING = dt.date.today() + dt.timedelta(days=14)
+TYLER_MBID = "9947e874-ddd0-4e1a-b0d4-a76f6532fe45"
 CHICAGO = Place(name="Chicago, IL, United States of America", lat=41.8755616, lon=-87.6244212)
 
 
 @pytest.fixture(autouse=True)
 def fast_limiter(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(limits, "SLOT_SECONDS", 0.001)
+    monkeypatch.setattr(limits, "MUSICBRAINZ_GAP", dt.timedelta(milliseconds=1))
 
 
 def tm_record(**overrides: Any) -> dict[str, Any]:
@@ -96,6 +98,62 @@ def geoapify_result(**overrides: Any) -> dict[str, Any]:
         "rank": {"confidence": 1, "match_type": "full_match"},
     }
     return result | overrides
+
+
+def mb_artist(**overrides: Any) -> dict[str, Any]:
+    """A MusicBrainz search hit, in the shape the live API returns."""
+    artist: dict[str, Any] = {
+        "id": TYLER_MBID,
+        "name": "Tyler Childers",
+        "sort-name": "Childers, Tyler",
+        "score": 100,
+        "type": "Person",
+        "country": "US",
+        "tags": [
+            {"count": 3, "name": "country"},
+            {"count": 4, "name": "americana"},
+            {"count": 3, "name": "alternative country"},
+        ],
+    }
+    return artist | overrides
+
+
+def lb_similar(*names_and_mbids: tuple[str, str], top_score: int = 300) -> list[dict[str, Any]]:
+    """A ListenBrainz Labs similar-artists body, closest first, in the live shape."""
+    return [
+        {
+            "artist_mbid": mbid,
+            "name": name,
+            "comment": "",
+            "type": "Person",
+            "gender": "Male",
+            "score": top_score // (n + 1),
+            "reference_mbid": TYLER_MBID,
+        }
+        for n, (name, mbid) in enumerate(names_and_mbids)
+    ]
+
+
+def lb_metadata(**tags_by_mbid: list[str]) -> list[dict[str, Any]]:
+    """A ListenBrainz artist metadata body with `inc=tag`, in the live shape."""
+    return [
+        {
+            "artist_mbid": mbid,
+            "mbid": mbid,
+            "name": "An Artist",
+            "tag": {"artist": [{"artist_mbid": mbid, "count": 1, "tag": t} for t in tags]},
+        }
+        for mbid, tags in tags_by_mbid.items()
+    ]
+
+
+def lastfm_similar(*names: str) -> dict[str, Any]:
+    """A Last.fm artist.getSimilar body, in the shape its docs show. `match` is a string."""
+    artists = [
+        {"name": name, "mbid": "", "match": str(1 - n / 10), "url": "https://www.last.fm/music/x"}
+        for n, name in enumerate(names)
+    ]
+    return {"similarartists": {"artist": artists, "@attr": {"artist": "Tyler Childers"}}}
 
 
 def interpretation(**overrides: Any) -> dict[str, Any]:

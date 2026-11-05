@@ -41,3 +41,23 @@ async def test_a_redis_outage_never_raises() -> None:
     await cache.write(redis, "key", CHICAGO, TTL)
 
     assert await cache.read(redis, "key", Place) is None
+
+
+async def test_many_values_write_and_read_back_in_one_go() -> None:
+    redis = FakeAsyncRedis()
+
+    await cache.write_many(redis, {"a": CHICAGO, "b": CHICAGO}, TTL)
+
+    assert await cache.read_many(redis, ["a", "b", "missing"], Place) == {
+        "a": CHICAGO,
+        "b": CHICAGO,
+    }
+    assert 0 < await redis.ttl("b") <= TTL.total_seconds()
+
+
+async def test_reading_no_keys_asks_redis_for_nothing() -> None:
+    assert await cache.read_many(BrokenRedis(), [], Place) == {}
+
+
+async def test_a_redis_failure_reads_many_as_all_misses() -> None:
+    assert await cache.read_many(BrokenRedis(), ["a"], Place) == {}

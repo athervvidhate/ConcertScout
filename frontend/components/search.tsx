@@ -6,10 +6,23 @@ import { ConcertList } from "@/components/concert-list";
 import { formatInterpreted } from "@/lib/format";
 import { useSearch } from "@/lib/use-search";
 
+// The most names the loader shows. See docs/specs/04-interface.md.
+const MAX_NAMES = 38;
+
 export function Search() {
   const [text, setText] = useState("");
-  const { phase, searched, status, interpreted, total, recommendations, error, retryable, search } =
-    useSearch();
+  const {
+    phase,
+    searched,
+    status,
+    interpreted,
+    total,
+    candidates,
+    recommendations,
+    error,
+    retryable,
+    search,
+  } = useSearch();
 
   function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -48,6 +61,9 @@ export function Search() {
           <p>
             Showing {recommendations.length} of {total.toLocaleString("en-US")} Concerts
           </p>
+        )}
+        {candidates && candidates.names.length > 0 && (
+          <p>Close matches: {candidates.names.slice(0, MAX_NAMES).join(", ")}</p>
         )}
         {phase === "finished" && !error && recommendations.length === 0 && (
           <p>No Concerts found for this Search. Try wider dates or a nearby city.</p>
