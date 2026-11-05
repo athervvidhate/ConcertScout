@@ -7,6 +7,9 @@ from pydantic_ai.exceptions import AgentRunError
 from pydantic_ai.models import Model
 from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.providers.anthropic import AnthropicProvider
+from pydantic_ai.usage import RunUsage
+
+from concert_scout.telemetry import record_usage
 
 MODEL_NAME = "claude-haiku-5-5"
 
@@ -66,8 +69,11 @@ def make_model(api_key: str) -> Model:
 
 
 async def interpret(text: str, today: dt.date, model: Model) -> Interpretation:
+    usage = RunUsage()
     try:
-        result = await agent.run(text, model=model, deps=today)
+        result = await agent.run(text, model=model, deps=today, usage=usage)
     except AgentRunError as exc:
         raise InterpreterError(type(exc).__name__) from None
+    finally:
+        record_usage(usage)
     return result.output
