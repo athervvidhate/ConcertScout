@@ -8,8 +8,9 @@ from redis.exceptions import RedisError
 
 logger = logging.getLogger(__name__)
 
-# One call per slot keeps every worker sharing Redis under Ticketmaster's 5 requests a second.
-SLOT_SECONDS = 0.25
+# One call per slot. Any one second touches at most 4 slots, under Ticketmaster's 5 a second,
+# and the count holds across every worker sharing Redis.
+SLOT_SECONDS = 1 / 3
 DAILY_CALLS = 5000
 
 
