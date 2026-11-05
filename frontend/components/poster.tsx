@@ -17,11 +17,11 @@ export function Poster({ candidates, recommendations, hasPoster, searching }: Pr
   useEffect(() => {
     const timer = setTimeout(() => { setStage(candidates ? "names" : "opening"); setSelected(0); }, 0);
     return () => clearTimeout(timer);
-  }, [candidates]);
+  }, [candidates, hasPoster]);
   useEffect(() => {
-    if (!candidates || !hasPoster) return;
+    if (!hasPoster) return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const timer = setTimeout(() => setStage(reduced ? "ticket" : "picks"), reduced ? 0 : namesDuration(names.length));
+    const timer = setTimeout(() => setStage(reduced || !candidates ? "ticket" : "picks"), reduced || !candidates ? 0 : namesDuration(names.length));
     return () => clearTimeout(timer);
   }, [candidates, hasPoster, names.length]);
   useEffect(() => {
@@ -69,7 +69,7 @@ export function Poster({ candidates, recommendations, hasPoster, searching }: Pr
       <p>{[current.concert.venue, current.concert.city, current.concert.region].filter(Boolean).join(", ")}</p>
       {current.concert.time && <p>{formatTime(current.concert.time)}</p>}
       {current.concert.price && <p className="date">{formatPrice(current.concert.price)}</p>}
-      <a href={current.concert.url}>Tickets ↗</a>
+      <a href={current.concert.url} aria-label={`Tickets for ${current.concert.name}`}>Tickets ↗</a>
     </article>}
   </section>;
 }
