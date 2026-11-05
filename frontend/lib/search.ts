@@ -20,22 +20,29 @@ export type Concert = {
 
 export type Recommendation = { concert: Concert };
 
+// What the interpreter read from a Search. Anything it did not find is left out.
+export type Interpreted = { place?: string; start?: string; end?: string; artists: string[] };
+
 export type SearchError = { code: string; message: string };
+
+// The visitor has to change these Searches, so running one again cannot help.
+export const NEEDS_A_NEW_SEARCH = ["needs_taste_or_place", "needs_place", "place_not_found"];
 
 export type SearchEvent =
   | { event: "status"; data: { step: string; message: string } }
+  | { event: "interpreted"; data: Interpreted }
   | { event: "poster"; data: { recommendations: Recommendation[] } }
   | { event: "error"; data: SearchError }
   | { event: "done"; data: Record<string, never> };
 
 export async function* streamSearch(
-  city: string,
+  text: string,
   signal: AbortSignal,
 ): AsyncGenerator<SearchEvent> {
   const response = await fetch(`${API_URL}/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ city }),
+    body: JSON.stringify({ text }),
     signal,
   });
   if (!response.ok || !response.body) {

@@ -3,11 +3,13 @@
 import { type SubmitEvent, useState } from "react";
 
 import { ConcertList } from "@/components/concert-list";
+import { formatInterpreted } from "@/lib/format";
 import { useSearch } from "@/lib/use-search";
 
 export function Search() {
   const [text, setText] = useState("");
-  const { phase, city, status, recommendations, error, search } = useSearch();
+  const { phase, searched, status, interpreted, recommendations, error, retryable, search } =
+    useSearch();
 
   function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -18,14 +20,14 @@ export function Search() {
   return (
     <>
       <form onSubmit={submit} className="flex gap-2">
-        <label htmlFor="city" className="sr-only">
-          City
+        <label htmlFor="search" className="sr-only">
+          Search
         </label>
         <input
-          id="city"
+          id="search"
           value={text}
           onChange={(event) => setText(event.target.value)}
-          placeholder="Chicago"
+          placeholder="Something like Khruangbin in Chicago, next two weekends"
           required
           maxLength={500}
           className="min-w-0 flex-1 rounded border border-stone-300 bg-white px-3 py-2"
@@ -40,18 +42,21 @@ export function Search() {
       </form>
 
       <div aria-live="polite" className="mt-6 text-sm text-stone-600">
+        {interpreted && <p>{formatInterpreted(interpreted)}</p>}
         {status && <p>{status}</p>}
         {phase === "finished" && !error && recommendations.length === 0 && (
-          <p>No Concerts found in {city}. Check the spelling, or try the name of a nearby city.</p>
+          <p>No Concerts found for this Search. Try wider dates or a nearby city.</p>
         )}
       </div>
 
       {error && (
         <div role="alert" className="mt-6 text-sm">
           <p>{error}</p>
-          <button type="button" onClick={() => search(city)} className="mt-1 underline">
-            Try again
-          </button>
+          {retryable && (
+            <button type="button" onClick={() => search(searched)} className="mt-1 underline">
+              Try again
+            </button>
+          )}
         </div>
       )}
 

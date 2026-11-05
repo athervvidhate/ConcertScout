@@ -1,21 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { type Recommendation, streamSearch } from "@/lib/search";
+import {
+  type Interpreted,
+  NEEDS_A_NEW_SEARCH,
+  type Recommendation,
+  streamSearch,
+} from "@/lib/search";
 
 export type SearchState = {
   phase: "idle" | "searching" | "finished";
-  city: string;
+  searched: string;
   status: string | null;
+  interpreted: Interpreted | null;
   recommendations: Recommendation[];
   error: string | null;
+  retryable: boolean;
 };
 
 const IDLE: SearchState = {
   phase: "idle",
-  city: "",
+  searched: "",
   status: null,
+  interpreted: null,
   recommendations: [],
   error: null,
+  retryable: true,
 };
 
 const DROPPED = "The connection dropped before the Search finished.";
@@ -27,22 +36,26 @@ export function useSearch() {
 
   useEffect(() => () => current.current?.abort(), []);
 
-  const search = useCallback(async (city: string) => {
+  const search = useCallback(async (text: string) => {
     current.current?.abort();
     const controller = new AbortController();
     current.current = controller;
-    setState({ ...IDLE, phase: "searching", city });
+    setState({ ...IDLE, phase: "searching", searched: text });
 
     let finished = false;
     let error: string | null = null;
+    let retryable = true;
     try {
-      for await (const { event, data } of streamSearch(city, controller.signal)) {
+      for await (const { event, data } of streamSearch(text, controller.signal)) {
         if (event === "status") {
           setState((state) => ({ ...state, status: data.message }));
+        } else if (event === "interpreted") {
+          setState((state) => ({ ...state, interpreted: data }));
         } else if (event === "poster") {
           setState((state) => ({ ...state, recommendations: data.recommendations }));
         } else if (event === "error") {
           error = data.message;
+          retryable = !NEEDS_A_NEW_SEARCH.includes(data.code);
         } else {
           finished = true;
         }
@@ -53,7 +66,7 @@ export function useSearch() {
       error = caught instanceof TypeError ? UNREACHABLE : (caught as Error).message;
     }
     if (controller.signal.aborted) return;
-    setState((state) => ({ ...state, phase: "finished", status: null, error }));
+    setState((state) => ({ ...state, phase: "finished", status: null, error, retryable }));
   }, []);
 
   return { ...state, search };

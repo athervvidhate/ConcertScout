@@ -1,4 +1,4 @@
-import type { Price } from "@/lib/search";
+import type { Interpreted, Price } from "@/lib/search";
 
 // Concert dates and times are local to the venue, so format them in UTC to keep them unshifted.
 const dateFormat = new Intl.DateTimeFormat("en-US", {
@@ -26,4 +26,19 @@ export function formatTime(time: string): string {
 export function formatPrice({ min, max, currency }: Price): string {
   const format = new Intl.NumberFormat("en-US", { style: "currency", currency });
   return min === max ? format.format(min) : `${format.format(min)} to ${format.format(max)}`;
+}
+
+function formatDates({ start, end }: Interpreted): string | null {
+  if (start && end) {
+    return start === end ? formatDate(start) : `${formatDate(start)} to ${formatDate(end)}`;
+  }
+  if (start) return `from ${formatDate(start)}`;
+  if (end) return `until ${formatDate(end)}`;
+  return null;
+}
+
+export function formatInterpreted(interpreted: Interpreted): string {
+  return [interpreted.place, formatDates(interpreted), ...interpreted.artists]
+    .filter(Boolean)
+    .join(" · ");
 }
