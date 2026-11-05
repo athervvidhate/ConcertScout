@@ -1,19 +1,10 @@
-import { SearchPrompt } from "@/components/search-prompt"
-import { Instructions } from "@/components/instructions"
+import { Search } from "@/components/search";
 
 export default function Home() {
   return (
-    <main className="flex flex-col items-center justify-center p-4 md:p-24 min-h-full">
-      <div className="w-full max-w-3xl mx-auto space-y-8">
-        <div className="text-center space-y-4">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white">Concert Scout AI</h1>
-          <p className="text-lg text-gray-300">Discover live music events tailored to your taste ✨</p>
-        </div>
-
-        <Instructions type="above" />
-        <SearchPrompt />
-        <Instructions type="below" />
-      </div>
+    <main className="mx-auto max-w-2xl px-4 py-12">
+      <h1 className="mb-6 text-3xl font-semibold">Concert Scout</h1>
+      <Search />
     </main>
-  )
+  );
 }

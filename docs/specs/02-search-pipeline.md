@@ -122,6 +122,7 @@ Send a keepalive comment every 15 seconds. The browser sends `POST` with `fetch`
 api/concert_scout/
   app.py            FastAPI routes
   config.py         settings from the environment
+  models.py         Concert facts and event payloads
   pipeline.py       the seven steps
   interpreter.py    step 1
   ranker.py         step 6
