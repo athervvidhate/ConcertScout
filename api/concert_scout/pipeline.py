@@ -1,3 +1,4 @@
+import asyncio
 import datetime as dt
 import logging
 from collections.abc import AsyncIterator
@@ -9,29 +10,34 @@ from pydantic import BaseModel
 from pydantic_ai.models import Model
 from redis.asyncio import Redis
 
-from concert_scout import limits, pool
-from concert_scout.interpreter import InterpreterError, interpret
+from concert_scout import limits, matching, pool, similarity
+from concert_scout.interpreter import InterpreterError, Interpretation, interpret
 from concert_scout.models import (
+    Candidates,
     Interpreted,
     PoolTotal,
     Poster,
     Recommendation,
     SearchError,
+    SeedArtist,
     Status,
 )
-from concert_scout.sources import geocoder, ticketmaster
+from concert_scout.sources import geocoder, listenbrainz, musicbrainz, ticketmaster
 
 logger = logging.getLogger(__name__)
 
 ASK_FOR_A_SEARCH = "Tell us an Artist, a style or a place."
-# Until matching and the ranker cut the pool down, the Poster shows its first Concerts.
-POSTER_SIZE = 50
+# With no place there is no pool, so this many similar Artists get looked up by name.
+DIRECT_LOOKUPS = 15
 
 
 @dataclass(frozen=True)
 class Services:
     ticketmaster: httpx.AsyncClient
     geocoder: httpx.AsyncClient
+    musicbrainz: httpx.AsyncClient
+    listenbrainz: httpx.AsyncClient
+    lastfm: httpx.AsyncClient | None
     redis: Redis
     model: Model
 
@@ -43,6 +49,23 @@ def _event(name: str, payload: BaseModel | None = None) -> ServerSentEvent:
 
 def _error(code: str, message: str) -> ServerSentEvent:
     return _event("error", SearchError(code=code, message=message))
+
+
+async def _resolve_seed(name: str, services: Services) -> SeedArtist:
+    try:
+        return await musicbrainz.resolve(services.musicbrainz, services.redis, name)
+    except musicbrainz.MusicBrainzError as exc:
+        # The name alone can still join the pool, so a Search survives without MusicBrainz.
+        logger.warning("MusicBrainz failed: %s", exc)
+        return SeedArtist(name=name)
+
+
+async def _find_taste(interpretation: Interpretation, services: Services) -> matching.Taste:
+    seeds = await asyncio.gather(*(_resolve_seed(n, services) for n in interpretation.artists))
+    neighbours = await similarity.find_neighbours(
+        services.listenbrainz, services.lastfm, services.redis, seeds
+    )
+    return matching.Taste(seeds, neighbours, interpretation.tags)
 
 
 async def _steps(text: str, services: Services) -> AsyncIterator[ServerSentEvent]:
@@ -59,6 +82,14 @@ async def _steps(text: str, services: Services) -> AsyncIterator[ServerSentEvent
         ),
     )
 
+    if not (interpretation.place or interpretation.artists):
+        if interpretation.descriptors or interpretation.tags:
+            # Similar Artists start from a seed, so a style alone has nothing to look up.
+            yield _error("needs_place", "Add a place or an Artist to your Search.")
+        else:
+            yield _error("needs_taste_or_place", ASK_FOR_A_SEARCH)
+        return
+
     place = None
     if interpretation.place:
         message = f"Finding {interpretation.place}"
@@ -68,29 +99,42 @@ async def _steps(text: str, services: Services) -> AsyncIterator[ServerSentEvent
             message = f"We could not find {interpretation.place}. Check the spelling."
             yield _error("place_not_found", message)
             return
-        message = f"Looking for Concerts near {place.name}"
-    elif interpretation.artists:
-        message = f"Looking for Concerts by {', '.join(interpretation.artists)}"
-    elif interpretation.descriptors or interpretation.tags:
-        # With no place and no Artist there is nothing to look up directly yet.
-        yield _error("needs_place", "Add a place or an Artist to your Search.")
-        return
-    else:
-        yield _error("needs_taste_or_place", ASK_FOR_A_SEARCH)
-        return
 
+    if interpretation.artists:
+        message = f"Finding Artists like {', '.join(interpretation.artists)}"
+        yield _event("status", Status(step="resolve", message=message))
+    taste = await _find_taste(interpretation, services)
+
+    if place:
+        message = f"Looking for Concerts near {place.name}"
+        lookups = interpretation.artists
+    else:
+        message = f"Looking for Concerts by {', '.join(interpretation.artists)} and similar Artists"
+        lookups = [*interpretation.artists, *similarity.closest(taste.neighbours, DIRECT_LOOKUPS)]
     yield _event("status", Status(step="pool", message=message))
     concerts = await pool.find_concerts(
         services.ticketmaster,
         services.redis,
         place,
-        interpretation.artists,
+        lookups,
         interpretation.start,
         interpretation.end,
         today,
     )
     yield _event("pool", PoolTotal(total=len(concerts)))
-    recommendations = [Recommendation(concert=c) for c in concerts[:POSTER_SIZE]]
+
+    artist_tags: dict[str, list[str]] = {}
+    if taste:
+        yield _event("status", Status(step="match", message="Matching Concerts to your Taste"))
+        mbids = {a.mbid for concert in concerts for a in concert.artists if a.mbid}
+        artist_tags = await listenbrainz.artist_tags(
+            services.listenbrainz, services.redis, sorted(mbids)
+        )
+    shortlist = matching.shortlist(matching.score_concerts(concerts, taste, artist_tags))
+    names = matching.candidate_names(shortlist)
+    yield _event("candidates", Candidates(names=names, total=len(shortlist)))
+
+    recommendations = [Recommendation(concert=c.concert) for c in shortlist]
     yield _event("poster", Poster(recommendations=recommendations))
 
 

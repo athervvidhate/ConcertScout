@@ -9,6 +9,7 @@ from redis.asyncio import Redis
 
 from concert_scout import cache
 from concert_scout.models import Concert, Place
+from concert_scout.names import normalize
 from concert_scout.sources import ticketmaster
 
 CACHE_TTL = dt.timedelta(hours=6)
@@ -78,7 +79,7 @@ async def _chunk(
 async def _artist(
     client: httpx.AsyncClient, redis: Redis, name: str, point: str | None
 ) -> list[Concert]:
-    key = f"artist:{point or 'anywhere'}:{ticketmaster.normalize(name)}"
+    key = f"artist:{point or 'anywhere'}:{normalize(name)}"
     if cached := await cache.read(redis, key, CachedConcerts):
         return cached.concerts
     concerts = await ticketmaster.find_artist_concerts(client, redis, name, point)

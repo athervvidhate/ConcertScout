@@ -24,8 +24,30 @@ async def read[T: BaseModel](redis: Redis, key: str, model: type[T]) -> T | None
         return None
 
 
+async def read_many[T: BaseModel](redis: Redis, keys: list[str], model: type[T]) -> dict[str, T]:
+    """The keys that hit. One Search can hold hundreds, so this is a single round trip."""
+    if not keys:
+        return {}
+    try:
+        values = await redis.mget(keys)
+        return {k: model.model_validate_json(v) for k, v in zip(keys, values, strict=True) if v}
+    except (RedisError, ValidationError) as exc:
+        logger.warning("Cache read failed: %s", type(exc).__name__)
+        return {}
+
+
 async def write(redis: Redis, key: str, value: BaseModel, ttl: dt.timedelta) -> None:
     try:
         await redis.set(key, value.model_dump_json(), ex=ttl)
+    except RedisError as exc:
+        logger.warning("Cache write failed: %s", type(exc).__name__)
+
+
+async def write_many(redis: Redis, values: dict[str, BaseModel], ttl: dt.timedelta) -> None:
+    try:
+        async with redis.pipeline(transaction=False) as pipeline:
+            for key, value in values.items():
+                pipeline.set(key, value.model_dump_json(), ex=ttl)
+            await pipeline.execute()
     except RedisError as exc:
         logger.warning("Cache write failed: %s", type(exc).__name__)

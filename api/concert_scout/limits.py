@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 # and the count holds across every worker sharing Redis.
 SLOT_SECONDS = 1 / 3
 DAILY_CALLS = 5000
+# MusicBrainz blocks clients that average over 1 request a second.
+MUSICBRAINZ_GAP = dt.timedelta(seconds=1)
 
 
 class DailyLimitReached(Exception):
@@ -31,6 +33,16 @@ async def ticketmaster_call(redis: Redis) -> None:
         # Without Redis nothing is shared, so pace this caller alone and let the Search go on.
         logger.warning("Limiter failed: %s", type(exc).__name__)
         await asyncio.sleep(SLOT_SECONDS)
+
+
+async def musicbrainz_call(redis: Redis) -> None:
+    """Wait until a full gap has passed since the last MusicBrainz call by any worker."""
+    try:
+        while not await redis.set("musicbrainz:gate", 1, nx=True, px=MUSICBRAINZ_GAP):
+            await asyncio.sleep(MUSICBRAINZ_GAP.total_seconds() / 20)
+    except RedisError as exc:
+        logger.warning("Limiter failed: %s", type(exc).__name__)
+        await asyncio.sleep(MUSICBRAINZ_GAP.total_seconds())
 
 
 async def _count_today(redis: Redis) -> None:
