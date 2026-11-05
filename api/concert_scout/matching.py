@@ -139,6 +139,17 @@ def shortlist(candidates: Sequence[Candidate]) -> list[Candidate]:
     return ranked[:SHORTLIST_SIZE]
 
 
+def notable(concerts: Sequence[Concert]) -> list[Candidate]:
+    """What to show with no Taste: Concerts headlined by an Artist Ticketmaster links to
+    MusicBrainz, which leaves out most unbilled bar listings. One per headliner, order kept.
+    """
+    firsts: dict[str, Concert] = {}
+    for concert in concerts:
+        if concert.artists and concert.artists[0].mbid:
+            firsts.setdefault(concert.artists[0].mbid, concert)
+    return [Candidate(concert=concert) for concert in list(firsts.values())[:SHORTLIST_SIZE]]
+
+
 def candidate_names(candidates: Sequence[Candidate]) -> list[str]:
     """Who the shortlist is about, once each, falling back on the Concert's own name."""
     names = (

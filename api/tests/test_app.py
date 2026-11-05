@@ -125,6 +125,7 @@ async def test_search_streams_each_step_then_the_poster() -> None:
         "pool",
         "status",
         "candidates",
+        "status",
         "poster",
         "done",
     ]
@@ -134,6 +135,7 @@ async def test_search_streams_each_step_then_the_poster() -> None:
         "resolve",
         "pool",
         "match",
+        "rank",
     ]
     assert events[1][1] == {
         "place": "Chicago",
@@ -195,7 +197,7 @@ async def test_the_shortlist_cuts_the_pool_while_the_pool_event_counts_everythin
     events = dict(parse_sse(response.text))
     assert events["pool"] == {"total": 120}
     assert events["candidates"]["total"] == SHORTLIST_SIZE
-    assert len(events["poster"]["recommendations"]) == SHORTLIST_SIZE
+    assert len(events["poster"]["recommendations"]) == 8
 
 
 async def test_a_search_with_no_taste_calls_no_similarity_source() -> None:
@@ -212,6 +214,8 @@ async def test_a_search_with_no_taste_calls_no_similarity_source() -> None:
     assert hosts == {"api.geoapify.com", "app.ticketmaster.com"}
     steps = [data["step"] for name, data in parse_sse(response.text) if name == "status"]
     assert "match" not in steps
+    assert "rank" not in steps
+    assert len(dict(parse_sse(response.text))["poster"]["recommendations"]) == 8
 
 
 def attraction(name: str, mbid: str | None = None, subgenre: str | None = None) -> dict[str, Any]:

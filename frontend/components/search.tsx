@@ -66,7 +66,7 @@ export function Search() {
           <p>Close matches: {candidates.names.slice(0, MAX_NAMES).join(", ")}</p>
         )}
         {phase === "finished" && !error && recommendations.length === 0 && (
-          <p>No Concerts found for this Search. Try wider dates or a nearby city.</p>
+          <p>Nothing qualifies for this Search. Try wider dates or a nearby city.</p>
         )}
       </div>
 

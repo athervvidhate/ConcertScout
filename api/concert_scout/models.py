@@ -35,6 +35,8 @@ class Concert(BaseModel):
 
 class Recommendation(BaseModel):
     concert: Concert
+    reason: str
+    score: int | None = None
 
 
 class Poster(BaseModel):
