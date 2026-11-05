@@ -1,9 +1,10 @@
 "use client";
 
+import { Button } from "@base-ui/react/button";
 import { type SubmitEvent, useState } from "react";
 
 import { Poster } from "@/components/poster";
-import { formatInterpreted } from "@/lib/format";
+import { formatInterpreted, formatPosterHeading } from "@/lib/format";
 import { useSearch } from "@/lib/use-search";
 
 
@@ -12,7 +13,6 @@ export function Search() {
   const {
     phase,
     searched,
-    status,
     interpreted,
     total,
     candidates,
@@ -31,7 +31,7 @@ export function Search() {
 
   return (
     <>
-      <form onSubmit={submit} className="flex gap-2">
+      <form onSubmit={submit} className="search-bar">
         <label htmlFor="search" className="sr-only">
           Search
         </label>
@@ -44,23 +44,18 @@ export function Search() {
           maxLength={500}
           className="min-w-0 flex-1 rounded border border-stone-300 bg-white px-3 py-2"
         />
-        <button
+        <Button
           type="submit"
           disabled={phase === "searching"}
           className="rounded bg-stone-900 px-4 py-2 text-white disabled:opacity-50"
         >
-          Search
-        </button>
+          Find concerts
+        </Button>
       </form>
 
-      <div aria-live="polite" className="mt-6 text-sm text-stone-600">
-        {interpreted && <p>{formatInterpreted(interpreted)}</p>}
-        {status && <p>{status}</p>}
-        {total !== null && total > recommendations.length && recommendations.length > 0 && (
-          <p>
-            Showing {recommendations.length} of {total.toLocaleString("en-US")} Concerts
-          </p>
-        )}
+      <div aria-live="polite" className="search-context">
+        {interpreted && <p title={formatInterpreted(interpreted)}>{formatPosterHeading(interpreted)}</p>}
+        {total !== null && total > recommendations.length && recommendations.length > 0 && !candidates && <p className="pool-summary">Showing {recommendations.length} of {total.toLocaleString("en-US")} Concerts</p>}
         {phase === "finished" && !error && recommendations.length === 0 && (
           <p>Nothing qualifies for this Search. Try wider dates or a nearby city.</p>
         )}
@@ -70,9 +65,9 @@ export function Search() {
         <div role="alert" className="mt-6 text-sm">
           <p>{error}</p>
           {retryable && (
-            <button type="button" onClick={() => search(searched)} className="mt-1 underline">
+            <Button type="button" onClick={() => search(searched)} className="mt-1 underline">
               Try again
-            </button>
+            </Button>
           )}
         </div>
       )}

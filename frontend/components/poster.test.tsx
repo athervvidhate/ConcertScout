@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { fireEvent, act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Poster } from "@/components/poster";
@@ -21,6 +21,7 @@ beforeEach(() => {
   vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
   Object.defineProperty(HTMLElement.prototype, "animate", { configurable: true, value: animate });
   animate.mockClear();
+  localStorage.clear();
 });
 
 afterEach(() => {
@@ -47,7 +48,7 @@ describe("Poster presentation", () => {
     expect(screen.getByText("1 picks from 2 close matches")).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
     await advance(PICK_READ_MS);
-    expect(animate).toHaveBeenCalledTimes(1);
+    expect(animate).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("link")).toBeNull();
     await advance(flyDuration(1));
     expect(screen.getByRole("link", { name: "Tickets for Real Concert" })).toBeTruthy();
@@ -61,4 +62,29 @@ describe("Poster presentation", () => {
     expect(screen.getByRole("link", { name: "Tickets for Real Concert" })).toBeTruthy();
     expect(animate).not.toHaveBeenCalled();
   });
+});
+
+it("keeps duplicate Artists as distinct Concerts and uses 1/2/rest tiers", async () => {
+  const picks = Array.from({ length: 5 }, (_, i) => ({ ...recommendations[0], concert: { ...recommendations[0].concert, id: `id-${i}`, venue: `Venue ${i}` } }));
+  render(<Poster candidates={null} recommendations={picks} hasPoster searching={false} />);
+  await advance(0);
+  const names = screen.getAllByRole("button", { name: /Real Artist.*Venue/ });
+  expect(names).toHaveLength(5);
+  expect(names.map(n => n.className.match(/tier-\d/)?.[0])).toEqual(["tier-1", "tier-2", "tier-2", "tier-3", "tier-3"]);
+  fireEvent.click(names[3]);
+  expect(screen.getByText("Venue 3", { selector: ".venue" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(JSON.parse(localStorage.getItem("concert-scout-saved")!)[0].concert.id).toBe("id-3");
+  expect(screen.getByRole("status").textContent).toContain("saved on this device");
+  fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+  expect(screen.getByRole("status").textContent).toContain("skipped");
+});
+
+it("does not replay the name reveal when ranking finishes later", async () => {
+  const view = render(<Poster candidates={candidates} recommendations={[]} hasPoster={false} searching />);
+  await advance(namesDuration(candidates.names.length) + 2000);
+  view.rerender(<Poster candidates={candidates} recommendations={recommendations} hasPoster searching={false} />);
+  await advance(0);
+  await advance(PICK_READ_MS);
+  expect(animate).toHaveBeenCalled();
 });

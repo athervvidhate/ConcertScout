@@ -23,8 +23,8 @@ export function formatTime(time: string): string {
   return timeFormat.format(new Date(`1970-01-01T${time}Z`));
 }
 
-export function formatPrice({ min, max, currency }: Price): string {
-  const format = new Intl.NumberFormat("en-US", { style: "currency", currency });
+export function formatPrice({ min, max, currency }: Price, compact = false): string {
+  const format = new Intl.NumberFormat("en-US", { style: "currency", currency, ...(compact ? { minimumFractionDigits: 0 } : {}) });
   return min === max ? format.format(min) : `${format.format(min)} to ${format.format(max)}`;
 }
 
@@ -41,4 +41,10 @@ export function formatInterpreted(interpreted: Interpreted): string {
   return [interpreted.place, formatDates(interpreted), ...interpreted.artists]
     .filter(Boolean)
     .join(" · ");
+}
+
+export function formatPosterHeading({ place, start, end, artists }: Interpreted): string {
+  const short = (date: string) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
+  const dates = start && end ? start === end ? short(start) : `${short(start)} to ${start.slice(0, 7) === end.slice(0, 7) ? Number(end.slice(8)) : short(end)}` : start ? `from ${short(start)}` : end ? `until ${short(end)}` : null;
+  return [place, dates].filter(Boolean).join(", ") || artists.join(", ");
 }

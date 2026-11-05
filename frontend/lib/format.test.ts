@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatDate, formatInterpreted, formatPrice, formatTime } from "@/lib/format";
+import { formatDate, formatPosterHeading, formatInterpreted, formatPrice, formatTime } from "@/lib/format";
 
 describe("formatDate", () => {
   it("keeps the venue's calendar day", () => {
@@ -50,4 +50,13 @@ describe("formatInterpreted", () => {
   it("leaves out what the interpreter did not find", () => {
     expect(formatInterpreted({ place: "Chicago", artists: [] })).toBe("Chicago");
   });
+});
+
+it("compacts Ticket prices without changing their value or currency", () => {
+  expect(formatPrice({ min: 38, max: 38, currency: "USD" }, true)).toBe("$38");
+  expect(formatPrice({ min: 45.5, max: 120, currency: "USD" }, true)).toBe("$45.5 to $120");
+});
+it("keeps the Poster heading compact and leaves absent fields out", () => {
+  expect(formatPosterHeading({ place: "Chicago", start: "2026-11-06", end: "2026-11-15", artists: [] })).toBe("Chicago, Nov 6 to 15");
+  expect(formatPosterHeading({ artists: ["Khruangbin"] })).toBe("Khruangbin");
 });
