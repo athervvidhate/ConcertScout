@@ -25,7 +25,7 @@ async def find_neighbours(
     redis: Redis,
     seeds: Sequence[SeedArtist],
 ) -> list[Neighbour]:
-    """Every seed's neighbours at one and two hops. Failures leave a seed with fewer, never raise."""
+    """Every seed's neighbours at one and two hops. A failure only leaves a seed with fewer."""
     slots = asyncio.Semaphore(MAX_CONCURRENT)
 
     async def from_listenbrainz(artist: SeedArtist | SimilarArtist) -> list[SimilarArtist]:

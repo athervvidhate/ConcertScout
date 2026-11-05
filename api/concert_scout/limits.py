@@ -38,7 +38,9 @@ async def ticketmaster_call(redis: Redis) -> None:
 async def musicbrainz_call(redis: Redis) -> None:
     """Wait until a full gap has passed since the last MusicBrainz call by any worker."""
     try:
-        while not await redis.set("musicbrainz:gate", 1, nx=True, px=MUSICBRAINZ_GAP):
+        while True:
+            if await redis.set("musicbrainz:gate", 1, nx=True, px=MUSICBRAINZ_GAP):
+                return
             await asyncio.sleep(MUSICBRAINZ_GAP.total_seconds() / 20)
     except RedisError as exc:
         logger.warning("Limiter failed: %s", type(exc).__name__)

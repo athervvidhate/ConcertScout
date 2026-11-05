@@ -1,5 +1,6 @@
 import datetime as dt
 import logging
+from collections.abc import Mapping
 
 from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
@@ -43,7 +44,7 @@ async def write(redis: Redis, key: str, value: BaseModel, ttl: dt.timedelta) -> 
         logger.warning("Cache write failed: %s", type(exc).__name__)
 
 
-async def write_many(redis: Redis, values: dict[str, BaseModel], ttl: dt.timedelta) -> None:
+async def write_many(redis: Redis, values: Mapping[str, BaseModel], ttl: dt.timedelta) -> None:
     try:
         async with redis.pipeline(transaction=False) as pipeline:
             for key, value in values.items():

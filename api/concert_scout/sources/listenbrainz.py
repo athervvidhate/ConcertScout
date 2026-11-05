@@ -73,7 +73,7 @@ async def artist_tags(
     tags = {mbid: cached[key].tags for mbid, key in keys.items() if key in cached}
 
     missing = [mbid for mbid in keys if mbid not in tags]
-    batches = batched(missing, TAG_BATCH_SIZE)
+    batches = batched(missing, TAG_BATCH_SIZE, strict=False)
     fetched = await asyncio.gather(*(_tag_batch(client, redis, batch) for batch in batches))
     return tags | {mbid: found for batch in fetched for mbid, found in batch.items()}
 

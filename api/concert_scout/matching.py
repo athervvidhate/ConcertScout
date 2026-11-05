@@ -172,7 +172,7 @@ def _known_match(artist: Artist, known: Mapping[str, Match]) -> Match | None:
 
 
 def _tag_weights(tags: Mapping[str, set[str]]) -> dict[str, float]:
-    """A tag's rarity in the pool, from near 0 for a tag on everyone to 1 for a tag on one Artist."""
+    """A tag's rarity in the pool: near 0 for a tag on everyone, 1 for a tag on one Artist."""
     counts = Counter(tag for artist_tags in tags.values() for tag in artist_tags)
     if len(tags) < 2:
         return dict.fromkeys(counts, 1.0)
@@ -180,7 +180,8 @@ def _tag_weights(tags: Mapping[str, set[str]]) -> dict[str, float]:
 
 
 def _tag_sets(taste: Taste, weights: Mapping[str, float]) -> list[tuple[str | None, set[str]]]:
-    """What each seed, and the Search's own tags, ask for. Tags no one in the pool has can't help."""
+    """What each seed and the Search's own tags ask for. A tag absent from the pool can't help."""
+    sets: list[tuple[str | None, set[str]]]
     sets = [(seed.name, usable_tags(seed.tags)) for seed in taste.seeds]
     sets.append((None, usable_tags(taste.tags)))
     return [(via, tags & weights.keys()) for via, tags in sets]

@@ -11,7 +11,7 @@ from pydantic_ai.models import Model
 from redis.asyncio import Redis
 
 from concert_scout import limits, matching, pool, similarity
-from concert_scout.interpreter import InterpreterError, Interpretation, interpret
+from concert_scout.interpreter import Interpretation, InterpreterError, interpret
 from concert_scout.models import (
     Candidates,
     Interpreted,
