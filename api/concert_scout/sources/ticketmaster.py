@@ -1,15 +1,26 @@
+import asyncio
 import datetime as dt
+import logging
+import unicodedata
 from typing import Any
 
 import httpx
 from pygeohash import encode
+from redis.asyncio import Redis
 
+from concert_scout import limits
 from concert_scout.models import Concert, Place, Price
 from concert_scout.sources import http
 
+logger = logging.getLogger(__name__)
+
 BASE_URL = "https://app.ticketmaster.com/discovery/v2"
-PAGE_SIZE = 50
+PAGE_SIZE = 200
+# Past this many results Ticketmaster answers 200 with no events, so a query is silently cut off.
+MAX_RESULTS = 1000
 RADIUS_MILES = 50
+# About 5km, so Searches near each other share a pool without moving its 50-mile circle much.
+POINT_PRECISION = 5
 
 
 class TicketmasterError(Exception):
@@ -22,29 +33,79 @@ def make_client(
     return http.make_client(BASE_URL, {"apikey": api_key}, transport)
 
 
+def rounded_point(place: Place) -> str:
+    return encode(place.lat, place.lon, precision=POINT_PRECISION)
+
+
+def normalize(name: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", name)
+    unaccented = "".join(c for c in decomposed if not unicodedata.combining(c))
+    return " ".join(unaccented.casefold().split())
+
+
 async def find_concerts(
+    client: httpx.AsyncClient, redis: Redis, point: str, start: dt.date, end: dt.date
+) -> list[Concert]:
+    return await _find(client, redis, _base_params(point), start, end)
+
+
+async def find_artist_concerts(
+    client: httpx.AsyncClient, redis: Redis, name: str, point: str | None
+) -> list[Concert]:
+    """An Artist's upcoming Concerts. `keyword` is loose, so code checks the Lineup."""
+    concerts = await _find(client, redis, _base_params(point) | {"keyword": name})
+    wanted = normalize(name)
+    return [c for c in concerts if wanted in map(normalize, c.artists)]
+
+
+def _base_params(point: str | None) -> dict[str, str | int]:
+    params: dict[str, str | int] = {
+        "segmentName": "Music",
+        "size": PAGE_SIZE,
+        "sort": "date,name,asc",
+    }
+    if point:
+        params |= {"geoPoint": point, "radius": RADIUS_MILES, "unit": "miles"}
+    return params
+
+
+async def _find(
     client: httpx.AsyncClient,
-    place: Place,
+    redis: Redis,
+    params: dict[str, str | int],
     start: dt.date | None = None,
     end: dt.date | None = None,
 ) -> list[Concert]:
-    params: dict[str, str | int] = {
-        "geoPoint": encode(place.lat, place.lon, precision=9),
-        "radius": RADIUS_MILES,
-        "unit": "miles",
-        "segmentName": "Music",
-        "size": PAGE_SIZE,
-        "sort": "date,asc",
-    }
     # The venue's local time, because `startDateTime` is UTC and would shift a late Concert a day.
-    if start or end:
-        first = f"{start}T00:00:00" if start else "*"
-        last = f"{end}T23:59:59" if end else "*"
-        params["localStartDateTime"] = f"{first},{last}"
+    if start and end:
+        params = params | {"localStartDateTime": f"{start}T00:00:00,{end}T23:59:59"}
+    concerts, total = await _page(client, redis, params, 0)
+
+    if total > MAX_RESULTS and start and end and start < end:
+        middle = start + dt.timedelta(days=(end - start).days // 2)
+        before, after = await asyncio.gather(
+            _find(client, redis, params, start, middle),
+            _find(client, redis, params, middle + dt.timedelta(days=1), end),
+        )
+        return before + after
+
+    if total > MAX_RESULTS:
+        logger.warning("Ticketmaster cut a query off at %d of %d", MAX_RESULTS, total)
+    reachable = min(total, MAX_RESULTS)
+    pages = range(1, (reachable + PAGE_SIZE - 1) // PAGE_SIZE)
+    rest = await asyncio.gather(*(_page(client, redis, params, page) for page in pages))
+    return concerts + [concert for page, _ in rest for concert in page]
+
+
+async def _page(
+    client: httpx.AsyncClient, redis: Redis, params: dict[str, str | int], page: int
+) -> tuple[list[Concert], int]:
+    await limits.ticketmaster_call(redis)
     try:
-        response = await client.get("/events.json", params=params)
+        response = await client.get("/events.json", params=params | {"page": page})
         response.raise_for_status()
-        return parse_concerts(response.json())
+        body = response.json()
+        return parse_concerts(body), body["page"]["totalElements"]
     except httpx.HTTPStatusError as exc:
         raise TicketmasterError(f"status {exc.response.status_code}") from None
     except httpx.HTTPError as exc:

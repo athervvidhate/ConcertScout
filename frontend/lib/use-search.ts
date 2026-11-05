@@ -12,6 +12,7 @@ export type SearchState = {
   searched: string;
   status: string | null;
   interpreted: Interpreted | null;
+  total: number | null;
   recommendations: Recommendation[];
   error: string | null;
   retryable: boolean;
@@ -22,6 +23,7 @@ const IDLE: SearchState = {
   searched: "",
   status: null,
   interpreted: null,
+  total: null,
   recommendations: [],
   error: null,
   retryable: true,
@@ -51,11 +53,13 @@ export function useSearch() {
           setState((state) => ({ ...state, status: data.message }));
         } else if (event === "interpreted") {
           setState((state) => ({ ...state, interpreted: data }));
+        } else if (event === "pool") {
+          setState((state) => ({ ...state, total: data.total }));
         } else if (event === "poster") {
           setState((state) => ({ ...state, recommendations: data.recommendations }));
         } else if (event === "error") {
           error = data.message;
-          retryable = !NEEDS_A_NEW_SEARCH.includes(data.code);
+          retryable = !NEEDS_A_NEW_SEARCH.includes(data.code) && data.retry_after === undefined;
         } else {
           finished = true;
         }

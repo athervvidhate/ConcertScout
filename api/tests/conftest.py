@@ -1,16 +1,26 @@
+import datetime as dt
 import json
 from typing import Any
 
+import pytest
 from pydantic_ai import models
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
+from concert_scout import limits
 from concert_scout.models import Place
+from concert_scout.sources import ticketmaster
 
 # A test that reaches a real model fails instead of spending money.
 models.ALLOW_MODEL_REQUESTS = False
 
+UPCOMING = dt.date.today() + dt.timedelta(days=14)
 CHICAGO = Place(name="Chicago, IL, United States of America", lat=41.8755616, lon=-87.6244212)
+
+
+@pytest.fixture(autouse=True)
+def fast_limiter(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(limits, "SLOT_SECONDS", 0.001)
 
 
 def tm_record(**overrides: Any) -> dict[str, Any]:
@@ -49,10 +59,25 @@ def tm_record(**overrides: Any) -> dict[str, Any]:
     return record | overrides
 
 
-def tm_body(*records: dict[str, Any]) -> dict[str, Any]:
+def upcoming_record(**overrides: Any) -> dict[str, Any]:
+    """A record inside the default date window, whenever the tests run."""
+    record = tm_record(**overrides)
+    record["dates"]["start"]["localDate"] = str(UPCOMING)
+    return record
+
+
+def tm_body(*records: dict[str, Any], total: int | None = None) -> dict[str, Any]:
+    elements = len(records) if total is None else total
+    size = ticketmaster.PAGE_SIZE
+    page = {
+        "size": size,
+        "totalElements": elements,
+        "totalPages": -(-elements // size),
+        "number": 0,
+    }
     if not records:
-        return {"page": {"size": 50, "totalElements": 0, "totalPages": 0, "number": 0}}
-    return {"_embedded": {"events": list(records)}}
+        return {"page": page}
+    return {"_embedded": {"events": list(records)}, "page": page}
 
 
 def geoapify_result(**overrides: Any) -> dict[str, Any]:

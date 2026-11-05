@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 from collections.abc import AsyncIterator, Callable
 from typing import Any
@@ -10,9 +11,18 @@ from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
 from pydantic_ai.models import Model
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
+from concert_scout import limits
 from concert_scout.app import create_app
 from concert_scout.config import Settings
-from tests.conftest import geoapify_result, interpretation, model_returning, tm_body, tm_record
+from concert_scout.pipeline import POSTER_SIZE
+from tests.conftest import (
+    UPCOMING,
+    geoapify_result,
+    interpretation,
+    model_returning,
+    tm_body,
+    upcoming_record,
+)
 
 ALLOWED_ORIGIN = "http://localhost:3000"
 
@@ -28,12 +38,14 @@ def routed(
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.host == "api.geoapify.com":
             return httpx.Response(geo_status, json=geoapify or {"results": [geoapify_result()]})
-        return httpx.Response(tm_status, json=ticketmaster or tm_body(tm_record()))
+        return httpx.Response(tm_status, json=ticketmaster or tm_body(upcoming_record()))
 
     return handler
 
 
-def api_for(handler: Handler, model: Model | None = None) -> httpx.AsyncClient:
+def api_for(
+    handler: Handler, model: Model | None = None, redis: FakeAsyncRedis | None = None
+) -> httpx.AsyncClient:
     settings = Settings(
         tm_key=SecretStr("test-key"),
         anthropic_api_key=SecretStr("test-key"),
@@ -41,7 +53,7 @@ def api_for(handler: Handler, model: Model | None = None) -> httpx.AsyncClient:
         cors_origins=[ALLOWED_ORIGIN],
     )
     model = model or model_returning(interpretation(place="Chicago"))
-    app = create_app(settings, httpx.MockTransport(handler), FakeAsyncRedis(), model)
+    app = create_app(settings, httpx.MockTransport(handler), redis or FakeAsyncRedis(), model)
     return httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test")
 
 
@@ -68,7 +80,7 @@ async def test_health(api: httpx.AsyncClient) -> None:
 
 async def test_search_streams_each_step_then_the_poster() -> None:
     fields = interpretation(
-        artists=["Khruangbin"], place="Chicago", start="2026-11-06", end="2026-11-15"
+        artists=["Khruangbin"], place="Chicago", start=str(UPCOMING), end=str(UPCOMING)
     )
     requests: list[httpx.Request] = []
     respond = routed()
@@ -90,6 +102,7 @@ async def test_search_streams_each_step_then_the_poster() -> None:
         "interpreted",
         "status",
         "status",
+        "pool",
         "poster",
         "done",
     ]
@@ -100,34 +113,105 @@ async def test_search_streams_each_step_then_the_poster() -> None:
     ]
     assert events[1][1] == {
         "place": "Chicago",
-        "start": "2026-11-06",
-        "end": "2026-11-15",
+        "start": str(UPCOMING),
+        "end": str(UPCOMING),
         "artists": ["Khruangbin"],
     }
     assert events[3][1] == {
         "step": "pool",
         "message": "Looking for Concerts near Chicago, IL, United States of America",
     }
-    assert events[4][1]["recommendations"][0]["concert"] == {
+    assert events[4][1] == {"total": 1}
+    assert events[5][1]["recommendations"][0]["concert"] == {
         "id": "vvG18Z_ueUZbii",
         "name": "Khruangbin: The Ether Tour",
         "url": "https://www.ticketmaster.com/event/040064D0B6018B2C",
         "artists": ["Khruangbin", "Men I Trust"],
-        "date": "2026-11-20",
+        "date": str(UPCOMING),
         "time": "19:30:00",
         "venue": "The Salt Shed",
         "city": "Chicago",
         "region": "IL",
         "price": {"min": 45.5, "max": 120.0, "currency": "USD"},
     }
-    assert events[5][1] == {}
-    ticketmaster_params = requests[1].url.params
-    assert ticketmaster_params["geoPoint"] == "dp3wnp1yf"
-    assert ticketmaster_params["localStartDateTime"] == "2026-11-06T00:00:00,2026-11-15T23:59:59"
+    assert events[6][1] == {}
+    params = [request.url.params for request in requests[1:]]
+    assert sorted("keyword" in p for p in params) == [False, True]
+    assert all(p["geoPoint"] == "dp3wn" for p in params)
+
+
+async def test_a_repeat_search_makes_no_ticketmaster_calls() -> None:
+    fields = interpretation(artists=["Khruangbin"], place="Chicago")
+    ticketmaster_calls = 0
+    respond = routed()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal ticketmaster_calls
+        ticketmaster_calls += request.url.host == "app.ticketmaster.com"
+        return respond(request)
+
+    async with api_for(handler, model_returning(fields, fields)) as api:
+        first = await api.post("/search", json={"text": "Khruangbin in Chicago"})
+        calls_after_first = ticketmaster_calls
+        second = await api.post("/search", json={"text": "Khruangbin in Chicago"})
+
+    assert calls_after_first == 8  # seven months of the default window and one Artist
+    assert ticketmaster_calls == calls_after_first
+    assert dict(parse_sse(second.text))["poster"] == dict(parse_sse(first.text))["poster"]
+
+
+async def test_the_poster_stays_small_while_the_pool_event_counts_everything() -> None:
+    records = [upcoming_record(id=str(n)) for n in range(120)]
+
+    async with api_for(routed(tm_body(*records))) as api:
+        response = await api.post("/search", json={"text": "Chicago"})
+
+    events = dict(parse_sse(response.text))
+    assert events["pool"] == {"total": 120}
+    assert len(events["poster"]["recommendations"]) == POSTER_SIZE
+
+
+async def test_an_artist_with_no_place_is_looked_up_directly_anywhere() -> None:
+    requests: list[httpx.Request] = []
+    respond = routed()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return respond(request)
+
+    model = model_returning(interpretation(artists=["Khruangbin"]))
+    async with api_for(handler, model) as api:
+        response = await api.post("/search", json={"text": "Khruangbin"})
+
+    events = parse_sse(response.text)
+    assert [name for name, _ in events][-3:] == ["pool", "poster", "done"]
+    assert dict(events)["status"]["message"] == "Looking for Concerts by Khruangbin"
+    assert dict(events)["pool"] == {"total": 1}
+    assert len(requests) == 1
+    assert "geoPoint" not in requests[0].url.params
+
+
+async def test_the_daily_limit_says_when_to_come_back_and_calls_ticketmaster_no_more() -> None:
+    redis = FakeAsyncRedis()
+    await redis.set(f"ticketmaster:calls:{dt.datetime.now(dt.UTC).date()}", limits.DAILY_CALLS)
+    requests: list[httpx.Request] = []
+    respond = routed()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return respond(request)
+
+    async with api_for(handler, redis=redis) as api:
+        response = await api.post("/search", json={"text": "Chicago"})
+
+    error = dict(parse_sse(response.text))["error"]
+    assert error["code"] == "ticketmaster_limit"
+    assert 0 < error["retry_after"] <= 86400
+    assert all(request.url.host == "api.geoapify.com" for request in requests)
 
 
 async def test_missing_facts_are_left_out_of_the_stream() -> None:
-    record = tm_record()
+    record = upcoming_record()
     del record["priceRanges"]
     record["dates"]["start"]["timeTBA"] = True
 
@@ -169,7 +253,7 @@ async def test_a_search_with_no_taste_and_no_place_asks_for_one_and_calls_no_sou
     }
 
 
-async def test_a_taste_with_no_place_asks_for_a_place() -> None:
+async def test_a_style_with_no_artist_and_no_place_asks_for_one() -> None:
     model = model_returning(interpretation(descriptors=["dreamy guitar"]))
     async with api_for(routed(), model) as api:
         response = await api.post("/search", json={"text": "dreamy guitar"})

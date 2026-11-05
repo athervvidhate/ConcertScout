@@ -52,6 +52,10 @@ class Interpreted(BaseModel):
     artists: list[str]
 
 
+class PoolTotal(BaseModel):
+    total: int
+
+
 class SearchError(BaseModel):
     code: str
     message: str
