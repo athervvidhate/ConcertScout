@@ -15,8 +15,24 @@ const timeFormat = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 });
 
+const monthDayFormat = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+
+const dayFormat = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" });
+
 export function formatDate(date: string): string {
   return dateFormat.format(new Date(`${date}T00:00:00Z`));
+}
+
+export function formatMonthDay(date: string): string {
+  return monthDayFormat.format(new Date(`${date}T00:00:00Z`));
+}
+
+export function formatDayShort(date: string): string {
+  return dayFormat.format(new Date(`${date}T00:00:00Z`));
 }
 
 export function formatTime(time: string): string {
@@ -24,7 +40,11 @@ export function formatTime(time: string): string {
 }
 
 export function formatPrice({ min, max, currency }: Price, compact = false): string {
-  const format = new Intl.NumberFormat("en-US", { style: "currency", currency, ...(compact ? { minimumFractionDigits: 0 } : {}) });
+  const format = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    ...(compact ? { minimumFractionDigits: 0 } : {}),
+  });
   return min === max ? format.format(min) : `${format.format(min)} to ${format.format(max)}`;
 }
 
@@ -43,8 +63,17 @@ export function formatInterpreted(interpreted: Interpreted): string {
     .join(" · ");
 }
 
+function headingDates(start?: string, end?: string): string | null {
+  if (start && end) {
+    if (start === end) return formatMonthDay(start);
+    const sameMonth = start.slice(0, 7) === end.slice(0, 7);
+    return `${formatMonthDay(start)} to ${sameMonth ? Number(end.slice(8)) : formatMonthDay(end)}`;
+  }
+  if (start) return `from ${formatMonthDay(start)}`;
+  if (end) return `until ${formatMonthDay(end)}`;
+  return null;
+}
+
 export function formatPosterHeading({ place, start, end, artists }: Interpreted): string {
-  const short = (date: string) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
-  const dates = start && end ? start === end ? short(start) : `${short(start)} to ${start.slice(0, 7) === end.slice(0, 7) ? Number(end.slice(8)) : short(end)}` : start ? `from ${short(start)}` : end ? `until ${short(end)}` : null;
-  return [place, dates].filter(Boolean).join(", ") || artists.join(", ");
+  return [place, headingDates(start, end)].filter(Boolean).join(", ") || artists.join(", ");
 }

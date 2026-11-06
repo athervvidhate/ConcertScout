@@ -2,7 +2,7 @@
 
 The old UI looked generated, so the rebuild has a real point of view: a screen-printed festival poster on a hot orange field. Decoration must help someone find a Concert. Anything that exists for its own sake goes.
 
-Follow `ui-skills.com` rules and Emil Kowalski's motion rules. Use coss ui (Base UI) for controls and Motion for animation. Short React Bits text effects are allowed. WebGL backgrounds are not.
+Follow `ui-skills.com` rules and Emil Kowalski's motion rules. Use coss ui (Base UI) for controls. The fly-in uses the Web Animations API, and Ticket drag uses Motion. Short React Bits text effects are allowed. WebGL backgrounds are not.
 
 ## Tokens
 
@@ -21,7 +21,8 @@ The sun is a `repeating-conic-gradient` of 7.5 degree stripes that rotates once 
 
 | Use | Font |
 |---|---|
-| Poster names and UI | Bricolage Grotesque, variable, width 75 |
+| Poster names | Anton 400, which matches the owner's reference image |
+| UI | Bricolage Grotesque, variable |
 | Ticket Artist | Big Shoulders Display 800 |
 | Ticket date and price | Doto 800 |
 | Body and status | Hanken Grotesk |
@@ -30,9 +31,11 @@ Poster sizes:
 
 | Tier | Size | Weight |
 |---|---|---|
-| Headliner | `clamp(46px, 12.4vw, 92px)` | 800 |
-| Second tier | `clamp(32px, 7.8vw, 58px)` | 700 |
-| Third tier | `clamp(20px, 4.1vw, 29px)` | 700 |
+| Headliner | `clamp(52px, 11.7vw, 164px)` | 400 |
+| Second tier | `clamp(34px, 7.4vw, 104px)` | 400 |
+| Third tier | `clamp(24px, 3.8vw, 54px)` | 400 |
+
+Above 700px wide, each size also shrinks with the viewport height, so the Poster and Ticket fit an ordinary laptop screen. A headliner too long for its row shrinks to fit.
 
 Load fonts with `next/font`. Use tabular numbers for dates and prices.
 
@@ -42,7 +45,7 @@ Nothing on screen is a fake. No skeleton blocks, no invented progress percentage
 
 | Stage | Trigger | What shows |
 |---|---|---|
-| 1. Opening | Submit | Equalizer bars in the Poster area, status "Reading your request". Keep this short: send `candidates` as early as possible, aiming for under 2s |
+| 1. Opening | Submit | Equalizer bars in the Poster area, status "Reading your request", then each real `status` message. Keep this short: send `candidates` as early as possible, aiming for under 2s |
 | 2. Names | `candidates` | Equalizer leaves. Real candidate names fade in as small print, 32ms apart, up to 38 names |
 | 3. Ranking | Same event | Names stay. Status shows real counts |
 | 4. Picks | `poster` | Picks turn pink, the status changes to "8 picks from 38 close matches", and other names fade together over 0.28s |

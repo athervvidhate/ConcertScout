@@ -7,14 +7,13 @@ import { Poster } from "@/components/poster";
 import { formatInterpreted, formatPosterHeading } from "@/lib/format";
 import { useSearch } from "@/lib/use-search";
 
-
 export function Search() {
   const [text, setText] = useState("");
   const {
     phase,
     searched,
+    status,
     interpreted,
-    total,
     candidates,
     recommendations,
     hasPoster,
@@ -42,37 +41,39 @@ export function Search() {
           placeholder="Something like Khruangbin in Chicago, next two weekends"
           required
           maxLength={500}
-          className="min-w-0 flex-1 rounded border border-stone-300 bg-white px-3 py-2"
         />
-        <Button
-          type="submit"
-          disabled={phase === "searching"}
-          className="rounded bg-stone-900 px-4 py-2 text-white disabled:opacity-50"
-        >
+        <Button type="submit" disabled={phase === "searching"}>
           Find concerts
         </Button>
       </form>
 
       <div aria-live="polite" className="search-context">
-        {interpreted && <p title={formatInterpreted(interpreted)}>{formatPosterHeading(interpreted)}</p>}
-        {total !== null && total > recommendations.length && recommendations.length > 0 && !candidates && <p className="pool-summary">Showing {recommendations.length} of {total.toLocaleString("en-US")} Concerts</p>}
+        {interpreted && (
+          <p title={formatInterpreted(interpreted)}>{formatPosterHeading(interpreted)}</p>
+        )}
         {phase === "finished" && !error && recommendations.length === 0 && (
           <p>Nothing qualifies for this Search. Try wider dates or a nearby city.</p>
         )}
       </div>
 
       {error && (
-        <div role="alert" className="mt-6 text-sm">
+        <div role="alert" className="search-error">
           <p>{error}</p>
           {retryable && (
-            <Button type="button" onClick={() => search(searched)} className="mt-1 underline">
+            <Button type="button" onClick={() => search(searched)}>
               Try again
             </Button>
           )}
         </div>
       )}
 
-      <Poster candidates={candidates} recommendations={recommendations} searching={phase === "searching"} hasPoster={hasPoster} />
+      <Poster
+        candidates={candidates}
+        recommendations={recommendations}
+        searching={phase === "searching"}
+        hasPoster={hasPoster}
+        status={status}
+      />
     </>
   );
 }

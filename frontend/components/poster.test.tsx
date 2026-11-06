@@ -13,7 +13,7 @@ const recommendations: Recommendation[] = [{
   reason: "Similar to your seed Artist",
 }];
 const candidates = { names: ["Real Artist", "Another Artist"], total: 2 };
-const animate = vi.fn(() => ({ cancel: vi.fn(), onfinish: null }));
+const animate = vi.fn<(keyframes: Keyframe[]) => { cancel: () => void; onfinish: null }>(() => ({ cancel: vi.fn(), onfinish: null }));
 const originalAnimate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "animate");
 
 beforeEach(() => {
@@ -34,8 +34,31 @@ afterEach(() => {
 const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 
 describe("Poster presentation", () => {
+  it("shows the pipeline's real status while the Search runs", () => {
+    render(<Poster candidates={null} recommendations={[]} hasPoster={false} searching status="Finding Chicago" />);
+    expect(screen.getByText("Finding Chicago")).toBeTruthy();
+  });
+
+  it("fades in a pick that has no name on the wall to fly from", async () => {
+    render(<Poster candidates={{ names: ["Another Artist"], total: 2 }} recommendations={recommendations} hasPoster searching={false} status={null} />);
+    await advance(0);
+    await advance(namesDuration(1));
+    await advance(PICK_READ_MS);
+    const frames = animate.mock.calls.map(([keyframes]) => keyframes as Keyframe[]);
+    expect(frames.some((keyframes) => keyframes[0].opacity === 0)).toBe(true);
+  });
+
+  it("gives each rank its own Ticket color", async () => {
+    const second = { ...recommendations[0], concert: { ...recommendations[0].concert, id: "second", artists: [{ name: "Second Artist" }] } };
+    render(<Poster candidates={null} recommendations={[...recommendations, second]} hasPoster searching={false} status={null} />);
+    await advance(0);
+    expect(document.querySelector(".ticket")?.getAttribute("data-color")).toBe("0");
+    fireEvent.click(screen.getByRole("button", { name: "Second Artist" }));
+    expect(document.querySelector(".ticket")?.getAttribute("data-color")).toBe("1");
+  });
+
   it("shows a received Poster even without a candidates event", async () => {
-    render(<Poster candidates={null} recommendations={recommendations} hasPoster searching={false} />);
+    render(<Poster candidates={null} recommendations={recommendations} hasPoster searching={false} status={null} />);
     await advance(0);
     expect(screen.getByRole("link", { name: "Tickets for Real Concert" }).getAttribute("href"))
       .toBe(recommendations[0].concert.url);
@@ -43,7 +66,7 @@ describe("Poster presentation", () => {
   });
 
   it("finishes names, then picks and fly-in before showing the Ticket", async () => {
-    render(<Poster candidates={candidates} recommendations={recommendations} hasPoster searching={false} />);
+    render(<Poster candidates={candidates} recommendations={recommendations} hasPoster searching={false} status={null} />);
     await advance(namesDuration(candidates.names.length));
     expect(screen.getByText("1 picks from 2 close matches")).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
@@ -57,7 +80,7 @@ describe("Poster presentation", () => {
 
   it("reduced motion shows the Ticket without a fly-in", async () => {
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
-    render(<Poster candidates={candidates} recommendations={recommendations} hasPoster searching={false} />);
+    render(<Poster candidates={candidates} recommendations={recommendations} hasPoster searching={false} status={null} />);
     await advance(0);
     expect(screen.getByRole("link", { name: "Tickets for Real Concert" })).toBeTruthy();
     expect(animate).not.toHaveBeenCalled();
@@ -66,7 +89,7 @@ describe("Poster presentation", () => {
 
 it("keeps duplicate Artists as distinct Concerts and uses 1/2/rest tiers", async () => {
   const picks = Array.from({ length: 5 }, (_, i) => ({ ...recommendations[0], concert: { ...recommendations[0].concert, id: `id-${i}`, venue: `Venue ${i}` } }));
-  render(<Poster candidates={null} recommendations={picks} hasPoster searching={false} />);
+  render(<Poster candidates={null} recommendations={picks} hasPoster searching={false} status={null} />);
   await advance(0);
   const names = screen.getAllByRole("button", { name: /Real Artist.*Venue/ });
   expect(names).toHaveLength(5);
@@ -81,9 +104,9 @@ it("keeps duplicate Artists as distinct Concerts and uses 1/2/rest tiers", async
 });
 
 it("does not replay the name reveal when ranking finishes later", async () => {
-  const view = render(<Poster candidates={candidates} recommendations={[]} hasPoster={false} searching />);
+  const view = render(<Poster candidates={candidates} recommendations={[]} hasPoster={false} searching status={null} />);
   await advance(namesDuration(candidates.names.length) + 2000);
-  view.rerender(<Poster candidates={candidates} recommendations={recommendations} hasPoster searching={false} />);
+  view.rerender(<Poster candidates={candidates} recommendations={recommendations} hasPoster searching={false} status={null} />);
   await advance(0);
   await advance(PICK_READ_MS);
   expect(animate).toHaveBeenCalled();

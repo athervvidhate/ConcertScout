@@ -52,13 +52,12 @@ describe("Search", () => {
   beforeEach(() => {
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
   });
-  it("says how much of a big pool the list shows and keeps reading after the total", async () => {
+  it("keeps reading the stream after the pool total", async () => {
     stubStream(sse("pool", { total: 1189 }), poster(full), sse("done", {}));
 
     await searchFor("Chicago");
 
     await screen.findByRole("link", { name: `Tickets for ${full.name}` });
-    expect(screen.getByText("Showing 1 of 1,189 Concerts")).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
   });
 

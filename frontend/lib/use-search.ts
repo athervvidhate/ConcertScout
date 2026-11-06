@@ -13,7 +13,6 @@ export type SearchState = {
   searched: string;
   status: string | null;
   interpreted: Interpreted | null;
-  total: number | null;
   candidates: Candidates | null;
   recommendations: Recommendation[];
   hasPoster: boolean;
@@ -26,7 +25,6 @@ const IDLE: SearchState = {
   searched: "",
   status: null,
   interpreted: null,
-  total: null,
   candidates: null,
   recommendations: [],
   hasPoster: false,
@@ -58,8 +56,6 @@ export function useSearch() {
           setState((state) => ({ ...state, status: data.message }));
         } else if (event === "interpreted") {
           setState((state) => ({ ...state, interpreted: data }));
-        } else if (event === "pool") {
-          setState((state) => ({ ...state, total: data.total }));
         } else if (event === "candidates") {
           setState((state) => ({ ...state, candidates: data }));
         } else if (event === "poster") {
