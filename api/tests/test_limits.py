@@ -1,5 +1,8 @@
 import asyncio
 import datetime as dt
+import hashlib
+import time
+from decimal import Decimal
 
 import pytest
 from fakeredis import FakeAsyncRedis
@@ -71,3 +74,55 @@ async def test_musicbrainz_calls_keep_a_full_gap_across_callers(
 
 async def test_musicbrainz_calls_pace_themselves_without_redis() -> None:
     await limits.musicbrainz_call(BrokenRedis())
+
+
+async def test_visitor_limits_count_each_client_separately() -> None:
+    redis = FakeAsyncRedis()
+
+    await limits.visitor_call(redis, "search", "1.1.1.1", 1)
+
+    with pytest.raises(limits.VisitorLimitReached) as caught:
+        await limits.visitor_call(redis, "search", "1.1.1.1", 1)
+    assert 0 < caught.value.retry_after <= limits.HOUR_SECONDS
+    await limits.visitor_call(redis, "search", "2.2.2.2", 1)
+
+
+async def test_redis_never_holds_a_visitor_address() -> None:
+    redis = FakeAsyncRedis()
+
+    await limits.visitor_call(redis, "search", "1.1.1.1", 1)
+
+    visitor = hashlib.sha256(b"1.1.1.1").hexdigest()[:32]
+    hour = int(time.time() // limits.HOUR_SECONDS)
+    assert await redis.get(f"visitor:search:{visitor}:{hour}") == b"1"
+    assert await redis.get(f"visitor:search:1.1.1.1:{hour}") is None
+
+
+async def test_spend_adds_up_to_the_daily_cap() -> None:
+    redis = FakeAsyncRedis()
+
+    await limits.record_spend(redis, Decimal("0.999999"))
+    await limits.check_spend(redis)
+    await limits.record_spend(redis, Decimal("0.000001"))
+
+    with pytest.raises(limits.SpendCapReached) as caught:
+        await limits.check_spend(redis)
+    assert 0 < caught.value.retry_after <= 86401
+
+
+async def test_the_monthly_cap_holds_after_the_day_rolls_over() -> None:
+    redis = FakeAsyncRedis()
+    now = dt.datetime.now(dt.UTC)
+    await redis.set(f"spend:month:{now:%Y-%m}", 10 * limits.MICRODOLLARS)
+
+    with pytest.raises(limits.SpendCapReached) as caught:
+        await limits.check_spend(redis)
+    assert caught.value.retry_after > 0
+
+
+async def test_a_tiny_cost_still_counts() -> None:
+    redis = FakeAsyncRedis()
+
+    await limits.record_spend(redis, Decimal("0.0000001"))
+
+    assert await redis.get(f"spend:day:{dt.datetime.now(dt.UTC).date()}") == b"1"

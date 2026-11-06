@@ -131,7 +131,7 @@ describe("Search", () => {
     ).toBeTruthy();
     const [url, init] = fetchStub.mock.calls[0];
     expect(url).toBe("http://127.0.0.1:8000/search");
-    expect(init.body).toBe(JSON.stringify({ text }));
+    expect(init.body).toBe(JSON.stringify({ text, token: "test-token" }));
   });
 
   it("leaves a missing time and price blank", async () => {
@@ -173,7 +173,7 @@ describe("Search", () => {
     await user.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByRole("link", { name: `Tickets for ${full.name}` })).toBeTruthy();
-    expect(fetchStub.mock.calls[0][1].body).toBe(JSON.stringify({ text: "Chicago" }));
+    expect(fetchStub.mock.calls[0][1].body).toBe(JSON.stringify({ text: "Chicago", token: "test-token" }));
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -200,5 +200,49 @@ describe("Search", () => {
     await searchFor("Chicago");
 
     expect((await screen.findByRole("alert")).textContent).toContain(refusal.message);
+  });
+});
+
+describe("refused Searches", () => {
+  function stubRefusal(status: number, body: unknown) {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.includes("/search")) return new Response(JSON.stringify(body), { status });
+      return new Response(JSON.stringify({ concerts: [] }));
+    }));
+  }
+
+  beforeEach(() => localStorage.clear());
+
+  it("sends the bot check token with the Search", async () => {
+    const fetchStub = stubStream(sse("done", {}));
+    await searchFor("Chicago");
+
+    await screen.findByRole("button", { name: "Find concerts" });
+    expect(JSON.parse(fetchStub.mock.calls[0][1].body)).toEqual({ text: "Chicago", token: "test-token" });
+  });
+
+  it("says when to come back and offers no pointless retry at a limit", async () => {
+    stubRefusal(429, {
+      code: "visitor_limit",
+      message: "You have used this hour's Searches. Try again in 12 minutes.",
+      retry_after: 700,
+    });
+    await searchFor("Chicago");
+
+    expect(await screen.findByText(/Try again in 12 minutes/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("keeps the home page working when Search stops at the spend cap", async () => {
+    stubRefusal(503, {
+      code: "budget_reached",
+      message: "Concert Scout has used its Search budget for now. Nearby Concerts still work.",
+      retry_after: 3600,
+    });
+    await searchFor("Chicago");
+
+    expect(await screen.findByText(/Search budget/)).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Concerts near you" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 });
