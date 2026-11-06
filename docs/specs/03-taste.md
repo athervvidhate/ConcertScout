@@ -34,11 +34,13 @@ Accept one Artist per line, comma-separated text, or a CSV with an obvious Artis
 - Up to 5 allowlisted users. The owner needs Premium for Development Mode.
 - Local redirect URI: `http://127.0.0.1:8000/auth/spotify/callback`. Spotify rejects `localhost`.
 - Use Authlib with `httpx`. Do not use spotipy.
-- Store tokens encrypted in Redis with a TTL, keyed by an `HttpOnly`, `Secure`, `SameSite=Lax` session cookie. `/auth/spotify/disconnect` deletes them.
+- Store tokens encrypted in Redis for seven days, keyed by an opaque `HttpOnly`, `Secure`, `SameSite=Lax` session cookie. The cookie is scoped to `/auth/spotify`, so it never accompanies `/search`. For the explicit HTTP loopback redirect in local development only, Secure is disabled; HTTPS is required elsewhere. `/auth/spotify/disconnect` deletes tokens and the cookie. A refresh preserves the original session deadline and cannot recreate a disconnected session.
 - Refresh tokens expire after 6 months, so reconnecting must work without help.
 
 ## Spotify shelf
 
 Spotify developer policy clauses III.13 and III.14 keep this data out of LLM prompts. So the shelf does not use the pipeline. Code takes the user's top Artists, normalizes names, and looks for exact matches in the Concert pool. It shows those Concerts in a separate shelf, ranked by the user's own Artist order.
 
-The shelf has no LLM reasons. Each entry says "From your top Artists". The Spotify logo and attribution follow Spotify's design rules.
+The separate `/auth/spotify/shelf` route receives a place or explicit coordinates and dates. It never calls the Search pipeline. Only top Artists (up to 50) and the first 50 followed Artists are read, with top Artists first. The shelf shows at most 20 Concerts, using normalized exact Lineup names and their source facts. Its data never becomes imported Taste or enters localStorage.
+
+The shelf has no LLM reasons. Each entry says "From your top Artists", or "An Artist you follow" when it came from the followed list. The Spotify logo and attribution follow Spotify's design rules.

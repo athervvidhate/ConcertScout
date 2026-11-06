@@ -15,12 +15,13 @@ from pydantic_ai.models import Model
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from concert_scout import cache, interpreter, limits, security
+from concert_scout import cache, interpreter, limits, security, spotify
 from concert_scout.config import Settings
 from concert_scout.models import ImportedTaste, Nearby, SearchError
 from concert_scout.pipeline import ASK_FOR_A_SEARCH, Services, find_nearby, run_search
 from concert_scout.security import Refused, SecurityHeaders
 from concert_scout.sources import geocoder, lastfm, listenbrainz, musicbrainz, ticketmaster
+from concert_scout.sources.spotify import SpotifyError
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,7 @@ def create_app(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_methods=["GET", "POST"],
+        allow_credentials=True,
         allow_headers=["Content-Type"],
     )
 
@@ -176,6 +178,24 @@ def create_app(
         if request.url.path.startswith("/taste/"):
             return _failure(422, SearchError(code="invalid_username", message="Enter a username."))
         return _failure(422, SearchError(code="invalid_place", message="Choose a place."))
+
+    @app.exception_handler(RedisError)
+    async def storage_error(_: Request, __: RedisError) -> JSONResponse:
+        return _failure(
+            503,
+            SearchError(
+                code="storage_unavailable",
+                message="Connection storage is unavailable. Try again soon.",
+            ),
+        )
+
+    @app.exception_handler(SpotifyError)
+    async def spotify_error(_: Request, exc: SpotifyError) -> JSONResponse:
+        return _failure(exc.status, SearchError(code=exc.code, message=exc.message))
+
+    app.include_router(
+        spotify.router(settings, services.redis, services.ticketmaster, services.geocoder)
+    )
 
     @app.get("/health")
     async def health() -> dict[str, str]:

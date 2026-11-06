@@ -86,7 +86,7 @@ test("a truncated app stream offers a retry of the same Search", async ({ page }
 test("history stays local, and only imported Artist names enter a Search", async ({ page }) => {
   await page.goto("/");
   const requests: string[] = [];
-  page.on("request", r => { if (r.url().startsWith("http://127.0.0.1:8146")) requests.push(r.postData() ?? ""); });
+  page.on("request", r => { if (r.method() === "POST" && r.url().startsWith("http://127.0.0.1:8146")) requests.push(r.postData() ?? ""); });
   await page.getByRole("button", { name: "Your Taste", exact: true }).click();
   await page.getByLabel("Import from").selectOption("history");
   await page.getByLabel("Spotify history file", { exact: true }).setInputFiles({
@@ -151,4 +151,52 @@ test("location is used only after the visitor presses its button", async ({ page
   expect((await nearby).ok()).toBe(true);
   expect(new URL(requests[0]).searchParams.get("lat")).toBe("37.77");
   expect(new URL(requests[0]).searchParams.get("lon")).toBe("-122.42");
+});
+
+
+// Enter through our real OAuth routes, substituting only the typed Spotify adapter on the server.
+// No Spotify authorization page, token response, or metadata JSON is imitated in the browser.
+async function spotifyCallback(context: import("@playwright/test").BrowserContext, code: string) {
+  const login = await context.request.get("http://127.0.0.1:8146/auth/spotify/login", {params: {return_to: "http://127.0.0.1:3146"}, maxRedirects: 0});
+  expect(login.status()).toBe(303);
+  const state = new URL(login.headers().location).searchParams.get("state")!;
+  const callback = await context.request.get("http://127.0.0.1:8146/auth/spotify/callback", {params: {code, state}, maxRedirects: 0});
+  expect(callback.status()).toBe(303);
+  return callback.headers().location;
+}
+
+test("Spotify has its own shelf, never enters Search Taste, and disconnect removes access", async ({ page, context }, testInfo) => {
+  const target = await spotifyCallback(context, "account-code");
+  await page.goto(target);
+  const cookie = (await context.cookies()).find(c => c.name === "concert_scout_spotify")!;
+  expect(cookie.httpOnly).toBe(true);
+  expect(cookie.sameSite).toBe("Lax");
+  expect(cookie.path).toBe("/auth/spotify");
+  expect(cookie.value).not.toMatch(/private-platform/);
+  const request = page.waitForRequest(r => r.url().endsWith("/search"));
+  await search(page);
+  const sent = await request;
+  expect(sent.postDataJSON().taste).toEqual([]);
+  expect(sent.headers().cookie ?? "").not.toContain("concert_scout_spotify");
+  const shelf = page.getByRole("region", {name: "Concerts from your Spotify top Artists"});
+  await expect(shelf.locator(".spotify-artist")).toHaveCount(2);
+  await expect(shelf.getByRole("img", {name: "Spotify", exact: true})).toBeVisible();
+  await expect(shelf.locator(".spotify-artist").first()).toHaveAttribute("href", "https://open.spotify.com/artist/contract");
+  await noOverflow(page);
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await page.screenshot({path: testInfo.outputPath("spotify-shelf.png"), fullPage: true});
+  await page.getByRole("button", {name: "Your Taste", exact: true}).click();
+  await page.getByRole("button", {name: "Disconnect Spotify", exact: true}).click();
+  await expect(shelf).toHaveCount(0);
+  const status = await context.request.get("http://127.0.0.1:8146/auth/spotify/status");
+  expect((await status.json()).connected).toBe(false);
+  expect((await context.cookies()).some(c => c.name === "concert_scout_spotify")).toBe(false);
+  expect(await page.evaluate(() => JSON.stringify({...localStorage}))).not.toMatch(/private-platform/);
+});
+
+test("Spotify access denial explains the invite list and keeps no session", async ({ page, context }) => {
+  await page.goto(await spotifyCallback(context, "not-allowed"));
+  await page.getByRole("button", {name: "Your Taste", exact: true}).click();
+  await expect(page.getByRole("status")).toContainText("not on the app's invite list");
+  expect((await context.cookies()).some(c => c.name === "concert_scout_spotify")).toBe(false);
 });

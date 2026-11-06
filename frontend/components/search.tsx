@@ -8,6 +8,8 @@ import { type SubmitEvent, useEffect, useRef, useState } from "react";
 
 import { NearbyConcerts } from "@/components/nearby";
 import { Poster } from "@/components/poster";
+import { SpotifyShelf } from "@/components/spotify-shelf";
+import { useSpotifyConnection } from "@/lib/spotify";
 import { TastePanel } from "@/components/taste-panel";
 import { formatInterpreted, formatPosterHeading } from "@/lib/format";
 import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/nearby";
@@ -26,6 +28,7 @@ export function Search() {
   const [botCheckFailed, setBotCheckFailed] = useState(false);
   const botCheck = useRef<TurnstileInstance>(null);
   const taste = useImportedTaste();
+  const spotify = useSpotifyConnection();
   const [place, setPlace] = useState<Place | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const {
@@ -88,7 +91,7 @@ export function Search() {
     <>
       <nav className="top-bar">
         <Link href="/saved">Saved Concerts</Link>
-        <TastePanel />
+        <TastePanel spotify={spotify} />
       </nav>
 
       <h1 className={resting ? "wordmark" : "sr-only"}>Concert Scout</h1>
@@ -178,6 +181,17 @@ export function Search() {
         />
       ) : (
         place && <NearbyConcerts place={place} onClose={hideNearby} />
+      )}
+      {spotify.connected && (
+        <SpotifyShelf
+          connectHref={spotify.connectHref}
+          key={JSON.stringify([interpreted, place])}
+          place={interpreted?.place}
+          lat={interpreted?.place ? undefined : place?.lat}
+          lon={interpreted?.place ? undefined : place?.lon}
+          start={interpreted?.start}
+          end={interpreted?.end}
+        />
       )}
     </>
   );
