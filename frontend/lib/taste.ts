@@ -4,17 +4,20 @@ import { API_URL, SearchRefused } from "@/lib/search";
 
 const TASTE_KEY = "concert-scout-taste";
 
-export type TasteSource = "lastfm" | "listenbrainz";
+export type UsernameSource = "lastfm" | "listenbrainz";
+export type TasteSource = UsernameSource | "history" | "list";
 
 export const SOURCE_NAMES: Record<TasteSource, string> = {
   lastfm: "Last.fm",
   listenbrainz: "ListenBrainz",
+  history: "your Spotify history file",
+  list: "your list",
 };
 
 // A Taste brought in from elsewhere: Artist names, favourites first. It lives only on this device.
-export type ImportedTaste = { source: TasteSource; username: string; artists: string[] };
+export type ImportedTaste = { source: TasteSource; artists: string[] };
 
-export async function fetchTaste(source: TasteSource, username: string): Promise<ImportedTaste> {
+export async function fetchTaste(source: UsernameSource, username: string): Promise<string[]> {
   const response = await fetch(`${API_URL}/taste/${source}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -22,7 +25,7 @@ export async function fetchTaste(source: TasteSource, username: string): Promise
   });
   if (!response.ok) throw new SearchRefused(await response.json());
   const { artists }: { artists: string[] } = await response.json();
-  return { source, username, artists };
+  return artists;
 }
 
 const listeners = new Set<() => void>();

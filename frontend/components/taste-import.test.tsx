@@ -33,7 +33,6 @@ describe("TasteImport", () => {
     expect(init.body).toBe(JSON.stringify({ username: "some one" }));
     expect(JSON.parse(localStorage.getItem("concert-scout-taste") ?? "")).toEqual({
       source: "listenbrainz",
-      username: "some one",
       artists: ["Khruangbin", "Tyler Childers"],
     });
   });
@@ -55,6 +54,48 @@ describe("TasteImport", () => {
 
     expect((await screen.findByRole("alert")).textContent).toBe(message);
     expect(localStorage.getItem("concert-scout-taste")).toBeNull();
+  });
+
+  it("imports a pasted list and calls no API", async () => {
+    const fetchStub = stubImport(200, {});
+    const user = userEvent.setup();
+    render(<TasteImport />);
+    await user.click(screen.getByText("Import your Taste"));
+    await user.selectOptions(screen.getByRole("combobox", { name: "From" }), "Pasted list");
+    await user.type(screen.getByRole("textbox", { name: /one per line/ }), "Khruangbin{enter}Bonobo");
+    await user.click(screen.getByRole("button", { name: "Import" }));
+
+    expect(await screen.findByText(/Using 2 Artists from your list/)).toBeTruthy();
+    expect(fetchStub).not.toHaveBeenCalled();
+  });
+
+  it("imports a history file without it leaving the browser", async () => {
+    const fetchStub = stubImport(200, {});
+    const user = userEvent.setup();
+    const { container } = render(<TasteImport />);
+    await user.click(screen.getByText("Import your Taste"));
+    await user.selectOptions(screen.getByRole("combobox", { name: "From" }), "Spotify history file");
+    const body = JSON.stringify([{ ms_played: 5, master_metadata_album_artist_name: "Bonobo" }]);
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    await user.upload(input as HTMLInputElement, new File([body], "history.json"));
+    await user.click(screen.getByRole("button", { name: "Import" }));
+
+    expect(await screen.findByText(/Using 1 Artist from your Spotify history/)).toBeTruthy();
+    expect(fetchStub).not.toHaveBeenCalled();
+    expect(localStorage.getItem("concert-scout-taste")).not.toContain("ms_played");
+  });
+
+  it("explains a malformed history file", async () => {
+    stubImport(200, {});
+    const user = userEvent.setup();
+    const { container } = render(<TasteImport />);
+    await user.click(screen.getByText("Import your Taste"));
+    await user.selectOptions(screen.getByRole("combobox", { name: "From" }), "Spotify history file");
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    await user.upload(input as HTMLInputElement, new File(["{nope"], "history.json"));
+    await user.click(screen.getByRole("button", { name: "Import" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Extended Streaming History");
   });
 
   it("says so when the API cannot be reached", async () => {
