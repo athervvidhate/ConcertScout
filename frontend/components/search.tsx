@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@base-ui/react/button";
+import Link from "next/link";
 import { type SubmitEvent, useState } from "react";
 
 import { Poster } from "@/components/poster";
@@ -46,6 +47,10 @@ export function Search() {
           Find concerts
         </Button>
       </form>
+
+      <nav className="search-nav">
+        <Link href="/saved">Saved Concerts</Link>
+      </nav>
 
       <div aria-live="polite" className="search-context">
         {interpreted && (

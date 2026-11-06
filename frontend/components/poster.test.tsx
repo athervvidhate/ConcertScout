@@ -34,6 +34,20 @@ afterEach(() => {
 const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 
 describe("Poster presentation", () => {
+  it("saves and skips from the arrow keys, keeps both, and moves to the next undecided", async () => {
+    const second = { ...recommendations[0], concert: { ...recommendations[0].concert, id: "second", artists: [{ name: "Second Artist" }] } };
+    render(<Poster candidates={null} recommendations={[...recommendations, second]} hasPoster searching={false} status={null} />);
+    await advance(0);
+
+    fireEvent.keyDown(screen.getByRole("button", { name: "Save" }), { key: "ArrowRight" });
+    expect(screen.getByRole("button", { name: "Real Artist, saved" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Second Artist" })).toBeTruthy();
+
+    fireEvent.keyDown(screen.getByRole("button", { name: "Save" }), { key: "ArrowLeft" });
+    expect(screen.getByRole("button", { name: "Second Artist, skipped" })).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem("concert-scout-skipped") ?? "[]")).toEqual(["second"]);
+  });
+
   it("shows the pipeline's real status while the Search runs", () => {
     render(<Poster candidates={null} recommendations={[]} hasPoster={false} searching status="Finding Chicago" />);
     expect(screen.getByText("Finding Chicago")).toBeTruthy();
