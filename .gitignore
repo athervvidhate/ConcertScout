@@ -78,3 +78,8 @@ CLAUDE.md
 
 # Third-party Concert pool snapshots
 api/evals/snapshots/
+
+# Browser test build and failure artifacts
+.next-e2e/
+test-results/
+playwright-report/

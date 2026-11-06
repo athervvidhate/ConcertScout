@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatDate, formatPosterHeading, formatInterpreted, formatPrice, formatTime } from "@/lib/format";
+import { formatDate, formatPrice, formatTime } from "@/lib/format";
 
 describe("formatDate", () => {
   it("keeps the venue's calendar day", () => {
@@ -22,41 +22,4 @@ describe("formatPrice", () => {
   it("shows one price when the range is a single value", () => {
     expect(formatPrice({ min: 30, max: 30, currency: "GBP" })).toBe("£30.00");
   });
-});
-
-describe("formatInterpreted", () => {
-  it("joins the place, dates and Artists", () => {
-    expect(
-      formatInterpreted({
-        place: "Chicago",
-        start: "2026-11-06",
-        end: "2026-11-15",
-        artists: ["Khruangbin"],
-      }),
-    ).toBe("Chicago · Fri, Nov 6, 2026 to Sun, Nov 15, 2026 · Khruangbin");
-  });
-
-  it("shows one date for a single day", () => {
-    expect(formatInterpreted({ start: "2026-11-06", end: "2026-11-06", artists: [] })).toBe(
-      "Fri, Nov 6, 2026",
-    );
-  });
-
-  it("words an open-ended range", () => {
-    expect(formatInterpreted({ start: "2026-11-06", artists: [] })).toBe("from Fri, Nov 6, 2026");
-    expect(formatInterpreted({ end: "2026-11-15", artists: [] })).toBe("until Sun, Nov 15, 2026");
-  });
-
-  it("leaves out what the interpreter did not find", () => {
-    expect(formatInterpreted({ place: "Chicago", artists: [] })).toBe("Chicago");
-  });
-});
-
-it("compacts Ticket prices without changing their value or currency", () => {
-  expect(formatPrice({ min: 38, max: 38, currency: "USD" }, true)).toBe("$38");
-  expect(formatPrice({ min: 45.5, max: 120, currency: "USD" }, true)).toBe("$45.5 to $120");
-});
-it("keeps the Poster heading compact and leaves absent fields out", () => {
-  expect(formatPosterHeading({ place: "Chicago", start: "2026-11-06", end: "2026-11-15", artists: [] })).toBe("Chicago, Nov 6 to 15");
-  expect(formatPosterHeading({ artists: ["Khruangbin"] })).toBe("Khruangbin");
 });

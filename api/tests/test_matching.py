@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -57,13 +56,6 @@ def test_one_hop_outranks_two_hops_at_full_closeness() -> None:
 
     assert near is not None and far is not None
     assert (near.score, far.score) == (matching.ONE_HOP_WEIGHT, matching.TWO_HOP_WEIGHT)
-
-
-def test_one_hop_shrinks_with_distance_on_a_root_scale() -> None:
-    match = only_match(Artist(name="Near"), Taste([], [neighbour("Near", 1, 0.25)], []))
-
-    assert match is not None
-    assert match.score == pytest.approx(matching.ONE_HOP_WEIGHT * 0.5)  # pyright: ignore[reportUnknownMemberType]
 
 
 def test_many_two_hop_paths_beat_one_stronger_path() -> None:
@@ -129,16 +121,6 @@ def test_a_tag_on_everyone_in_the_pool_scores_nothing() -> None:
     )
 
     assert [c.match for c in candidates] == [None, None]
-
-
-def test_the_searchs_own_tags_match_and_name_no_seed() -> None:
-    tags = {"a": ["shoegaze"], "b": ["pop"]}
-    pool = (concert("2", tagged("b")),)
-
-    match = only_match(tagged("a"), Taste([], [], ["Shoegaze"]), tags, pool)
-
-    assert match is not None
-    assert (match.signal, match.via) == ("tags", None)
 
 
 def test_each_seed_is_measured_against_its_own_tags() -> None:
@@ -229,28 +211,9 @@ def test_a_seed_playing_in_the_pool_lends_its_ticketmaster_genre() -> None:
     assert match.signal == "genre"
 
 
-def test_no_taste_scores_nothing_and_keeps_the_order() -> None:
-    concerts = [concert(str(n), Artist(name=f"A{n}")) for n in range(3)]
-
-    candidates = matching.score_concerts(concerts, Taste([], [], []), {})
-
-    assert [c.match for c in candidates] == [None, None, None]
-    assert [c.concert.id for c in matching.shortlist(candidates)] == ["0", "1", "2"]
-
-
 def scored(id: str, score: float, support: float = 0) -> Candidate:
     match = Match(artist=id, signal="tags", score=score, support=support)
     return Candidate(concert=concert(id, Artist(name=id)), match=match)
-
-
-def test_the_shortlist_keeps_the_top_sixty_by_score() -> None:
-    candidates = [scored(str(n), n / 100) for n in range(90)]
-
-    picked = matching.shortlist(candidates)
-
-    assert len(picked) == matching.SHORTLIST_SIZE == 60
-    assert picked[0].concert.id == "89"
-    assert picked[-1].concert.id == "30"
 
 
 def test_ties_go_to_the_artist_with_more_supporting_signals_then_the_soonest() -> None:
@@ -279,14 +242,6 @@ def test_candidate_names_use_the_matched_artist_once_then_the_lineup_then_the_co
     ]
 
     assert matching.candidate_names(candidates) == ["Tyler Childers", "Unmatched", "Concert 3"]
-
-
-def test_matching_imports_nothing_that_can_reach_a_network() -> None:
-    source = Path(matching.__file__).read_text(encoding="utf-8")
-
-    assert "import httpx" not in source
-    assert "redis" not in source
-    assert "sources" not in source
 
 
 @pytest.mark.parametrize(

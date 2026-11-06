@@ -1,0 +1,154 @@
+import { expect, test, type Page } from "@playwright/test";
+
+async function search(page: Page, text = "UKG in SF") {
+  await page.getByRole("textbox", { name: "Search" }).fill(text);
+  await expect(page.getByRole("button", { name: "Find concerts" })).toBeEnabled();
+  await page.getByRole("button", { name: "Find concerts" }).click();
+}
+
+async function observeNames(page: Page) {
+  await page.evaluate(() => {
+    const counts: number[] = [];
+    const observer = new MutationObserver(() => {
+      counts.push(document.querySelectorAll(".wall:not(.wall-hidden) > span").length);
+    });
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true });
+    Object.assign(window, { nameCounts: counts });
+  });
+}
+
+async function noOverflow(page: Page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+}
+
+test("Search preserves source facts and distinct Concerts; Save survives navigation and reload", async ({ page }) => {
+  await page.goto("/");
+  await observeNames(page);
+  const response = page.waitForResponse(r => r.url().endsWith("/search"));
+  await search(page);
+  const stream = await (await response).text();
+  expect(stream).toContain("event: done");
+  expect(stream).not.toContain("unknown-id");
+  await expect(page.locator(".poster-name")).toHaveCount(2);
+  await expect(page.getByRole("link", { name: "Tickets for Contract Concert One" }))
+    .toHaveAttribute("href", "https://tickets.example/one");
+  await expect(page.locator(".ticket .venue")).toContainText("Source Hall");
+  await expect(page.locator(".ticket .price")).toHaveText("$38");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Tickets for Contract Concert Two" })).toBeVisible();
+  await expect(page.locator(".ticket .price")).toHaveCount(0);
+  await expect(page.locator(".ticket .venue")).not.toContainText(/AM|PM/);
+  await noOverflow(page);
+  expect(await page.evaluate(() => Math.max(0, ...(window as unknown as {nameCounts: number[]}).nameCounts))).toBeLessThanOrEqual(8);
+  await page.getByRole("link", { name: "Saved Concerts", exact: true }).click();
+  await expect(page).toHaveURL(/\/saved$/);
+  await page.reload();
+  await expect(page.getByRole("link", { name: "Tickets for Contract Concert One" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Tickets for Contract Concert Two" })).toHaveCount(0);
+  await noOverflow(page);
+  await page.evaluate(() => {
+    const kept = JSON.parse(localStorage.getItem("concert-scout-saved")!);
+    kept[0].concert.date = "2000-01-01";
+    localStorage.setItem("concert-scout-saved", JSON.stringify(kept));
+  });
+  await page.reload();
+  await expect(page.getByRole("link", { name: "Tickets for Contract Concert One" })).toHaveCount(0);
+});
+
+test("empty Searches never flash a candidate wall or invent a Ticket", async ({ page }) => {
+  await page.goto("/");
+  await observeNames(page);
+  await search(page, "empty UKG in SF");
+  await expect(page.getByText(/Nothing qualifies for this Search/)).toBeVisible();
+  expect(await page.evaluate(() => Math.max(0, ...(window as unknown as {nameCounts: number[]}).nameCounts))).toBe(0);
+  await expect(page.locator(".poster-name, .ticket")).toHaveCount(0);
+  await noOverflow(page);
+});
+
+test("a truncated app stream offers a retry of the same Search", async ({ page }) => {
+  await page.goto("/");
+  let interrupted = false;
+  await page.route("http://127.0.0.1:8146/search", async route => {
+    if (interrupted) return route.continue();
+    interrupted = true;
+    // This is our own public SSE contract, not a vendor API imitation.
+    await route.fulfill({ contentType: "text/event-stream", body: 'event: status\ndata: {"step":"interpret","message":"Reading your Search"}\n\n' });
+  });
+  await search(page);
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("connection dropped");
+  const request = page.waitForRequest(r => r.url().endsWith("/search"));
+  await expect(page.getByRole("button", { name: "Try again" })).toBeEnabled();
+  await page.getByRole("button", { name: "Try again" }).click();
+  expect((await request).postDataJSON().text).toBe("UKG in SF");
+  await expect(page.getByRole("link", { name: "Tickets for Contract Concert One" })).toBeVisible();
+});
+
+test("history stays local, and only imported Artist names enter a Search", async ({ page }) => {
+  await page.goto("/");
+  const requests: string[] = [];
+  page.on("request", r => { if (r.url().startsWith("http://127.0.0.1:8146")) requests.push(r.postData() ?? ""); });
+  await page.getByRole("button", { name: "Your Taste", exact: true }).click();
+  await page.getByLabel("Import from").selectOption("history");
+  await page.getByLabel("Spotify history file", { exact: true }).setInputFiles({
+    name: "Streaming_History_Audio.json", mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify([{ms_played: 1234567, master_metadata_album_artist_name: "Private Artist", private_marker: "NEVER_SEND_RAW_HISTORY"}])),
+  });
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await expect(page.getByText(/Using 1 Artist from .*Spotify history file/)).toBeVisible();
+  expect(requests).toEqual([]);
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  const request = page.waitForRequest(r => r.url().endsWith("/search"));
+  await search(page, "SF");
+  const data = (await request).postDataJSON();
+  expect(data.taste).toEqual(["Private Artist"]);
+  expect(JSON.stringify(data)).not.toMatch(/1234567|NEVER_SEND_RAW_HISTORY|ms_played/);
+});
+
+test("examples rotate without changing input, and reduced motion stays static", async ({ page }) => {
+  await page.goto("/");
+  const input = page.getByRole("textbox", { name: "Search" });
+  const first = await input.getAttribute("placeholder");
+  await expect.poll(() => input.getAttribute("placeholder")).not.toBe(first);
+  await input.fill("My own Search");
+  const frozen = await input.getAttribute("placeholder");
+  await page.waitForTimeout(350);
+  await expect(input).toHaveValue("My own Search");
+  await expect(input).toHaveAttribute("placeholder", frozen!);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload();
+  const staticText = await input.getAttribute("placeholder");
+  await page.waitForTimeout(2800);
+  await expect(input).toHaveAttribute("placeholder", staticText!);
+});
+
+
+test("a refused storage write never claims a successful Save", async ({ page }) => {
+  await page.addInitScript(() => {
+    const write = Storage.prototype.setItem;
+    Storage.prototype.setItem = function(key, value) {
+      if (key === "concert-scout-saved") throw new DOMException("Storage refused", "QuotaExceededError");
+      return write.call(this, key, value);
+    };
+  });
+  await page.goto("/");
+  await search(page);
+  await expect(page.getByRole("button", {name: "Save", exact: true})).toBeVisible();
+  await page.getByRole("button", {name: "Save", exact: true}).click();
+  await expect(page.getByRole("status")).toContainText("could not keep that choice");
+  expect(await page.evaluate(() => localStorage.getItem("concert-scout-saved"))).toBeNull();
+});
+
+test("location is used only after the visitor presses its button", async ({ page, context }) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({latitude: 37.77, longitude: -122.42});
+  const requests: string[] = [];
+  page.on("request", r => { if (r.url().includes("/nearby?")) requests.push(r.url()); });
+  await page.goto("/");
+  await expect(page.getByRole("textbox", {name: "Search"})).toBeVisible();
+  expect(requests).toEqual([]);
+  const nearby = page.waitForResponse(r => r.url().includes("/nearby?"));
+  await page.getByRole("button", {name: "Show Concerts near me"}).click();
+  expect((await nearby).ok()).toBe(true);
+  expect(new URL(requests[0]).searchParams.get("lat")).toBe("37.77");
+  expect(new URL(requests[0]).searchParams.get("lon")).toBe("-122.42");
+});

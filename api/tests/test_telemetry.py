@@ -6,15 +6,18 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from pydantic_ai.usage import RunUsage
 
 from concert_scout import telemetry
-from tests.conftest import interpretation, model_returning
-from tests.test_app import api_for, routed
+from tests.contracts import install_sources
+from tests.test_app import api_for
 
 
-async def test_search_spans_never_include_taste_or_spotify_data() -> None:
+async def test_search_spans_never_include_taste_or_spotify_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    install_sources(monkeypatch)
     exporter = InMemorySpanExporter()
     telemetry.provider.add_span_processor(SimpleSpanProcessor(exporter))
     secret = "private taste and Spotify listening history"
-    async with api_for(routed(), model=model_returning(interpretation(place="Chicago"))) as api:
+    async with api_for() as api:
         await api.post("/search", json={"text": secret, "token": "token"})
     spans = exporter.get_finished_spans()
     assert {span.name for span in spans} >= {"search", "interpret", "resolve_place", "pool"}
