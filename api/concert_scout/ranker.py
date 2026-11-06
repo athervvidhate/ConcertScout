@@ -7,9 +7,11 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, NativeOutput
 from pydantic_ai.models import Model
 from pydantic_ai.models.anthropic import AnthropicModelSettings
+from pydantic_ai.usage import RunUsage
 
 from concert_scout.interpreter import Interpretation
 from concert_scout.matching import Candidate, usable_tags
+from concert_scout.telemetry import record_usage
 
 # The Search still has its fallback, so a slow model never holds the Poster for long.
 DEADLINE_SECONDS = 12.0
@@ -121,9 +123,12 @@ async def rank(
     model: Model,
 ) -> list[Pick]:
     prompt = build_prompt(interpretation, shortlist, artist_tags)
+    usage = RunUsage()
     try:
         async with asyncio.timeout(DEADLINE_SECONDS):
-            result = await agent.run(prompt, model=model)
+            result = await agent.run(prompt, model=model, usage=usage)
     except Exception as exc:
         raise RankerError(type(exc).__name__) from None
+    finally:
+        record_usage(usage)
     return result.output.picks

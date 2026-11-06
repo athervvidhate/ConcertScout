@@ -1,0 +1,91 @@
+"""Safe Search telemetry. Only fixed span names and numeric usage leave this module."""
+
+import logging
+from collections.abc import Generator, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
+from decimal import Decimal
+
+from opentelemetry import trace
+from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
+from pydantic_ai.usage import RunUsage
+
+logger = logging.getLogger(__name__)
+
+
+class LogExporter(SpanExporter):
+    def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
+        for span in spans:
+            logger.warning(
+                "search span=%s trace=%032x duration_ms=%.2f attributes=%s",
+                span.name,
+                span.context.trace_id if span.context else 0,
+                ((span.end_time or 0) - (span.start_time or 0)) / 1_000_000,
+                dict(span.attributes or {}),
+            )
+        return SpanExportResult.SUCCESS
+
+    def shutdown(self) -> None:
+        pass
+
+
+provider = TracerProvider()
+provider.add_span_processor(SimpleSpanProcessor(LogExporter()))
+tracer = provider.get_tracer(__name__)
+
+
+@dataclass
+class SearchUsage:
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost: Decimal = Decimal(0)
+    complete: bool = True
+
+
+_current: ContextVar[SearchUsage | None] = ContextVar("search_usage", default=None)
+
+
+def record_usage(usage: RunUsage) -> None:
+    """Accumulate actual model usage; missing prices or usage remain explicitly unknown."""
+    total = _current.get()
+    span = trace.get_current_span()
+    span.set_attribute("input_tokens", usage.input_tokens)
+    span.set_attribute("output_tokens", usage.output_tokens)
+    if usage.cost is not None:
+        span.set_attribute("cost_usd", float(usage.cost))
+    if total is not None:
+        total.input_tokens += usage.input_tokens
+        total.output_tokens += usage.output_tokens
+        if usage.cost is None or usage.unmeasured_requests:
+            total.complete = False
+        else:
+            total.cost += usage.cost
+
+
+@contextmanager
+def step(name: str) -> Generator[None]:
+    # Exception messages and stack traces can contain Search text or source data.
+    with tracer.start_as_current_span(name, record_exception=False, set_status_on_exception=False):
+        yield
+
+
+@contextmanager
+def search() -> Generator[SearchUsage]:
+    usage = SearchUsage()
+    token = _current.set(usage)
+    try:
+        with tracer.start_as_current_span(
+            "search", record_exception=False, set_status_on_exception=False
+        ) as span:
+            try:
+                yield usage
+            finally:
+                span.set_attribute("input_tokens", usage.input_tokens)
+                span.set_attribute("output_tokens", usage.output_tokens)
+                span.set_attribute("cost_complete", usage.complete)
+                if usage.complete:
+                    span.set_attribute("cost_usd", float(usage.cost))
+    finally:
+        _current.reset(token)
