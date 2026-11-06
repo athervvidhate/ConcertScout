@@ -85,9 +85,8 @@ async def _recommend(
     return assemble.from_matches(shortlist) if picks and not recommendations else recommendations
 
 
-async def _steps(text: str, services: Services) -> AsyncIterator[ServerSentEvent]:
+async def _steps(text: str, services: Services, today: dt.date) -> AsyncIterator[ServerSentEvent]:
     yield _event("status", Status(step="interpret", message="Reading your Search"))
-    today = dt.date.today()
     with telemetry.step("interpret"):
         interpretation = await interpret(text, today, services.model)
     yield _event(
@@ -170,13 +169,15 @@ async def _steps(text: str, services: Services) -> AsyncIterator[ServerSentEvent
 
 async def run_search(text: str, services: Services) -> AsyncIterator[ServerSentEvent]:
     with telemetry.search():
-        async for event in _run_search(text, services):
+        async for event in stream_search(text, services, dt.date.today()):
             yield event
 
 
-async def _run_search(text: str, services: Services) -> AsyncIterator[ServerSentEvent]:
+async def stream_search(
+    text: str, services: Services, today: dt.date
+) -> AsyncIterator[ServerSentEvent]:
     try:
-        async for event in _steps(text, services):
+        async for event in _steps(text, services, today):
             yield event
     except InterpreterError as exc:
         logger.warning("Interpreter failed: %s", exc)
