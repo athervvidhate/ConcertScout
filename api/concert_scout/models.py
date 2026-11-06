@@ -100,3 +100,9 @@ class SearchError(BaseModel):
     code: str
     message: str
     retry_after: int | None = None
+
+
+class ImportedTaste(BaseModel):
+    """A person's Artists, favourites first. The server keeps none of this."""
+
+    artists: list[str]

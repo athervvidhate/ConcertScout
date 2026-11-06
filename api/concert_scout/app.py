@@ -2,7 +2,7 @@ import datetime as dt
 import logging
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx
 from fastapi import Depends, FastAPI, Query, Request
@@ -10,28 +10,39 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints
 from pydantic_ai.models import Model
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from concert_scout import cache, interpreter, limits, security
 from concert_scout.config import Settings
-from concert_scout.models import Nearby, Places, SearchError
+from concert_scout.models import ImportedTaste, Nearby, Places, SearchError
 from concert_scout.pipeline import ASK_FOR_A_SEARCH, Services, find_nearby, run_search
 from concert_scout.security import Refused, SecurityHeaders
 from concert_scout.sources import geocoder, lastfm, listenbrainz, musicbrainz, ticketmaster
 
 logger = logging.getLogger(__name__)
 
+IMPORT_SIZE = 50
+MAX_TASTE = 100
+
 
 def _failure(status: int, error: SearchError) -> JSONResponse:
     return JSONResponse(error.model_dump(exclude_none=True), status_code=status)
 
 
+class TasteRequest(BaseModel):
+    username: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
+
+
+ArtistName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+
 class SearchRequest(BaseModel):
     text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
     token: Annotated[str, StringConstraints(min_length=1, max_length=2048)]
+    taste: Annotated[list[ArtistName], Field(max_length=MAX_TASTE)] = []
 
 
 def make_services(
@@ -53,6 +64,33 @@ def make_services(
         model=model or interpreter.make_model(settings.anthropic_api_key.get_secret_value()),
         turnstile=security.make_turnstile_client(transport),
     )
+
+
+async def _top_artists(source: str, username: str, services: Services) -> list[str]:
+    """Usernames stay out of the logs: they identify a person."""
+    name = "Last.fm" if source == "lastfm" else "ListenBrainz"
+    unavailable = Refused(503, "taste_unavailable", f"{name} is not answering. Try again soon.")
+    try:
+        if source == "listenbrainz":
+            artists = await listenbrainz.top_artists(services.listenbrainz, username, IMPORT_SIZE)
+        elif services.lastfm:
+            artists = await lastfm.top_artists(services.lastfm, username, IMPORT_SIZE)
+        else:
+            raise unavailable
+    except (lastfm.UserNotFound, listenbrainz.UserNotFound):
+        message = f"We could not find that {name} username. Check the spelling."
+        raise Refused(404, "taste_user_not_found", message) from None
+    except lastfm.PrivateUser:
+        message = (
+            "That Last.fm profile hides its listening. Turn that off in Last.fm's privacy settings."
+        )
+        raise Refused(403, "taste_private", message) from None
+    except (lastfm.LastfmError, listenbrainz.ListenBrainzError) as exc:
+        logger.warning("Taste import failed: %s", exc)
+        raise unavailable from None
+    if not artists:
+        raise Refused(404, "taste_empty", f"That {name} account has no listening to import yet.")
+    return artists
 
 
 def create_app(
@@ -135,6 +173,8 @@ def create_app(
     async def invalid_request(request: Request, _: RequestValidationError) -> JSONResponse:
         if request.url.path == "/search":
             return _failure(422, SearchError(code="invalid_search", message=ASK_FOR_A_SEARCH))
+        if request.url.path.startswith("/taste/"):
+            return _failure(422, SearchError(code="invalid_username", message="Enter a username."))
         return _failure(422, SearchError(code="invalid_place", message="Choose a place."))
 
     @app.get("/health")
@@ -176,9 +216,17 @@ def create_app(
             return _failure(503, SearchError(code="ticketmaster_unavailable", message=message))
         return Nearby(concerts=concerts)
 
+    # A POST, so the username stays out of access logs.
+    @app.post("/taste/{source}")
+    async def import_taste(
+        request: Request, source: Literal["lastfm", "listenbrainz"], body: TasteRequest
+    ) -> ImportedTaste:
+        await limit_visitor(request, "taste", limits.TASTE_PER_HOUR)
+        return ImportedTaste(artists=await _top_artists(source, body.username, services))
+
     @app.post("/search", response_class=EventSourceResponse, dependencies=[Depends(guard_search)])
     async def search(search: SearchRequest) -> AsyncIterator[ServerSentEvent]:
-        async for event in run_search(search.text, services):
+        async for event in run_search(search.text, search.taste, services):
             yield event
 
     return app

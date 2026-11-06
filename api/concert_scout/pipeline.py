@@ -36,6 +36,8 @@ NEARBY_WINDOW = dt.timedelta(days=30)
 NEARBY_SIZE = 12
 # With no place there is no pool, so this many similar Artists get looked up by name.
 DIRECT_LOOKUPS = 15
+# Imported Artists past this many join as names only, so a long list costs no extra API calls.
+IMPORTED_SEEDS = 5
 
 
 @dataclass(frozen=True)
@@ -77,12 +79,15 @@ async def _resolve_seed(name: str, services: Services) -> SeedArtist:
         return SeedArtist(name=name)
 
 
-async def _find_taste(interpretation: Interpretation, services: Services) -> matching.Taste:
+async def _find_taste(
+    interpretation: Interpretation, names_only: Sequence[str], services: Services
+) -> matching.Taste:
     seeds = await asyncio.gather(*(_resolve_seed(n, services) for n in interpretation.artists))
     neighbours = await similarity.find_neighbours(
         services.listenbrainz, services.lastfm, services.redis, seeds
     )
-    return matching.Taste(seeds, neighbours, interpretation.tags)
+    extra = [SeedArtist(name=name) for name in names_only]
+    return matching.Taste([*seeds, *extra], neighbours, interpretation.tags)
 
 
 async def _recommend(
@@ -101,10 +106,17 @@ async def _recommend(
     return assemble.from_matches(shortlist) if picks and not recommendations else recommendations
 
 
-async def _steps(text: str, services: Services, today: dt.date) -> AsyncIterator[ServerSentEvent]:
+async def _steps(
+    text: str, imported: Sequence[str], services: Services, today: dt.date
+) -> AsyncIterator[ServerSentEvent]:
     yield _event("status", Status(step="interpret", message="Reading your Search"))
     with telemetry.step("interpret"):
         interpretation = await interpret(text, today, services.model)
+    names_only: Sequence[str] = ()
+    # A Taste typed into this Search says what the person wants now, so it beats an import.
+    if not (interpretation.artists or interpretation.tags or interpretation.descriptors):
+        seeds, names_only = imported[:IMPORTED_SEEDS], imported[IMPORTED_SEEDS:]
+        interpretation = interpretation.model_copy(update={"artists": list(seeds)})
     yield _event(
         "interpreted",
         Interpreted(
@@ -138,7 +150,7 @@ async def _steps(text: str, services: Services, today: dt.date) -> AsyncIterator
         message = f"Finding Artists like {', '.join(interpretation.artists)}"
         yield _event("status", Status(step="resolve", message=message))
     with telemetry.step("resolve_artists"):
-        taste = await _find_taste(interpretation, services)
+        taste = await _find_taste(interpretation, names_only, services)
 
     if place:
         message = f"Looking for Concerts near {place.name}"
@@ -183,10 +195,12 @@ async def _steps(text: str, services: Services, today: dt.date) -> AsyncIterator
     yield _event("poster", Poster(recommendations=recommendations))
 
 
-async def run_search(text: str, services: Services) -> AsyncIterator[ServerSentEvent]:
+async def run_search(
+    text: str, imported: Sequence[str], services: Services
+) -> AsyncIterator[ServerSentEvent]:
     with telemetry.search() as usage:
         try:
-            async for event in stream_search(text, services, dt.date.today()):
+            async for event in stream_search(text, imported, services, dt.date.today()):
                 yield event
         finally:
             # A visitor who leaves early has still cost money, so a cancel must not skip this.
@@ -197,10 +211,10 @@ async def run_search(text: str, services: Services) -> AsyncIterator[ServerSentE
 
 
 async def stream_search(
-    text: str, services: Services, today: dt.date
+    text: str, imported: Sequence[str], services: Services, today: dt.date
 ) -> AsyncIterator[ServerSentEvent]:
     try:
-        async for event in _steps(text, services, today):
+        async for event in _steps(text, imported, services, today):
             yield event
     except InterpreterError as exc:
         logger.warning("Interpreter failed: %s", exc)

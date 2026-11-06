@@ -1,6 +1,6 @@
 # Taste
 
-Every source reduces to the same thing: a list of Artist names, each with an optional weight. The pipeline never knows where they came from, with one exception. Data from a Spotify account has its own path.
+Every source reduces to the same thing: a list of Artist names, favourites first. The pipeline never knows where they came from, with one exception. Data from a Spotify account has its own path.
 
 | Source | How | Reaches the LLM |
 |---|---|---|
@@ -11,7 +11,9 @@ Every source reduces to the same thing: a list of Artist names, each with an opt
 | Pasted list or CSV | Parsed in the browser | Yes |
 | Spotify account | Official OAuth, allowlisted | Never |
 
-The chosen imported Taste stays in `localStorage`. The server keeps none of it after the Search ends.
+The chosen imported Taste stays in `localStorage`, and each Search sends it. The server keeps none of it after the Search ends. A Taste typed into a Search beats the import for that Search.
+
+Imports fetch the top 50 Artists. Only the top 5 get MusicBrainz and similar-Artist lookups. The rest match the Concert pool by name, so a long list costs no extra API calls or time.
 
 ## History file
 

@@ -7,7 +7,9 @@ import { type SubmitEvent, useRef, useState } from "react";
 
 import { NearbyConcerts } from "@/components/nearby";
 import { Poster } from "@/components/poster";
+import { TasteImport } from "@/components/taste-import";
 import { formatInterpreted, formatPosterHeading } from "@/lib/format";
+import { useImportedTaste } from "@/lib/taste";
 import { useSearch } from "@/lib/use-search";
 
 const TURNSTILE_SITE_KEY =
@@ -18,6 +20,7 @@ export function Search() {
   const [token, setToken] = useState<string | null>(null);
   const [botCheckFailed, setBotCheckFailed] = useState(false);
   const botCheck = useRef<TurnstileInstance>(null);
+  const taste = useImportedTaste();
   const {
     phase,
     searched,
@@ -37,7 +40,7 @@ export function Search() {
     // Each token works once, so the next Search needs a fresh one.
     setToken(null);
     botCheck.current?.reset();
-    search(query, token);
+    search(query, token, taste?.artists ?? []);
   }
 
   function submit(event: SubmitEvent<HTMLFormElement>) {
@@ -89,6 +92,8 @@ export function Search() {
       <nav className="search-nav">
         <Link href="/saved">Saved Concerts</Link>
       </nav>
+
+      <TasteImport />
 
       <div aria-live="polite" className="search-context">
         {interpreted && (
