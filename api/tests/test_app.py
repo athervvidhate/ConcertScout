@@ -16,9 +16,9 @@ from concert_scout.app import create_app
 from concert_scout.config import Settings
 from concert_scout.matching import SHORTLIST_SIZE
 from tests.conftest import (
+    KHRUANGBIN_MBID,
     TYLER_MBID,
     UPCOMING,
-    KHRUANGBIN_MBID,
     geoapify_result,
     interpretation,
     lastfm_similar,

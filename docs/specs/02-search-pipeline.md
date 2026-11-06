@@ -76,6 +76,8 @@ Rules from the spike:
 
 Keep the top 60 Concerts by score, deduplicated by Concert ID. Festivals count as one Concert, and the score comes from the best match in the Lineup.
 
+A Search with no Taste has nothing to score, so it shortlists notable Concerts instead: those whose first Artist Ticketmaster links to MusicBrainz, once per first Artist, soonest first. The link costs nothing extra and leaves out most unbilled bar listings. It does not filter tribute acts.
+
 This step emits the `candidates` event, whose names fill the loader. Names from a connected Spotify account never appear here, per [ADR 0003](../adr/0003-official-spotify-access-only.md).
 
 ## 6. Rank
@@ -89,11 +91,19 @@ class Pick(BaseModel):
     reason: str       # one sentence, 140 characters at most
 ```
 
-The ranker should drop poor fits. The spike showed tags pull in misses such as Kim Petras for Four Tet, and this step exists to remove them. Event text is untrusted, so it goes in delimited fields and the model has no tools.
+The ranker should drop poor fits. The spike showed tags pull in misses such as Kim Petras for Four Tet, and this step exists to remove them. Event text is untrusted, so it goes in delimited fields and the model has no tools. The prompt is one JSON object, so a listing's text stays inside its own quoted field, and each field is cut to 80 characters. The model never sees a URL, date, venue or price.
+
+A Search with no Taste skips this step, so it makes one LLM call. The ranker gets 12 seconds, and any failure goes to the fallback.
 
 ## 7. Assemble
 
-Code rejects any ID not in the shortlist, sorts by score, cuts to 8 and fills in facts from the source record. If the ranker fails, the Search shows the top matches from step 5 with a neutral reason built from the match signal. It says why the Concert matched, such as "Similar to Khruangbin".
+Code rejects any ID not in the shortlist, keeps one pick per ID, sorts by score, cuts to 8 and fills in facts from the source record. Only the reason comes from the model.
+
+If the ranker fails, or every pick names an unknown ID, the Search shows the top matches from step 5 with a neutral reason built from the match signal. It says why the Concert matched, such as "Rhye is similar to Khruangbin". A ranker that returns no picks has not failed: nothing fits, so the Poster is empty.
+
+The fallback never pads. A match qualifies with a signal other than genre, scoring above 0.15, the flat genre weight. A Concert with no match has no reason to show. Each Artist takes one slot, except a seed, so the Poster can be short.
+
+A Search with no Taste shows the first 8 notable Concerts from step 5, each with the reason "Coming up nearby".
 
 ## API
 
@@ -130,6 +140,7 @@ api/concert_scout/
   pipeline.py       the seven steps
   interpreter.py    step 1
   ranker.py         step 6
+  assemble.py       step 7, pure functions
   matching.py       steps 4 and 5, pure functions
   similarity.py     one and two hops, with the Last.fm fallback
   sources/          ticketmaster, musicbrainz, listenbrainz, lastfm, geocoder

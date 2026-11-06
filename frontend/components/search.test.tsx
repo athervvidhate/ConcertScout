@@ -46,7 +46,8 @@ async function searchFor(text: string) {
 }
 
 const poster = (...concerts: Concert[]) =>
-  sse("poster", { recommendations: concerts.map((concert) => ({ concert, reason: `Reason for ${concert.name}` })),
+  sse("poster", {
+    recommendations: concerts.map((concert) => ({ concert, reason: `Reason for ${concert.name}` })),
   });
 
 describe("Search", () => {

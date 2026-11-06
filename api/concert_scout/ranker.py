@@ -2,8 +2,9 @@
 
 import asyncio
 from collections.abc import Mapping, Sequence
+from typing import Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 from pydantic_ai import Agent, NativeOutput
 from pydantic_ai.models import Model
 from pydantic_ai.models.anthropic import AnthropicModelSettings
@@ -29,7 +30,8 @@ shares a broad genre. null means no signal, so judge it on what you know of the 
 
 Return only Concerts someone with this Taste would really want to see. Drop poor fits even when \
 they have a signal, because tags and genres pull in misses, and a filler act is worse than a \
-shorter list. If nothing fits, return no picks. Return at most 8 picks.
+shorter list. If nothing fits, return no picks. Return at most 8 picks, and at most one Concert \
+per Artist unless the Artist is a seed.
 
 - id: copied exactly from the candidate.
 - score: 0 to 100, how well it suits the Taste. Below 50 is a poor fit, so leave it out.
@@ -40,7 +42,7 @@ Mention no dates, venues, prices or links."""
 class Pick(BaseModel):
     id: str
     score: int = Field(ge=0, le=100)
-    reason: str = Field(max_length=140)
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=140)]
 
 
 class Ranking(BaseModel):

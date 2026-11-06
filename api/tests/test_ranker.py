@@ -118,11 +118,12 @@ async def test_a_model_that_never_answers_properly_is_a_ranker_error() -> None:
     assert "Off the scale" not in str(caught.value)
 
 
-async def test_an_overlong_reason_is_refused() -> None:
-    long = picks(("a", 90, "x" * 141))
+@pytest.mark.parametrize("reason", ["x" * 141, "", "   "])
+async def test_a_reason_too_long_or_blank_is_refused(reason: str) -> None:
+    bad = picks(("a", 90, reason))
 
     with pytest.raises(RankerError):
-        await rank(KHRUANGBIN, [candidate("a")], {}, model_returning(long, long, long))
+        await rank(KHRUANGBIN, [candidate("a")], {}, model_returning(bad, bad, bad))
 
 
 async def test_a_slow_model_is_a_ranker_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -190,13 +191,26 @@ def test_the_fallback_drops_genre_filler_weak_matches_and_concerts_with_no_match
     shortlist = [
         candidate("seed", 1.0, "seed"),
         candidate("near", 0.64, "one_hop"),
-        candidate("weak-hop", 0.2, "two_hops"),
-        candidate("narrow-genre", assemble.QUALIFYING_SCORE, "genre", None),
+        candidate("weak-hop", assemble.QUALIFYING_SCORE, "two_hops"),
+        candidate("narrow-genre", 0.3, "genre", None),
         candidate("genre", 0.15, "genre", None),
         Candidate(concert=concert("none")),
     ]
 
     assert [r.concert.id for r in assemble.from_matches(shortlist)] == ["seed", "near"]
+
+
+def test_the_fallback_gives_a_neighbour_one_slot_and_a_seed_as_many_as_it_has() -> None:
+    shortlist = [
+        candidate("seed-1"),
+        candidate("seed-2"),
+        candidate("near-1", 0.6, "one_hop"),
+        candidate("near-2", 0.6, "one_hop"),
+    ]
+
+    result = assemble.from_matches(shortlist)
+
+    assert [r.concert.id for r in result] == ["seed-1", "seed-2", "near-1"]
 
 
 def test_the_fallback_is_cut_to_the_poster() -> None:

@@ -13,7 +13,7 @@ A Search needs a Taste, a place, or both. Dates are optional.
 | Input | Behavior |
 |---|---|
 | Taste and place | Rank Concerts near the place against the Taste |
-| Place only | Show notable Concerts near the place, soonest first |
+| Place only | Show notable Concerts near the place, soonest first. [Notable](02-search-pipeline.md#5-shortlist) needs no LLM call |
 | Taste only | Look up the seed Artists and top similar Artists directly, then show their nearest Concerts anywhere |
 | No dates | Search the next 6 months |
 | Neither Taste nor place | Ask for one, inline, with no LLM ranking call |

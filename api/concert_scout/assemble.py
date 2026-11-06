@@ -3,15 +3,15 @@
 import logging
 from collections.abc import Sequence
 
-from concert_scout.matching import NARROW_GENRE_WEIGHT, Candidate, Match
+from concert_scout.matching import GENRE_WEIGHT, Candidate, Match
 from concert_scout.models import Recommendation
 from concert_scout.ranker import Pick
 
 logger = logging.getLogger(__name__)
 
 POSTER_SIZE = 8
-# The most a genre alone can score, so with no ranker to drop them, genre fillers never qualify.
-QUALIFYING_SCORE = NARROW_GENRE_WEIGHT
+# What a broad genre scores. On live Searches this keeps real tag matches and cuts stray tags.
+QUALIFYING_SCORE = GENRE_WEIGHT
 NOTABLE_REASON = "Coming up nearby"
 
 
@@ -32,14 +32,21 @@ def from_picks(picks: Sequence[Pick], shortlist: Sequence[Candidate]) -> list[Re
 def from_matches(shortlist: Sequence[Candidate]) -> list[Recommendation]:
     """The fallback when the ranker fails: strong matches only, in shortlist order.
 
-    A Concert with no match has nothing true to say, and a weak one is what the ranker would have
-    dropped, so the Poster comes up short rather than padded.
+    A match qualifies with a signal other than genre, scoring above QUALIFYING_SCORE. A Concert
+    with no match has nothing true to say and a weak one is what the ranker would have dropped, so
+    the Poster comes up short rather than padded. Only a seed may fill more than one slot.
     """
-    recommendations = [
-        Recommendation(concert=candidate.concert, reason=_neutral_reason(match))
-        for candidate in shortlist
-        if (match := candidate.match) and match.score > QUALIFYING_SCORE
-    ]
+    recommendations: list[Recommendation] = []
+    shown: set[str] = set()
+    for candidate in shortlist:
+        match = candidate.match
+        if not match or match.signal == "genre" or match.score <= QUALIFYING_SCORE:
+            continue
+        if match.signal == "seed" or match.artist not in shown:
+            shown.add(match.artist)
+            recommendations.append(
+                Recommendation(concert=candidate.concert, reason=_neutral_reason(match))
+            )
     return recommendations[:POSTER_SIZE]
 
 
