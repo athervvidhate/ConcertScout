@@ -36,10 +36,14 @@ def concert(id: str, artist: str = "Source Artist", mbid: str | None = None) -> 
 
 
 def candidate(
-    id: str, score: float = 1.0, signal: Signal = "seed", via: str | None = "Khruangbin"
+    id: str,
+    score: float = 1.0,
+    signal: Signal = "seed",
+    via: str | None = "Khruangbin",
+    artist: str = "Source Artist",
 ) -> Candidate:
-    match = Match(artist="Source Artist", signal=signal, score=score, via=via)
-    return Candidate(concert=concert(id), match=match)
+    match = Match(artist=artist, signal=signal, score=score, via=via)
+    return Candidate(concert=concert(id, artist), match=match)
 
 
 def prompt_of(shortlist: Sequence[Candidate], tags: dict[str, list[str]] | None = None) -> Any:
@@ -190,10 +194,10 @@ def test_the_fallback_reason_states_the_real_signal(
 def test_the_fallback_drops_genre_filler_weak_matches_and_concerts_with_no_match() -> None:
     shortlist = [
         candidate("seed", 1.0, "seed"),
-        candidate("near", 0.64, "one_hop"),
-        candidate("weak-hop", assemble.QUALIFYING_SCORE, "two_hops"),
-        candidate("narrow-genre", 0.3, "genre", None),
-        candidate("genre", 0.15, "genre", None),
+        candidate("near", 0.64, "one_hop", artist="Neighbour"),
+        candidate("weak-hop", assemble.QUALIFYING_SCORE, "two_hops", artist="Stranger"),
+        candidate("narrow-genre", 0.3, "genre", None, "Filler"),
+        candidate("genre", 0.15, "genre", None, "Lady A"),
         Candidate(concert=concert("none")),
     ]
 
@@ -204,8 +208,8 @@ def test_the_fallback_gives_a_neighbour_one_slot_and_a_seed_as_many_as_it_has() 
     shortlist = [
         candidate("seed-1"),
         candidate("seed-2"),
-        candidate("near-1", 0.6, "one_hop"),
-        candidate("near-2", 0.6, "one_hop"),
+        candidate("near-1", 0.6, "one_hop", artist="Neighbour"),
+        candidate("near-2", 0.6, "one_hop", artist="Neighbour"),
     ]
 
     result = assemble.from_matches(shortlist)
