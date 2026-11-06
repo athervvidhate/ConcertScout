@@ -69,6 +69,7 @@ Snapshots preserve actual source responses and model answers so a changing conce
 make check       # lint, types and app/data contracts; no paid requests
 make e2e         # production browser journeys at 1280px and 390px, isolated real Redis
 make check-live  # explicitly call configured real providers; one paid interpreter call
+make check-context  # local transcript adapters; no model request
 ```
 
 Install the browser once with `cd frontend && npx playwright install chromium`. Browser tests use typed app-owned adapter fixtures rather than inventing vendor API JSON. Live checks validate real providers separately. Failure traces and screenshots are kept by CI. [Testing boundaries and commands](docs/development/testing.md).
@@ -88,3 +89,5 @@ Install the browser once with `cd frontend && npx playwright install chromium`. 
 Concert facts and links come from [Ticketmaster](https://www.ticketmaster.com). Artist identities/tags come from [MusicBrainz](https://musicbrainz.org); similarity/tags from [ListenBrainz](https://listenbrainz.org), with [Last.fm / AudioScrobbler](https://www.last.fm) as a similarity fallback and optional Taste import. Places use [Geoapify](https://www.geoapify.com) and [OpenStreetMap contributors](https://www.openstreetmap.org/copyright). The optional account shelf uses [Spotify](https://open.spotify.com) with its logo and links. The app links every source on its [credits page](frontend/app/credits/page.tsx); MusicBrainz's [data licenses](https://musicbrainz.org/doc/About/Data_License) apply to its metadata.
 
 Ticketmaster coverage is not the whole live-music calendar. Sparse tags and missing Artist IDs can hide relevant Concerts, while broad electronic genres can still produce weak picks. The similarity Labs API needs its fallback. The dataset still needs owner judgments. Spotify's live OAuth acceptance and public hosting remain pending their respective setup steps. Physical-device drag acceptance also remains a human check. Local implementation and passing CI are not a claim that those steps are finished.
+
+Agent session recovery: [single-agent continuity and host setup](docs/development/session-recovery.md).
