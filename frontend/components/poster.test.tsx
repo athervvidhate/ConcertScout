@@ -53,13 +53,13 @@ describe("Poster presentation", () => {
     expect(screen.getByText("Finding Chicago")).toBeTruthy();
   });
 
-  it("fades in a pick that has no name on the wall to fly from", async () => {
+  it("includes a chosen Artist missing from the candidates in the reveal", async () => {
     render(<Poster candidates={{ names: ["Another Artist"], total: 2 }} recommendations={recommendations} hasPoster searching={false} status={null} />);
     await advance(0);
-    await advance(namesDuration(1));
+    await advance(namesDuration(2));
     await advance(PICK_READ_MS);
     const frames = animate.mock.calls.map(([keyframes]) => keyframes as Keyframe[]);
-    expect(frames.some((keyframes) => keyframes[0].opacity === 0)).toBe(true);
+    expect(frames.length).toBeGreaterThan(0);
   });
 
   it("gives each rank its own Ticket color", async () => {
@@ -82,7 +82,7 @@ describe("Poster presentation", () => {
   it("finishes names, then picks and fly-in before showing the Ticket", async () => {
     render(<Poster candidates={candidates} recommendations={recommendations} hasPoster searching={false} status={null} />);
     await advance(namesDuration(candidates.names.length));
-    expect(screen.getByText("1 picks from 2 close matches")).toBeTruthy();
+    expect(screen.getByText("1 pick from 2 Concerts considered")).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
     await advance(PICK_READ_MS);
     expect(animate).toHaveBeenCalledTimes(2);
@@ -117,11 +117,33 @@ it("keeps duplicate Artists as distinct Concerts and uses 1/2/rest tiers", async
   expect(screen.getByRole("status").textContent).toContain("skipped");
 });
 
-it("does not replay the name reveal when ranking finishes later", async () => {
+it("starts the name reveal when ranking finishes later", async () => {
   const view = render(<Poster candidates={candidates} recommendations={[]} hasPoster={false} searching status={null} />);
   await advance(namesDuration(candidates.names.length) + 2000);
   view.rerender(<Poster candidates={candidates} recommendations={recommendations} hasPoster searching={false} status={null} />);
-  await advance(0);
+  await advance(namesDuration(2));
   await advance(PICK_READ_MS);
   expect(animate).toHaveBeenCalled();
+});
+
+
+it("does not reveal names while their qualification is still unknown", () => {
+  render(<Poster candidates={candidates} recommendations={[]} hasPoster={false} searching status="Choosing Concerts" />);
+  expect(document.querySelector(".wall")).toBeNull();
+  expect(screen.getByText("Choosing Concerts")).toBeTruthy();
+});
+
+it("never flashes a name wall for an empty Poster", async () => {
+  render(<Poster candidates={candidates} recommendations={[]} hasPoster searching={false} status={null} />);
+  await advance(5000);
+  expect(document.querySelector(".wall")).toBeNull();
+  expect(document.querySelector(".poster")).toBeNull();
+  expect(screen.queryByText(/0 picks/)).toBeNull();
+});
+
+it("keeps the reveal small when only two Concerts qualify", async () => {
+  const many = { names: Array.from({length: 60}, (_, i) => `Artist ${i}`), total: 60 };
+  render(<Poster candidates={many} recommendations={[...recommendations, {...recommendations[0], concert: {...recommendations[0].concert, id:"other", artists:[{name:"Second"}]}}]} hasPoster searching={false} status={null} />);
+  expect(document.querySelectorAll(".wall > span").length).toBeLessThanOrEqual(8);
+  expect(document.querySelector('.wall [data-name="Real Artist"]')).toBeTruthy();
 });

@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TasteImport } from "@/components/taste-import";
+import { TastePanel } from "@/components/taste-panel";
 
 function stubImport(status: number, body: unknown) {
   const fetchStub = vi.fn(async () => new Response(JSON.stringify(body), { status }));
@@ -12,15 +12,15 @@ function stubImport(status: number, body: unknown) {
 
 async function importFrom(source: string, username: string) {
   const user = userEvent.setup();
-  render(<TasteImport />);
-  await user.click(screen.getByText("Import your Taste"));
-  await user.selectOptions(screen.getByRole("combobox", { name: "From" }), source);
-  await user.type(screen.getByRole("textbox", { name: "Username" }), username);
+  render(<TastePanel />);
+  await user.click(screen.getByRole("button", { name: "Your Taste" }));
+  await user.selectOptions(screen.getByRole("combobox", { name: "Import from" }), source);
+  await user.type(screen.getByRole("textbox", { name: /username/ }), username);
   await user.click(screen.getByRole("button", { name: "Import" }));
   return user;
 }
 
-describe("TasteImport", () => {
+describe("TastePanel", () => {
   beforeEach(() => localStorage.clear());
 
   it("keeps an imported Taste on this device and shows where it came from", async () => {
@@ -44,7 +44,7 @@ describe("TasteImport", () => {
     await user.click(await screen.findByRole("button", { name: "Remove" }));
 
     expect(localStorage.getItem("concert-scout-taste")).toBeNull();
-    expect(screen.getByText("Import your Taste")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import" })).toBeTruthy();
   });
 
   it("shows a clear error for an unknown username and keeps nothing", async () => {
@@ -59,9 +59,9 @@ describe("TasteImport", () => {
   it("imports a pasted list and calls no API", async () => {
     const fetchStub = stubImport(200, {});
     const user = userEvent.setup();
-    render(<TasteImport />);
-    await user.click(screen.getByText("Import your Taste"));
-    await user.selectOptions(screen.getByRole("combobox", { name: "From" }), "Pasted list");
+    render(<TastePanel />);
+    await user.click(screen.getByRole("button", { name: "Your Taste" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Import from" }), "Pasted list");
     await user.type(screen.getByRole("textbox", { name: /one per line/ }), "Khruangbin{enter}Bonobo");
     await user.click(screen.getByRole("button", { name: "Import" }));
 
@@ -72,11 +72,11 @@ describe("TasteImport", () => {
   it("imports a history file without it leaving the browser", async () => {
     const fetchStub = stubImport(200, {});
     const user = userEvent.setup();
-    const { container } = render(<TasteImport />);
-    await user.click(screen.getByText("Import your Taste"));
-    await user.selectOptions(screen.getByRole("combobox", { name: "From" }), "Spotify history file");
+    render(<TastePanel />);
+    await user.click(screen.getByRole("button", { name: "Your Taste" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Import from" }), "Spotify history file");
     const body = JSON.stringify([{ ms_played: 5, master_metadata_album_artist_name: "Bonobo" }]);
-    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
     await user.upload(input as HTMLInputElement, new File([body], "history.json"));
     await user.click(screen.getByRole("button", { name: "Import" }));
 
@@ -88,14 +88,35 @@ describe("TasteImport", () => {
   it("explains a malformed history file", async () => {
     stubImport(200, {});
     const user = userEvent.setup();
-    const { container } = render(<TasteImport />);
-    await user.click(screen.getByText("Import your Taste"));
-    await user.selectOptions(screen.getByRole("combobox", { name: "From" }), "Spotify history file");
-    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    render(<TastePanel />);
+    await user.click(screen.getByRole("button", { name: "Your Taste" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Import from" }), "Spotify history file");
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
     await user.upload(input as HTMLInputElement, new File(["{nope"], "history.json"));
     await user.click(screen.getByRole("button", { name: "Import" }));
 
     expect((await screen.findByRole("alert")).textContent).toContain("Extended Streaming History");
+  });
+
+  it("explains how to get a history file behind an icon", async () => {
+    stubImport(200, {});
+    const user = userEvent.setup();
+    render(<TastePanel />);
+    await user.click(screen.getByRole("button", { name: "Your Taste" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Import from" }), "Spotify history file");
+
+    await user.click(screen.getByRole("button", { name: /How to get your Spotify history file/ }));
+
+    expect(await screen.findByText(/Extended streaming history/)).toBeTruthy();
+    const link = screen.getByRole("link", { name: /privacy page/ });
+    expect(link.getAttribute("target")).toBe("_blank");
+  });
+
+  it("shows the Taste in use on the button that opens the panel", async () => {
+    stubImport(200, { artists: ["Khruangbin", "Bonobo"] });
+    await importFrom("Last.fm", "someone");
+
+    expect(await screen.findByRole("button", { name: "Your Taste: 2 Artists", hidden: true })).toBeTruthy();
   });
 
   it("says so when the API cannot be reached", async () => {

@@ -116,3 +116,13 @@ async def test_a_request_anthropic_refuses_is_an_interpreter_error() -> None:
 
     with models.override_allow_model_requests(True), pytest.raises(InterpreterError):
         await interpret("Chicago", TODAY, anthropic_model(handler))
+
+
+async def test_common_shorthand_is_normalized_without_another_model_call() -> None:
+    result = await interpret(
+        "UKG in SF",
+        TODAY,
+        model_returning(interpretation(descriptors=["UKG"], tags=["ukg"], place="SF")),
+    )
+    assert result.place == "San Francisco, California, United States"
+    assert "uk garage" in result.tags

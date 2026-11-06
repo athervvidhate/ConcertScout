@@ -4,6 +4,15 @@ The old UI looked generated, so the rebuild has a real point of view: a screen-p
 
 Follow `ui-skills.com` rules and Emil Kowalski's motion rules. Use coss ui (Base UI) for controls. The fly-in uses the Web Animations API, and Ticket drag uses Motion. Short React Bits text effects are allowed. WebGL backgrounds are not.
 
+## Home
+
+The page has one job, so it has one search box in the middle. A city typed there already works, so there is no second place box.
+
+- Top bar, right aligned: Saved Concerts and Your Taste. Your Taste opens a panel from the right edge, and importing happens there.
+- A location button sits inside the search box. It asks for the browser's location only when pressed, then shows Concerts near you below.
+- The empty Search box rotates eight realistic examples with a typing/deleting effect. Pause while focused, while text is entered, or during a Search. Reduced motion keeps a static example.
+- Links to Tickets and other sites open a new tab, so a Poster is never lost.
+
 ## Tokens
 
 | Token | Value |
@@ -46,15 +55,15 @@ Nothing on screen is a fake. No skeleton blocks, no invented progress percentage
 | Stage | Trigger | What shows |
 |---|---|---|
 | 1. Opening | Submit | Equalizer bars in the Poster area, status "Reading your request", then each real `status` message. Keep this short: send `candidates` as early as possible, aiming for under 2s |
-| 2. Names | `candidates` | Equalizer leaves. Real candidate names fade in as small print, 32ms apart, up to 38 names |
-| 3. Ranking | Same event | Names stay. Status shows real counts |
-| 4. Picks | `poster` | Picks turn pink, the status changes to "8 picks from 38 close matches", and other names fade together over 0.28s |
+| 2. Names | Nonempty `poster`, using real `candidates` | Equalizer leaves. Real candidate names fade in as small print, 32ms apart, a bounded sample proportional to the qualifying Poster (up to 24 names) |
+| 3. Ranking | Before `poster` | Equalizer and real status stay; no Artist wall appears before qualification |
+| 4. Picks | `poster` | Picks turn pink, the status changes to "8 picks from 60 Concerts considered", and other names fade together over 0.28s |
 | 5. Fly-in | 550ms after picks turn pink, so the status can be read | See below |
 | 6. Ticket | As soon as the fly-in ends | First Ticket rises 12px over 420ms. The headliner stays pink |
 
 Stages 4 to 6 are presentation only. Every Recommendation already exists when the `poster` event arrives, so nothing after it waits on the network. The 550ms before the fly-in exists only so the status can be read, and no other pause is allowed.
 
-Save and Skip stay hidden until stage 6. If the `poster` event arrives before stage 2 finishes, stage 2 completes first.
+Save and Skip stay hidden until stage 6. The name reveal begins only after a nonempty `poster` arrives, so an empty Search never flashes Artists that did not qualify. Include every chosen Artist in the reveal and cap its size at the larger of 8 or three times the pick count, up to 24. Posters of three or fewer Recommendations collapse unused vertical space.
 
 ### Fly-in
 

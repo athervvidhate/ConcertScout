@@ -9,6 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from concert_scout.aliases import music_tag
 from concert_scout.models import Artist, Concert, SeedArtist
 from concert_scout.names import normalize
 
@@ -100,7 +101,7 @@ class Candidate(BaseModel):
 
 def usable_tags(tags: Iterable[str]) -> set[str]:
     """Tags that describe a sound. Era and demographic tags pull in Artists who only share those."""
-    clean = {" ".join(tag.casefold().replace("-", " ").split()) for tag in tags}
+    clean = {music_tag(tag) for tag in tags}
     return {tag for tag in clean if tag not in BLOCKED_TAGS and not ERA_TAG.fullmatch(tag)}
 
 
@@ -253,10 +254,10 @@ def _wanted_genres(lineups: Sequence[Artist], taste: Taste, known: Mapping[str, 
 
 
 def _genre_match(artist: Artist, genres: set[str], sizes: Mapping[str, int]) -> Match | None:
-    if artist.subgenre and artist.subgenre.casefold() in genres:
+    if artist.subgenre and music_tag(artist.subgenre) in genres:
         narrow = sizes[artist.subgenre] < NARROW_GENRE_ARTISTS
         score = NARROW_GENRE_WEIGHT if narrow else GENRE_WEIGHT
         return Match(artist=artist.name, signal="genre", score=score)
-    if artist.genre and artist.genre.casefold() in genres:
+    if artist.genre and music_tag(artist.genre) in genres:
         return Match(artist=artist.name, signal="genre", score=GENRE_WEIGHT)
     return None

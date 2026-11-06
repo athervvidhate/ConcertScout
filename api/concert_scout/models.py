@@ -49,6 +49,8 @@ class Place(BaseModel):
     name: str
     lat: float
     lon: float
+    state_code: str | None = None
+    country_code: str | None = None
 
 
 class SeedArtist(BaseModel):

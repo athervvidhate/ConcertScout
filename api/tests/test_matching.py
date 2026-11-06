@@ -287,3 +287,17 @@ def test_matching_imports_nothing_that_can_reach_a_network() -> None:
     assert "import httpx" not in source
     assert "redis" not in source
     assert "sources" not in source
+
+
+@pytest.mark.parametrize(
+    ("typed", "reported"),
+    [("UKG", "uk garage"), ("DnB", "drum & bass"), ("RnB", "rhythm and blues")],
+)
+def test_genre_aliases_match_source_tags(typed: str, reported: str) -> None:
+    match = only_match(
+        tagged("a"),
+        Taste([], [], [typed]),
+        {"a": [reported], "b": ["rock"]},
+        (concert("b", tagged("b")),),
+    )
+    assert match is not None and match.signal == "tags"

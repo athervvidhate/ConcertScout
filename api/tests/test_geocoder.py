@@ -112,3 +112,33 @@ async def test_find_places_asks_for_five_and_caches_them() -> None:
     assert first == second == [CHICAGO]
     assert len(requests) == 1
     assert requests[0].url.params["limit"] == "5"
+
+
+async def test_city_aliases_share_the_expanded_place_cache() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"results": [geoapify_result()]})
+
+    async with make_client("test-key", httpx.MockTransport(handler)) as client:
+        redis = FakeAsyncRedis()
+        await geocode(client, redis, "SF")
+        await geocode(client, redis, "San Francisco, California, United States")
+    assert len(requests) == 1
+    assert requests[0].url.params["text"] == "San Francisco, California, United States"
+
+
+def test_a_state_keeps_its_boundary_filter_and_a_city_does_not() -> None:
+    state = {
+        "formatted": "Texas, United States",
+        "lat": 31.1,
+        "lon": -99.1,
+        "result_type": "state",
+        "state_code": "TX",
+        "country_code": "us",
+    }
+    place = parse_places({"results": [state]})[0]
+    assert place.model_dump().get("state_code") == "TX"
+    city = parse_places({"results": [state | {"result_type": "city"}]})[0]
+    assert city.model_dump().get("state_code") is None

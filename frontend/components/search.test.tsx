@@ -77,14 +77,14 @@ describe("Search", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("caps the shortlisted names at what the loader shows", async () => {
+  it("keeps a small Poster reveal proportionate to its picks", async () => {
     const names = Array.from({ length: 60 }, (_, n) => `Artist ${n}`);
     stubStream(sse("candidates", { names, total: 60 }), poster(full), sse("done", {}));
 
     await searchFor("Chicago");
 
-    expect(await screen.findByText("Artist 37")).toBeTruthy();
-    expect(screen.queryByText("Artist 38")).toBeNull();
+    expect(await screen.findByText("Artist 6")).toBeTruthy();
+    expect(screen.queryByText("Artist 7")).toBeNull();
   });
 
   it("hides Try again when the error says when to come back", async () => {
@@ -204,6 +204,61 @@ describe("Search", () => {
   });
 });
 
+describe("the home page", () => {
+  beforeEach(() => localStorage.clear());
+
+  function stubLocation(works: boolean) {
+    const getCurrentPosition = vi.fn((done: PositionCallback, fail: PositionErrorCallback) => {
+      if (works) done({ coords: { latitude: 41.87, longitude: -87.62 } } as GeolocationPosition);
+      else fail({} as GeolocationPositionError);
+    });
+    vi.stubGlobal("navigator", { ...navigator, geolocation: { getCurrentPosition } });
+    return getCurrentPosition;
+  }
+
+  it("has one search box, and asks for location only when the button is pressed", async () => {
+    const getCurrentPosition = stubLocation(true);
+    const fetchStub = vi.fn(async () => Response.json({ concerts: [full] }));
+    vi.stubGlobal("fetch", fetchStub);
+    const user = userEvent.setup();
+    render(<Search />);
+
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Show Concerts near me" }));
+
+    const link = await screen.findByRole("link", { name: "Khruangbin" });
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(fetchStub.mock.calls[0]).toEqual([
+      "http://127.0.0.1:8000/nearby?lat=41.87&lon=-87.62",
+      expect.anything(),
+    ]);
+  });
+
+  it("points to the search box when location is refused", async () => {
+    stubLocation(false);
+    const user = userEvent.setup();
+    render(<Search />);
+
+    await user.click(screen.getByRole("button", { name: "Show Concerts near me" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Type a city");
+  });
+
+  it("forgets the place when nearby Concerts are hidden", async () => {
+    localStorage.setItem("concert-scout-place", JSON.stringify({ lat: 41.87, lon: -87.62 }));
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ concerts: [full] })));
+    const user = userEvent.setup();
+    render(<Search />);
+
+    await user.click(await screen.findByRole("button", { name: "Hide" }));
+
+    expect(localStorage.getItem("concert-scout-place")).toBeNull();
+    expect(screen.queryByRole("region", { name: "Concerts near you" })).toBeNull();
+  });
+});
+
 describe("refused Searches", () => {
   function stubRefusal(status: number, body: unknown) {
     vi.stubGlobal("fetch", vi.fn(async (url: string) => {
@@ -249,6 +304,7 @@ describe("refused Searches", () => {
       message: "Concert Scout has used its Search budget for now. Nearby Concerts still work.",
       retry_after: 3600,
     });
+    localStorage.setItem("concert-scout-place", JSON.stringify({ lat: 41.87, lon: -87.62 }));
     await searchFor("Chicago");
 
     expect(await screen.findByText(/Search budget/)).toBeTruthy();

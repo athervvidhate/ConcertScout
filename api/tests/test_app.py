@@ -21,7 +21,6 @@ from concert_scout.interpreter import InterpreterError
 from concert_scout.matching import SHORTLIST_SIZE
 from concert_scout.telemetry import record_usage
 from tests.conftest import (
-    CHICAGO,
     TYLER_MBID,
     UPCOMING,
     geoapify_result,
@@ -68,6 +67,7 @@ def routed(
 
 def settings_with(**overrides: Any) -> Settings:
     return Settings(
+        _env_file=None,  # pyright: ignore[reportCallIssue]
         tm_key=SecretStr("test-key"),
         anthropic_api_key=SecretStr("test-key"),
         geoapify_key=SecretStr("test-key"),
@@ -623,22 +623,6 @@ async def test_a_ticketmaster_failure_on_nearby_gets_a_safe_error() -> None:
     assert "test-key" not in response.text
 
 
-async def test_places_lists_matches_and_keeps_the_key_on_the_server() -> None:
-    async with api_for(routed()) as api:
-        response = await api.get("/places", params={"text": "Chi"})
-
-    assert response.json()["places"][0]["lat"] == CHICAGO.lat
-    assert "test-key" not in response.text
-
-
-async def test_a_geocoder_failure_on_places_gets_a_safe_error() -> None:
-    async with api_for(routed(geo_status=500)) as api:
-        response = await api.get("/places", params={"text": "Chi"})
-
-    assert response.status_code == 503
-    assert response.json()["code"] == "geocoder_unavailable"
-
-
 class BrokenRedis(FakeAsyncRedis):
     async def execute_command(self, *_: object, **__: object) -> None:
         raise RedisConnectionError("down")
@@ -668,6 +652,15 @@ async def test_each_client_gets_its_own_search_limit() -> None:
     assert over.json()["code"] == "visitor_limit"
     assert over.json()["retry_after"] > 0
     assert other.status_code == 200
+
+
+async def test_the_hourly_search_limit_is_a_setting() -> None:
+    settings = settings_with(searches_per_hour=1)
+    async with api_for(routed(), many_searches(), settings=settings) as api:
+        await api.post("/search", json=search_json())
+        over = await api.post("/search", json=search_json())
+
+    assert over.status_code == 429
 
 
 async def test_an_untrusted_forwarding_header_cannot_dodge_the_limit() -> None:
@@ -807,21 +800,18 @@ async def test_without_redis_search_refuses_and_the_home_page_keeps_working() ->
     assert nearby.status_code == 200
 
 
-async def test_nearby_and_places_have_their_own_limits(
+async def test_nearby_has_its_own_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(limits, "NEARBY_PER_HOUR", 1)
-    monkeypatch.setattr(limits, "PLACES_PER_HOUR", 1)
     handler = routed(ticketmaster=tm_body(nearby_record()))
 
     async with api_for(handler) as api:
         params = {"lat": 41.87, "lon": -87.62}
         await api.get("/nearby", params=params)
         nearby = await api.get("/nearby", params=params)
-        await api.get("/places", params={"text": "Chi"})
-        places = await api.get("/places", params={"text": "Chi"})
 
-    assert (nearby.status_code, places.status_code) == (429, 429)
+    assert nearby.status_code == 429
     assert nearby.json()["code"] == "visitor_limit"
 
 

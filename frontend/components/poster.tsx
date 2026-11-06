@@ -77,21 +77,29 @@ function useHeadlinerFit(poster: React.RefObject<HTMLDivElement | null>, visible
 }
 
 function statusText({ candidates, recommendations, hasPoster, searching, status }: Props) {
-  if (!candidates) return searching ? (status ?? "Reading your request") : "";
-  if (!hasPoster) return `${candidates.total} close matches, ranking them`;
-  return `${recommendations.length} picks from ${candidates.total} close matches`;
+  if (!hasPoster) return searching ? (status ?? "Reading your request") : "";
+  if (!recommendations.length) return "";
+  const picks = `${recommendations.length} ${recommendations.length === 1 ? "pick" : "picks"}`;
+  return candidates ? `${picks} from ${candidates.total} Concerts considered` : picks;
 }
 
 export function Poster(props: Props) {
   const { candidates, recommendations, hasPoster, searching } = props;
-  const names = candidates?.names.slice(0, MAX_CANDIDATE_NAMES) ?? [];
-  const [stage, setStage] = useStage(candidates, hasPoster, names.length);
+  // A name reveal only begins once there are Recommendations to reveal. Keep a small
+  // Poster proportionate, and include every chosen name so each has a place to fly from.
+  const qualified = hasPoster && recommendations.length > 0;
+  const names = qualified && candidates
+    ? [...new Set([...recommendations.map(nameOf), ...candidates.names])]
+      .slice(0, Math.min(MAX_CANDIDATE_NAMES, Math.max(8, recommendations.length * 3)))
+    : [];
+  const reveal = qualified ? candidates : null;
+  const [stage, setStage] = useStage(reveal, qualified, names.length);
   const [selected, setSelected] = useState(0);
   const decisions = useDecisions();
   const [notice, setNotice] = useState("");
   const wall = useRef<HTMLDivElement>(null);
   const poster = useRef<HTMLDivElement>(null);
-  const showPoster = stage === "fly" || stage === "ticket";
+  const showPoster = qualified && (stage === "fly" || stage === "ticket");
   useHeadlinerFit(poster, showPoster);
 
   useEffect(() => {
@@ -145,9 +153,9 @@ export function Poster(props: Props) {
   }
 
   return (
-    <section className="poster-area">
+    <section className={`poster-area ${hasPoster && recommendations.length <= 3 ? "poster-compact" : ""}`}>
       <div className="poster-stage">
-        {searching && !candidates && (
+        {searching && !qualified && (
           <div className="equalizer" aria-hidden="true">
             <i />
             <i />
@@ -156,7 +164,7 @@ export function Poster(props: Props) {
             <i />
           </div>
         )}
-        {candidates && (
+        {qualified && candidates && (
           <div ref={wall} className={`wall ${showPoster ? "wall-hidden" : ""}`}>
             {names.map((name, index) => (
               <span

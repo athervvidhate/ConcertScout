@@ -183,3 +183,19 @@ async def test_a_concert_with_no_known_date_stays_out_of_the_window() -> None:
         return httpx.Response(200, json=tm_body(undated))
 
     assert await find(respond, place=None, artists=("Khruangbin",)) == []
+
+
+async def test_state_searches_and_seed_lookups_use_boundaries_and_a_separate_cache() -> None:
+    requests: list[httpx.Request] = []
+    texas = CHICAGO.model_copy(update={"state_code": "TX", "country_code": "US"})
+    redis = FakeAsyncRedis()
+    await find(recording(requests), redis, texas, ("Khruangbin",), TODAY, TODAY)
+    assert requests
+    for request in requests:
+        assert request.url.params["stateCode"] == "TX"
+        assert request.url.params["countryCode"] == "US"
+        assert "geoPoint" not in request.url.params
+        assert "radius" not in request.url.params
+    await find(forbidden, redis, texas, ("Khruangbin",), TODAY, TODAY)
+    assert await redis.exists("pool:US:TX:2026-11")
+    assert not await redis.exists("pool:dp3wn:2026-11")

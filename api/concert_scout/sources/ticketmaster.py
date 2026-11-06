@@ -40,27 +40,40 @@ def rounded_point(place: Place) -> str:
 
 
 async def find_concerts(
-    client: httpx.AsyncClient, redis: Redis, point: str, start: dt.date, end: dt.date
+    client: httpx.AsyncClient,
+    redis: Redis,
+    point: str | None,
+    start: dt.date,
+    end: dt.date,
+    *,
+    state: tuple[str, str] | None = None,
 ) -> list[Concert]:
-    return await _find(client, redis, _base_params(point), start, end)
+    return await _find(client, redis, _base_params(point, state), start, end)
 
 
 async def find_artist_concerts(
-    client: httpx.AsyncClient, redis: Redis, name: str, point: str | None
+    client: httpx.AsyncClient,
+    redis: Redis,
+    name: str,
+    point: str | None,
+    *,
+    state: tuple[str, str] | None = None,
 ) -> list[Concert]:
     """An Artist's upcoming Concerts. `keyword` is loose, so code checks the Lineup."""
-    concerts = await _find(client, redis, _base_params(point) | {"keyword": name})
+    concerts = await _find(client, redis, _base_params(point, state) | {"keyword": name})
     wanted = normalize(name)
     return [c for c in concerts if wanted in (normalize(a.name) for a in c.artists)]
 
 
-def _base_params(point: str | None) -> dict[str, str | int]:
+def _base_params(point: str | None, state: tuple[str, str] | None) -> dict[str, str | int]:
     params: dict[str, str | int] = {
         "segmentName": "Music",
         "size": PAGE_SIZE,
         "sort": "date,name,asc",
     }
-    if point:
+    if state:
+        params |= {"countryCode": state[0], "stateCode": state[1]}
+    elif point:
         params |= {"geoPoint": point, "radius": RADIUS_MILES, "unit": "miles"}
     return params
 

@@ -47,7 +47,12 @@ export function Ticket({ recommendation, rank }: { recommendation: Recommendatio
       <div className="ticket-stub">
         <span>Admit one</span>
         {concert.price && <Price text={formatPrice(concert.price, true)} />}
-        <a href={concert.url} aria-label={`Tickets for ${concert.name}`}>
+        <a
+          href={concert.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Tickets for ${concert.name}`}
+        >
           Tickets
         </a>
       </div>

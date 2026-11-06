@@ -1,5 +1,5 @@
 import { cleanup } from "@testing-library/react";
-import { afterEach, vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 
 // Cloudflare's script cannot load in tests, so the widget passes as soon as it mounts.
 vi.mock("@marsidev/react-turnstile", async () => {
@@ -10,6 +10,10 @@ vi.mock("@marsidev/react-turnstile", async () => {
       return null;
     },
   };
+});
+
+beforeEach(() => {
+  vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
 });
 
 afterEach(() => {

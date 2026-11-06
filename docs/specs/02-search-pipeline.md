@@ -26,6 +26,8 @@ class Interpretation(BaseModel):
     end: date | None
 ```
 
+Common genre aliases (UKG, DnB/D&B, RnB, EDM) are normalized in code, including source tags. The existing interpreter call expands other familiar genre and place shorthand without an extra model call. A small explicit place alias map resolves common local shorthand before geocoding; unfamiliar names and explicit qualifiers are preserved.
+
 The prompt receives today's date in code, which removes the old hardcoded 2025. `tags` must include related styles, because exact tags are sparse: the spike found 4 Artists tagged "shoegaze" in Chicago and none tagged "techno".
 
 ## 2. Resolve
@@ -34,7 +36,7 @@ Code geocodes the place, using Geoapify autocomplete in the UI and for free text
 
 ## 3. Pool
 
-A pool holds every Concert for a place and date window.
+A pool holds every Concert for a place and date window. A Geoapify state result in the US or Canada uses Ticketmaster `countryCode` and `stateCode`, for both pool and direct Artist lookups, instead of a circle around the state center. State cache keys are separate from city coordinates.
 
 - Query Ticketmaster with `segmentName=Music` and a 50-mile radius.
 - Split the window into 30-day chunks to get past the 1,000-result cap.
@@ -100,7 +102,6 @@ Code rejects any ID not in the shortlist, sorts by score, cuts to 8 and fills in
 ```
 GET  /health
 GET  /nearby?lat=&lon=
-GET  /places?text=      place autocomplete, so the Geoapify key stays on the server
 POST /search            streams SSE
 GET  /auth/spotify/login
 GET  /auth/spotify/callback
