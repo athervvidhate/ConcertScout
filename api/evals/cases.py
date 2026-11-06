@@ -21,10 +21,7 @@ class Search(BaseModel):
     good: list[str] = []
     bad: list[str] = []
     notes: str | None = None
-
-    @property
-    def judged(self) -> bool:
-        return self.snapshot is not None and bool(self.must or self.good or self.bad)
+    judged: bool = False
 
 
 def load(path: Path = SEARCHES) -> list[Search]:

@@ -28,16 +28,20 @@ def sample(poster_artists: Sequence[str], names: Sequence[str], size: int = SAMP
 def label_artists(artists: Sequence[str], ask: Ask) -> Labels:
     labels = Labels()
     for index, artist in enumerate(artists, start=1):
-        answer = ask(f"[{index}/{len(artists)}] {artist}: (m)ust (g)ood (b)ad (Enter) neutral? ")
-        match answer.strip().lower():
-            case "m":
-                labels.must.append(artist)
-            case "g":
-                labels.good.append(artist)
-            case "b":
-                labels.bad.append(artist)
-            case _:
-                pass
+        while True:
+            answer = ask(
+                f"[{index}/{len(artists)}] {artist}: (m)ust (g)ood (b)ad (Enter) neutral? "
+            )
+            answer = answer.strip().lower()
+            if answer in {"m", "must", "g", "good", "b", "bad", "", "n", "neutral"}:
+                break
+            print("Use m, g, b or Enter for neutral.")
+        if answer in {"m", "must"}:
+            labels.must.append(artist)
+        elif answer in {"g", "good"}:
+            labels.good.append(artist)
+        elif answer in {"b", "bad"}:
+            labels.bad.append(artist)
     # A must Artist the pipeline missed never appears above, so it has to come from the judge.
     others = ask("Other must Artists, comma separated (Enter for none): ")
     labels.must.extend(name.strip() for name in others.split(",") if name.strip())
@@ -48,6 +52,7 @@ def apply_labels(search: Search, snapshot_id: str, labels: Labels, notes: str) -
     return search.model_copy(
         update={
             "snapshot": snapshot_id,
+            "judged": True,
             "must": labels.must,
             "good": labels.good,
             "bad": labels.bad,
@@ -56,10 +61,23 @@ def apply_labels(search: Search, snapshot_id: str, labels: Labels, notes: str) -
     )
 
 
-async def judge(search: Search, settings: Settings, ask: Ask) -> Search:
-    print(f"\n{search.id}: {search.text}\nRunning the Search...")
-    snapshot, result = await harness.capture(search.id, search.text, settings)
-    snapshots.save(snapshot)
+async def judge(
+    search: Search, settings: Settings | None, ask: Ask, snapshot: snapshots.Snapshot | None = None
+) -> Search:
+    print(f"\n{search.id}: {search.text}\nPreparing the Search...")
+    if snapshot is None:
+        if settings is None:
+            raise ValueError("Live capture requires Settings")
+        snapshot, result = await harness.capture(search.id, search.text, settings)
+        snapshots.save(snapshot)
+    else:
+        if snapshot.text != search.text:
+            raise ValueError("Snapshot text differs from this Search; choose the matching case")
+        result, misses = await harness.replay(snapshot, None)
+        if misses:
+            raise ValueError(
+                "Snapshot cannot replay the current pipeline; capture this Search again"
+            )
     if result.error:
         print(f"The Search ended with {result.error}.")
     poster_artists = [a.name for r in result.recommendations for a in r.concert.artists]
@@ -71,7 +89,11 @@ async def judge(search: Search, settings: Settings, ask: Ask) -> Search:
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("ids", nargs="*", help="Search IDs. Default: the next unjudged Search.")
-    wanted = parser.parse_args().ids
+    parser.add_argument(
+        "--snapshot", help="Judge one existing Snapshot offline, with no keys or cost."
+    )
+    arguments = parser.parse_args()
+    wanted = arguments.ids
     searches = cases.load()
     chosen = [s for s in searches if s.id in wanted] if wanted else []
     if not wanted:
@@ -79,9 +101,16 @@ async def main() -> None:
     if not chosen:
         print("Nothing to judge.")
         return
-    settings = Settings()  # pyright: ignore[reportCallIssue]
+    snapshot = snapshots.load(arguments.snapshot) if arguments.snapshot else None
+    if snapshot is not None and len(chosen) != 1:
+        parser.error("--snapshot needs exactly one Search ID")
+    settings = Settings() if snapshot is None else None  # pyright: ignore[reportCallIssue]
     for search in chosen:
-        judged = await judge(search, settings, input)
+        try:
+            judged = await judge(search, settings, input, snapshot)
+        except (EOFError, KeyboardInterrupt):
+            print("\nReview stopped; this Search was not changed.")
+            raise SystemExit(130) from None
         searches = [judged if s.id == judged.id else s for s in searches]
         cases.save(searches)
         print(f"Saved {judged.id}.")
