@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 async function search(page: Page, text = "UKG in SF") {
   await page.getByRole("textbox", { name: "Search" }).fill(text);
@@ -214,4 +214,88 @@ test("Spotify access denial explains the invite list and keeps no session", asyn
   await page.getByRole("button", {name: "Your Taste", exact: true}).click();
   await expect(page.getByRole("status")).toContainText("not on the app's invite list");
   expect((await context.cookies()).some(c => c.name === "concert_scout_spotify")).toBe(false);
+});
+
+
+async function tabTo(page: Page, target: Locator) {
+  for (let index = 0; index < 30; index++) {
+    if (await target.evaluate(element => element === document.activeElement)) return;
+    await page.keyboard.press("Tab");
+  }
+  await expect(target).toBeFocused();
+}
+
+async function dragTicket(page: Page, distance: number, touch: boolean) {
+  const ticket = page.locator(".ticket-drag");
+  await ticket.scrollIntoViewIfNeeded();
+  const box = (await ticket.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + Math.min(80, box.height / 2);
+  const frame = () => page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+  if (touch) {
+    // Native browser touch input, not DOM-dispatched pointer events or Motion callbacks.
+    const input = await page.context().newCDPSession(page);
+    await input.send("Input.dispatchTouchEvent", {type: "touchStart", touchPoints: [{x, y, id: 1}]});
+    for (let step = 1; step <= 12; step++) {
+      await input.send("Input.dispatchTouchEvent", {
+        type: "touchMove", touchPoints: [{x: x + distance * step / 12, y, id: 1}],
+      });
+      await frame();
+    }
+    await input.send("Input.dispatchTouchEvent", {type: "touchEnd", touchPoints: []});
+    await input.detach();
+  } else {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let step = 1; step <= 12; step++) {
+      await page.mouse.move(x + distance * step / 12, y);
+      await frame();
+    }
+    await page.mouse.up();
+  }
+  return box.x;
+}
+
+test("keyboard choices advance distinct Tickets and can be removed after reload", async ({page}) => {
+  await page.emulateMedia({reducedMotion: "reduce"});
+  await page.goto("/");
+  await search(page);
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await tabTo(page, page.getByRole("button", {name: "Save", exact: true}));
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert Two"})).toBeVisible();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator(".poster-name.saved")).toHaveCount(1);
+  await expect(page.locator(".poster-name.skipped")).toHaveCount(1);
+  await tabTo(page, page.getByRole("link", {name: "Saved Concerts", exact: true}));
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/saved$/);
+  await page.reload();
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert Two"})).toHaveCount(0);
+  await tabTo(page, page.getByRole("button", {name: "Remove", exact: true}));
+  await page.keyboard.press("Space");
+  await expect(page.getByText("Nothing saved yet. Save a Concert from a Poster.")).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toHaveCount(0);
+});
+
+test("short drags decide nothing; right saves and left skips with native input", async ({page, isMobile}) => {
+  await page.emulateMedia({reducedMotion: "reduce"});
+  await page.goto("/");
+  await search(page);
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  const originalX = await dragTicket(page, 20, Boolean(isMobile));
+  await expect.poll(async () => (await page.locator(".ticket-drag").boundingBox())!.x).toBeCloseTo(originalX, 0);
+  await expect(page.locator(".poster-name.saved,.poster-name.skipped")).toHaveCount(0);
+  await dragTicket(page, 150, Boolean(isMobile));
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert Two"})).toBeVisible();
+  await expect(page.locator(".poster-name.saved")).toHaveCount(1);
+  await dragTicket(page, -150, Boolean(isMobile));
+  await expect(page.locator(".poster-name.skipped")).toHaveCount(1);
+  await page.getByRole("link", {name: "Saved Concerts", exact: true}).click();
+  await expect(page).toHaveURL(/\/saved$/);
+  await page.reload();
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert Two"})).toHaveCount(0);
 });
