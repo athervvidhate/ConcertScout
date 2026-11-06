@@ -23,17 +23,16 @@ class SearchRequest(BaseModel):
     text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
 
 
-def create_app(
-    settings: Settings | None = None,
+def make_services(
+    settings: Settings,
     transport: httpx.AsyncBaseTransport | None = None,
     redis: Redis | None = None,
     model: Model | None = None,
-) -> FastAPI:
-    settings = settings or Settings()  # pyright: ignore[reportCallIssue]
+) -> Services:
     lastfm_client = None
     if settings.lastfm_key:
         lastfm_client = lastfm.make_client(settings.lastfm_key.get_secret_value(), transport)
-    services = Services(
+    return Services(
         ticketmaster=ticketmaster.make_client(settings.tm_key.get_secret_value(), transport),
         geocoder=geocoder.make_client(settings.geoapify_key.get_secret_value(), transport),
         musicbrainz=musicbrainz.make_client(transport),
@@ -42,6 +41,16 @@ def create_app(
         redis=redis or cache.make_client(settings.redis_url),
         model=model or interpreter.make_model(settings.anthropic_api_key.get_secret_value()),
     )
+
+
+def create_app(
+    settings: Settings | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
+    redis: Redis | None = None,
+    model: Model | None = None,
+) -> FastAPI:
+    settings = settings or Settings()  # pyright: ignore[reportCallIssue]
+    services = make_services(settings, transport, redis, model)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:

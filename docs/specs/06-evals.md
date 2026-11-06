@@ -49,6 +49,8 @@ The 20 Searches should cover the pipeline's weak spots:
 | Time to `poster` event, p95 | Under 15s |
 | Cost per Search | Measured and recorded |
 
+`uv run python -m evals.run` prints every measure. It replays each Snapshot, which holds every outbound call and model answer, so it needs no keys or network and costs nothing. A prompt, weight or shortlist change makes new model requests, so use `--live-model`, which calls the real model and costs money. Time to `poster` always comes from the cold capture, because a replay makes no real calls.
+
 Run the evals in CI only by hand or nightly, because they cost money. Fixture tests for `matching.py` run on every push.
 
 ## Tuning

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from pydantic_ai.models import Model
 from redis.asyncio import Redis
 
-from concert_scout import assemble, limits, matching, pool, similarity
+from concert_scout import assemble, limits, matching, pool, similarity, telemetry
 from concert_scout.interpreter import Interpretation, InterpreterError, interpret
 from concert_scout.models import (
     Candidates,
@@ -85,10 +85,10 @@ async def _recommend(
     return assemble.from_matches(shortlist) if picks and not recommendations else recommendations
 
 
-async def _steps(text: str, services: Services) -> AsyncIterator[ServerSentEvent]:
+async def _steps(text: str, services: Services, today: dt.date) -> AsyncIterator[ServerSentEvent]:
     yield _event("status", Status(step="interpret", message="Reading your Search"))
-    today = dt.date.today()
-    interpretation = await interpret(text, today, services.model)
+    with telemetry.step("interpret"):
+        interpretation = await interpret(text, today, services.model)
     yield _event(
         "interpreted",
         Interpreted(
@@ -111,7 +111,8 @@ async def _steps(text: str, services: Services) -> AsyncIterator[ServerSentEvent
     if interpretation.place:
         message = f"Finding {interpretation.place}"
         yield _event("status", Status(step="resolve", message=message))
-        place = await geocoder.geocode(services.geocoder, services.redis, interpretation.place)
+        with telemetry.step("resolve_place"):
+            place = await geocoder.geocode(services.geocoder, services.redis, interpretation.place)
         if place is None:
             message = f"We could not find {interpretation.place}. Check the spelling."
             yield _error("place_not_found", message)
@@ -120,7 +121,8 @@ async def _steps(text: str, services: Services) -> AsyncIterator[ServerSentEvent
     if interpretation.artists:
         message = f"Finding Artists like {', '.join(interpretation.artists)}"
         yield _event("status", Status(step="resolve", message=message))
-    taste = await _find_taste(interpretation, services)
+    with telemetry.step("resolve_artists"):
+        taste = await _find_taste(interpretation, services)
 
     if place:
         message = f"Looking for Concerts near {place.name}"
@@ -129,25 +131,27 @@ async def _steps(text: str, services: Services) -> AsyncIterator[ServerSentEvent
         message = f"Looking for Concerts by {', '.join(interpretation.artists)} and similar Artists"
         lookups = [*interpretation.artists, *similarity.closest(taste.neighbours, DIRECT_LOOKUPS)]
     yield _event("status", Status(step="pool", message=message))
-    concerts = await pool.find_concerts(
-        services.ticketmaster,
-        services.redis,
-        place,
-        lookups,
-        interpretation.start,
-        interpretation.end,
-        today,
-    )
+    with telemetry.step("pool"):
+        concerts = await pool.find_concerts(
+            services.ticketmaster,
+            services.redis,
+            place,
+            lookups,
+            interpretation.start,
+            interpretation.end,
+            today,
+        )
     yield _event("pool", PoolTotal(total=len(concerts)))
 
     artist_tags: dict[str, list[str]] = {}
     if taste:
         yield _event("status", Status(step="match", message="Matching Concerts to your Taste"))
         mbids = {a.mbid for concert in concerts for a in concert.artists if a.mbid}
-        artist_tags = await listenbrainz.artist_tags(
-            services.listenbrainz, services.redis, sorted(mbids)
-        )
-        shortlist = matching.shortlist(matching.score_concerts(concerts, taste, artist_tags))
+        with telemetry.step("match"):
+            artist_tags = await listenbrainz.artist_tags(
+                services.listenbrainz, services.redis, sorted(mbids)
+            )
+            shortlist = matching.shortlist(matching.score_concerts(concerts, taste, artist_tags))
     else:
         shortlist = matching.notable(concerts)
     names = matching.candidate_names(shortlist)
@@ -158,13 +162,22 @@ async def _steps(text: str, services: Services) -> AsyncIterator[ServerSentEvent
         recommendations = assemble.from_notable(shortlist)
     else:
         yield _event("status", Status(step="rank", message="Choosing the closest Concerts"))
-        recommendations = await _recommend(interpretation, shortlist, artist_tags, services)
+        with telemetry.step("rank"):
+            recommendations = await _recommend(interpretation, shortlist, artist_tags, services)
     yield _event("poster", Poster(recommendations=recommendations))
 
 
 async def run_search(text: str, services: Services) -> AsyncIterator[ServerSentEvent]:
+    with telemetry.search():
+        async for event in stream_search(text, services, dt.date.today()):
+            yield event
+
+
+async def stream_search(
+    text: str, services: Services, today: dt.date
+) -> AsyncIterator[ServerSentEvent]:
     try:
-        async for event in _steps(text, services):
+        async for event in _steps(text, services, today):
             yield event
     except InterpreterError as exc:
         logger.warning("Interpreter failed: %s", exc)
