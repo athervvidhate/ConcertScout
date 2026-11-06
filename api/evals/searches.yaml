@@ -1,0 +1,41 @@
+# Drafts only: the owner must choose a snapshot and supply relevance judgments.
+- id: tyler-childers-chicago
+  text: Artists like Tyler Childers in Chicago
+- id: turnstile-new-york
+  text: Something like Turnstile in New York this weekend
+- id: four-tet-london
+  text: Artists like Four Tet in London
+- id: khruangbin-chicago
+  text: Something like Khruangbin in Chicago
+- id: dreamy-guitar-seattle
+  text: Dreamy guitar music in Seattle
+- id: shoegaze-portland
+  text: Shoegaze in Portland this weekend
+- id: techno-detroit
+  text: Techno in Detroit
+- id: boise-country
+  text: Country music like Tyler Childers in Boise
+- id: no-place-turnstile
+  text: Concerts by Turnstile or similar Artists
+- id: new-york-jazz
+  text: Modern jazz in New York
+- id: chicago-far-month
+  text: Indie rock in Chicago in September 2027
+- id: boise-shoegaze
+  text: Shoegaze in Boise
+- id: ambient-seattle
+  text: Ambient electronic music in Seattle
+- id: punk-los-angeles
+  text: Punk like Turnstile in Los Angeles
+- id: folk-austin
+  text: Intimate folk music in Austin
+- id: four-tet-boise
+  text: Something like Four Tet in Boise this weekend
+- id: instrumental-san-francisco
+  text: Groove-led instrumental music in San Francisco
+- id: metal-denver
+  text: Heavy metal in Denver
+- id: no-place-khruangbin
+  text: Concerts by Khruangbin or similar Artists
+- id: sparse-answer
+  text: Tuvan throat singing in Boise this weekend
