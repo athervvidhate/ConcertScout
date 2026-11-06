@@ -35,6 +35,7 @@ class Concert(BaseModel):
 
 class Recommendation(BaseModel):
     concert: Concert
+    reason: str
 
 
 class Poster(BaseModel):

@@ -46,7 +46,8 @@ async function searchFor(text: string) {
 }
 
 const poster = (...concerts: Concert[]) =>
-  sse("poster", { recommendations: concerts.map((concert) => ({ concert })) });
+  sse("poster", { recommendations: concerts.map((concert) => ({ concert, reason: `Reason for ${concert.name}` })),
+  });
 
 describe("Search", () => {
   it("says how much of a big pool the list shows and keeps reading after the total", async () => {
@@ -57,6 +58,14 @@ describe("Search", () => {
     await screen.findByRole("link", { name: full.name });
     expect(screen.getByText("Showing 1 of 1,189 Concerts")).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows each Recommendation's reason", async () => {
+    stubStream(poster(full), sse("done", {}));
+
+    await searchFor("Chicago");
+
+    expect(await screen.findByText(`Reason for ${full.name}`)).toBeTruthy();
   });
 
   it("shows the shortlisted names and still waits for the Poster after them", async () => {
@@ -145,7 +154,7 @@ describe("Search", () => {
 
     await searchFor("Nowhere");
 
-    expect(await screen.findByText(/No Concerts found for this Search/)).toBeTruthy();
+    expect(await screen.findByText(/Nothing qualifies for this Search/)).toBeTruthy();
   });
 
   it("asks for a new Search instead of a retry when the Search cannot work", async () => {

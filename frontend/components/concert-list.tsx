@@ -1,7 +1,7 @@
 import { formatDate, formatPrice, formatTime } from "@/lib/format";
-import type { Concert, Recommendation } from "@/lib/search";
+import type { Recommendation } from "@/lib/search";
 
-function ConcertItem({ concert }: { concert: Concert }) {
+function ConcertItem({ concert, reason }: Recommendation) {
   const when = [
     concert.date && formatDate(concert.date),
     concert.time && formatTime(concert.time),
@@ -13,6 +13,7 @@ function ConcertItem({ concert }: { concert: Concert }) {
       <a href={concert.url} className="font-medium underline-offset-2 hover:underline">
         {concert.name}
       </a>
+      <p className="text-sm">{reason}</p>
       {concert.artists.length > 0 && (
         <p className="text-sm text-stone-600">
           {concert.artists.map((artist) => artist.name).join(", ")}
@@ -28,8 +29,8 @@ function ConcertItem({ concert }: { concert: Concert }) {
 export function ConcertList({ recommendations }: { recommendations: Recommendation[] }) {
   return (
     <ul>
-      {recommendations.map(({ concert }) => (
-        <ConcertItem key={concert.id} concert={concert} />
+      {recommendations.map(({ concert, reason }) => (
+        <ConcertItem key={concert.id} concert={concert} reason={reason} />
       ))}
     </ul>
   );

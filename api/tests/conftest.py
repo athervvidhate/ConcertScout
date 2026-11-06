@@ -16,6 +16,7 @@ models.ALLOW_MODEL_REQUESTS = False
 
 UPCOMING = dt.date.today() + dt.timedelta(days=14)
 TYLER_MBID = "9947e874-ddd0-4e1a-b0d4-a76f6532fe45"
+KHRUANGBIN_MBID = "khruangbin-mbid"
 CHICAGO = Place(name="Chicago, IL, United States of America", lat=41.8755616, lon=-87.6244212)
 
 
@@ -55,7 +56,10 @@ def tm_record(**overrides: Any) -> dict[str, Any]:
                     "country": {"name": "United States Of America", "countryCode": "US"},
                 }
             ],
-            "attractions": [{"name": "Khruangbin"}, {"name": "Men I Trust"}],
+            "attractions": [
+                {"name": "Khruangbin", "externalLinks": {"musicbrainz": [{"id": KHRUANGBIN_MBID}]}},
+                {"name": "Men I Trust"},
+            ],
         },
     }
     return record | overrides
@@ -166,6 +170,11 @@ def interpretation(**overrides: Any) -> dict[str, Any]:
         "end": None,
     }
     return fields | overrides
+
+
+def picks(*picked: tuple[str, int, str]) -> dict[str, Any]:
+    """A ranker answer."""
+    return {"picks": [{"id": id, "score": score, "reason": reason} for id, score, reason in picked]}
 
 
 def model_returning(*outputs: dict[str, Any]) -> FunctionModel:

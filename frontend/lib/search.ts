@@ -20,7 +20,7 @@ export type Concert = {
   price?: Price;
 };
 
-export type Recommendation = { concert: Concert };
+export type Recommendation = { concert: Concert; reason: string };
 
 // What the interpreter read from a Search. Anything it did not find is left out.
 export type Interpreted = { place?: string; start?: string; end?: string; artists: string[] };
