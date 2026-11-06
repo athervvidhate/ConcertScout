@@ -5,7 +5,7 @@ import httpx
 from redis.asyncio import Redis
 
 from concert_scout import cache
-from concert_scout.models import Place
+from concert_scout.models import Place, Places
 from concert_scout.sources import http
 
 BASE_URL = "https://api.geoapify.com/v1/geocode"
@@ -23,16 +23,23 @@ def make_client(
 
 
 async def geocode(client: httpx.AsyncClient, redis: Redis, text: str) -> Place | None:
-    key = f"geocode:{' '.join(text.casefold().split())}"
-    if cached := await cache.read(redis, key, Place):
-        return cached
+    places = await find_places(client, redis, text, limit=1)
+    return places[0] if places else None
+
+
+async def find_places(
+    client: httpx.AsyncClient, redis: Redis, text: str, limit: int = 5
+) -> list[Place]:
+    key = f"geocode:{limit}:{' '.join(text.casefold().split())}"
+    if cached := await cache.read(redis, key, Places):
+        return cached.places
 
     # `locality` covers cities, districts, counties and states, but not streets or venues.
-    params = {"text": text, "type": "locality", "limit": 1, "format": "json"}
+    params = {"text": text, "type": "locality", "limit": limit, "format": "json"}
     try:
         response = await client.get("/autocomplete", params=params)
         response.raise_for_status()
-        place = parse_place(response.json())
+        places = parse_places(response.json())
     except httpx.HTTPStatusError as exc:
         raise GeocoderError(f"status {exc.response.status_code}") from None
     except httpx.HTTPError as exc:
@@ -40,14 +47,11 @@ async def geocode(client: httpx.AsyncClient, redis: Redis, text: str) -> Place |
     except (KeyError, TypeError, ValueError) as exc:
         raise GeocoderError(f"unreadable response: {type(exc).__name__}") from None
 
-    if place:
-        await cache.write(redis, key, place, CACHE_TTL)
-    return place
+    if places:
+        await cache.write(redis, key, Places(places=places), CACHE_TTL)
+    return places
 
 
-def parse_place(body: dict[str, Any]) -> Place | None:
+def parse_places(body: dict[str, Any]) -> list[Place]:
     results: list[dict[str, Any]] = body.get("results", [])
-    if not results:
-        return None
-    first = results[0]
-    return Place(name=first["formatted"], lat=first["lat"], lon=first["lon"])
+    return [Place(name=r["formatted"], lat=r["lat"], lon=r["lon"]) for r in results]

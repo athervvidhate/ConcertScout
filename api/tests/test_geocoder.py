@@ -2,17 +2,23 @@ import httpx
 import pytest
 from fakeredis import FakeAsyncRedis
 
-from concert_scout.sources.geocoder import GeocoderError, geocode, make_client, parse_place
+from concert_scout.sources.geocoder import (
+    GeocoderError,
+    find_places,
+    geocode,
+    make_client,
+    parse_places,
+)
 from concert_scout.sources.http import USER_AGENT
 from tests.conftest import CHICAGO, geoapify_result
 
 
-def test_parse_place_copies_the_top_result() -> None:
-    assert parse_place({"results": [geoapify_result()]}) == CHICAGO
+def test_parse_places_copies_each_result() -> None:
+    assert parse_places({"results": [geoapify_result()]}) == [CHICAGO]
 
 
 def test_no_results_means_no_place() -> None:
-    assert parse_place({"results": []}) is None
+    assert parse_places({"results": []}) == []
 
 
 async def test_geocode_asks_autocomplete_for_one_locality_and_identifies_the_app() -> None:
@@ -89,3 +95,20 @@ async def test_geocode_reports_an_unreadable_response() -> None:
     async with make_client("test-key", httpx.MockTransport(handler)) as client:
         with pytest.raises(GeocoderError):
             await geocode(client, FakeAsyncRedis(), "Chicago")
+
+
+async def test_find_places_asks_for_five_and_caches_them() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"results": [geoapify_result()]})
+
+    redis = FakeAsyncRedis()
+    async with make_client("test-key", httpx.MockTransport(handler)) as client:
+        first = await find_places(client, redis, "Chi")
+        second = await find_places(client, redis, "  chi ")
+
+    assert first == second == [CHICAGO]
+    assert len(requests) == 1
+    assert requests[0].url.params["limit"] == "5"

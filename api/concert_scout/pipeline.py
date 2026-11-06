@@ -14,7 +14,9 @@ from concert_scout import assemble, limits, matching, pool, similarity, telemetr
 from concert_scout.interpreter import Interpretation, InterpreterError, interpret
 from concert_scout.models import (
     Candidates,
+    Concert,
     Interpreted,
+    Place,
     PoolTotal,
     Poster,
     Recommendation,
@@ -28,6 +30,9 @@ from concert_scout.sources import geocoder, listenbrainz, musicbrainz, ticketmas
 logger = logging.getLogger(__name__)
 
 ASK_FOR_A_SEARCH = "Tell us an Artist, a style or a place."
+# The home page shows the soonest of these, so a month of Concerts is plenty.
+NEARBY_WINDOW = dt.timedelta(days=30)
+NEARBY_SIZE = 12
 # With no place there is no pool, so this many similar Artists get looked up by name.
 DIRECT_LOOKUPS = 15
 
@@ -41,6 +46,15 @@ class Services:
     lastfm: httpx.AsyncClient | None
     redis: Redis
     model: Model
+
+
+async def find_nearby(lat: float, lon: float, services: Services, today: dt.date) -> list[Concert]:
+    """Notable Concerts soonest first, for the home page. This path never calls a model."""
+    place = Place(name="Nearby", lat=lat, lon=lon)
+    concerts = await pool.find_concerts(
+        services.ticketmaster, services.redis, place, [], today, today + NEARBY_WINDOW, today
+    )
+    return [candidate.concert for candidate in matching.notable(concerts)[:NEARBY_SIZE]]
 
 
 def _event(name: str, payload: BaseModel | None = None) -> ServerSentEvent:

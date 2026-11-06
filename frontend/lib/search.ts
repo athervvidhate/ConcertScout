@@ -1,6 +1,6 @@
 import { EventSourceParserStream } from "eventsource-parser/stream";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 export type Price = { min: number; max: number; currency: string };
 
