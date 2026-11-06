@@ -4,7 +4,7 @@ Tests should catch broken promises at boundaries. Do not add tests that only pro
 
 ## Fast checks
 
-`make check` runs lint, types, 106 Python contracts and 19 pure frontend data tests. It makes no real model calls. Coverage includes source facts, unknown IDs, SSE termination, safe errors, origin/bot/visitor/spend guards, telemetry privacy, cache/date scope, matching/fallback invariants, eval accounting and local file parsing.
+`make check` runs lint, types, Python contracts and pure frontend data tests. It makes no real model calls. Coverage includes source facts, unknown IDs, SSE termination, safe errors, origin/bot/visitor/spend guards, telemetry privacy, cache/date scope, matching/fallback invariants, eval accounting and local file parsing.
 
 API tests substitute typed Concerts, Places and Artist results at app-owned adapter functions. Unexpected vendor HTTP fails. They exercise real routing, pipeline and assembly, but do not verify external APIs.
 
@@ -12,7 +12,7 @@ API tests substitute typed Concerts, Places and Artist results at app-owned adap
 
 Run `make e2e` after `make install`. Install Chromium once with `cd frontend && npx playwright install chromium`. Install `redis-server` locally if missing; CI installs it and the browser dependencies.
 
-Fourteen browser checks cover seven journeys at 1280px and 390px: Search-to-Ticket source facts, distinct Concerts and Save through navigation/reload/expiry; empty Searches without a name wall; truncated streams and retry; local-history privacy; placeholder rotation and reduced motion; storage failure; explicit location use.
+Browser journeys run at 1280px and 390px: Search-to-Ticket source facts, distinct Concerts and Save through navigation/reload/expiry; empty Searches without a name wall; truncated streams and retry; local-history privacy; placeholder rotation and reduced motion; storage failure; explicit location use; isolated Spotify connection, shelf privacy and disconnect; denied Spotify access. Privacy opens without losing the active Ticket.
 
 The runner starts a separate production Next.js build on 3146, the real API/pipeline on 8146 and temporary isolated real Redis. It preserves the normal app on 3000/8000. Source adapters and the model are replaced at typed app-owned boundaries, without fabricated vendor response JSON. No production setting enables the test app.
 

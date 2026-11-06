@@ -21,7 +21,7 @@ async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 }
 
-test("Search preserves source facts and distinct Concerts; Save survives navigation and reload", async ({ page }) => {
+test("Search preserves source facts and distinct Concerts; Save survives navigation and reload", async ({ page }, testInfo) => {
   await page.goto("/");
   await observeNames(page);
   const response = page.waitForResponse(r => r.url().endsWith("/search"));
@@ -34,6 +34,19 @@ test("Search preserves source facts and distinct Concerts; Save survives navigat
     .toHaveAttribute("href", "https://tickets.example/one");
   await expect(page.locator(".ticket .venue")).toContainText("Source Hall");
   await expect(page.locator(".ticket .price")).toHaveText("$38");
+  const policyOpened = page.waitForEvent("popup");
+  await page.getByRole("link", {name: "Privacy", exact: true}).click();
+  const policy = await policyOpened;
+  await expect(policy).toHaveURL(/\/privacy$/);
+  await expect(policy.getByRole("heading", {name: "Privacy", exact: true})).toBeVisible();
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await noOverflow(policy);
+  await policy.screenshot({path: testInfo.outputPath("privacy.png"), fullPage: true});
+  await policy.getByRole("link", {name: "data credits", exact: true}).click();
+  await expect(policy).toHaveURL(/\/credits$/);
+  await noOverflow(policy);
+  await policy.screenshot({path: testInfo.outputPath("credits.png"), fullPage: true});
+  await policy.close();
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("link", { name: "Tickets for Contract Concert Two" })).toBeVisible();
   await expect(page.locator(".ticket .price")).toHaveCount(0);
