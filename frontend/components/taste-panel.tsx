@@ -6,6 +6,8 @@ import { Popover } from "@base-ui/react/popover";
 import { Info, X } from "lucide-react";
 import { type SubmitEvent, useState } from "react";
 
+import { SpotifyControl } from "@/components/spotify-shelf";
+import type { SpotifyConnection } from "@/lib/spotify";
 import { SearchRefused } from "@/lib/search";
 import {
   fetchTaste,
@@ -155,7 +157,7 @@ function ImportForm() {
   );
 }
 
-export function TastePanel() {
+export function TastePanel({spotify}: {spotify: SpotifyConnection}) {
   const taste = useImportedTaste();
 
   return (
@@ -187,6 +189,7 @@ export function TastePanel() {
           ) : (
             <ImportForm />
           )}
+          <SpotifyControl connection={spotify} />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

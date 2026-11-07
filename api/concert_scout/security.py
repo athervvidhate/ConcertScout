@@ -69,7 +69,12 @@ class SecurityHeaders:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         async def with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
+                # Uvicorn logs this scope when sending headers. OAuth codes must not enter logs.
+                if scope.get("path") == "/auth/spotify/callback":
+                    scope["query_string"] = b""
                 message["headers"] = [*message["headers"], *HEADERS]
+                if scope.get("path", "").startswith("/auth/spotify"):
+                    message["headers"].append((b"cache-control", b"private, no-store"))
             await send(message)
 
         await self.app(scope, receive, with_headers)

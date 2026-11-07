@@ -140,3 +140,19 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid cur
 /* Sparse Posters use only the space their Recommendations need. */
 .poster-compact .poster-stage { min-height:0; padding-block:12px; }
 .poster-compact .wall { min-height:110px; align-items:center; }
+
+.spotify-control { border-top:1px solid currentColor; margin-top:28px; padding-top:20px; }
+.spotify-control h3 { font-size:22px; margin:0 0 8px; }
+.spotify-control a,.spotify-control button { display:inline-flex; align-items:center; min-height:44px; text-decoration:underline; color:inherit; font:700 17px var(--font-ui),sans-serif; background:none; border:0; padding:8px 0; }
+.spotify-shelf { margin:40px auto 0; max-width:1100px; border-radius:12px; padding:24px; background:#10291F; color:#FFD3E4; text-align:left; font-family:var(--font-body),sans-serif; }
+.spotify-shelf header { display:flex; justify-content:space-between; align-items:center; gap:24px; margin-bottom:20px; }
+.spotify-shelf header img { width:110px; height:auto; flex-shrink:0; }
+.spotify-shelf h2 { font:700 clamp(22px,3vw,32px) var(--font-ui),sans-serif; margin:0; }
+.spotify-shelf p { margin:6px 0 12px; }
+.spotify-shelf ul { list-style:none; padding:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:20px; }
+.spotify-shelf li { border-top:1px solid #FFD3E466; padding-top:12px; min-width:0; overflow-wrap:anywhere; }
+.spotify-shelf a { color:inherit; min-height:44px; display:inline-flex; align-items:center; text-decoration:underline; }
+.spotify-artist { font:700 23px var(--font-ui),sans-serif; }
+.spotify-shelf span { display:block; font-size:14px; }
+.spotify-tickets { font-weight:700; }
+@media(max-width:560px) { .spotify-shelf { padding:20px; } .spotify-shelf header { align-items:flex-start; flex-direction:column; } }
