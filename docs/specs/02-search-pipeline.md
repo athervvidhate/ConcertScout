@@ -7,7 +7,7 @@ One Search runs these steps in order. Only steps 1 and 6 use an LLM.
 2. Resolve     Code geocodes the place and finds seed Artist IDs
 3. Pool        Code gathers Concerts for the place and dates
 4. Match       Code scores each Concert against the Taste
-5. Shortlist   Code keeps the top 60
+5. Shortlist   Code keeps the top 40
 6. Rank        Haiku scores the shortlist and writes reasons
 7. Assemble    Code rejects bad IDs and fills in facts
 ```
@@ -45,6 +45,7 @@ A pool holds every Concert for a place and date window. A Geoapify state result 
 - With no dates, use the next 6 months. That covers 85-96% of listed Concerts and costs about 7-8 calls for Chicago.
 - Cache each chunk for 6 hours, keyed by rounded coordinates and month, so Searches share them.
 - Always look up seed Artists directly, so a seed's Concert is never lost to paging.
+- A seed Artist's direct lookup covers every date Ticketmaster lists. Unless the Search sets an end date, all of them stay, so a tour past the 6-month pool still appears at no extra cost.
 
 With no place, skip the pool. Look up the seeds and the top 15 similar Artists by name. This costs about 16 calls.
 
@@ -86,7 +87,7 @@ With a place, the Concert pool needs nothing from the Taste, so similar Artists 
 
 ## 5. Shortlist
 
-Keep the top 60 Concerts by score, deduplicated by Concert ID. Festivals count as one Concert, and the score comes from the best match in the Lineup.
+Keep the top 40 Concerts by score, deduplicated by Concert ID. Festivals count as one Concert, and the score comes from the best match in the Lineup.
 
 This step emits the `candidates` event, whose names fill the loader. Names from a connected Spotify account never appear here, per [ADR 0003](../adr/0003-official-spotify-access-only.md).
 
@@ -101,11 +102,11 @@ class Pick(BaseModel):
     reason: str       # one sentence, 140 characters at most
 ```
 
-The ranker should drop poor fits. The spike showed tags pull in misses such as Kim Petras for Four Tet, and this step exists to remove them. Event text is untrusted, so it goes in delimited fields and the model has no tools.
+The ranker should drop poor fits. The spike showed tags pull in misses such as Kim Petras for Four Tet, and this step exists to remove them. A seed Artist is never a poor fit, because the visitor asked for them. Event text is untrusted, so it goes in delimited fields and the model has no tools.
 
 ## 7. Assemble
 
-Code rejects any ID not in the shortlist, sorts by score, cuts to 8 and fills in facts from the source record. If the ranker fails, the Search shows the top matches from step 5 with a neutral reason built from the match signal. It says why the Concert matched, such as "Similar to Khruangbin".
+Code rejects any ID not in the shortlist and any row with no reason, sorts by score, puts seed Artists first, keeps one Recommendation per Artist, cuts to 8 and fills in facts from the source record. A seed the model left out still appears, with a neutral reason. An Artist\'s other dates travel with their Recommendation, and two listings of one Artist on one date count once. If the ranker fails, the Search shows the top matches from step 5 with a neutral reason built from the match signal. It says why the Concert matched, such as "Similar to Khruangbin".
 
 ## API
 

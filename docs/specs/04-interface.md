@@ -57,7 +57,7 @@ Nothing on screen is a fake. No skeleton blocks, no invented progress percentage
 | 1. Opening | Submit | Equalizer bars in the Poster area, status "Reading your request", then each real `status` message. Keep this short: send `candidates` as early as possible, aiming for under 2s |
 | 2. Names | Nonempty `poster`, using real `candidates` | Equalizer leaves. Real candidate names fade in as small print, 32ms apart, a bounded sample proportional to the qualifying Poster (up to 24 names) |
 | 3. Ranking | Before `poster` | Equalizer and real status stay; no Artist wall appears before qualification |
-| 4. Picks | `poster` | Picks turn pink, the status changes to "8 picks from 60 Concerts considered", and other names fade together over 0.28s |
+| 4. Picks | `poster` | Picks turn pink, the status changes to "8 picks from 40 Concerts considered", and other names fade together over 0.28s |
 | 5. Fly-in | 550ms after picks turn pink, so the status can be read | See below |
 | 6. Ticket | As soon as the fly-in ends | First Ticket rises 12px over 420ms. The headliner stays pink |
 

@@ -15,7 +15,7 @@ A Search needs a Taste, a place, or both. Dates are optional.
 | Taste and place | Rank Concerts near the place against the Taste |
 | Place only | Show notable Concerts near the place, soonest first |
 | Taste only | Look up the seed Artists and top similar Artists directly, then show their nearest Concerts anywhere |
-| No dates | Search the next 6 months |
+| No dates | Search the next 6 months, plus every listed Concert by a named Artist |
 | Neither Taste nor place | Ask for one, inline, with no LLM ranking call |
 
 Typed Taste beats imported Taste when they conflict. An imported Taste fills in only what the text leaves open.
@@ -26,7 +26,7 @@ The page streams real progress. See the loader in [04-interface](04-interface.md
 
 A Poster shows up to 8 Recommendations, ranked and set in festival-style tiers: one headliner, two second-tier names, and the rest beneath. If fewer than 8 Concerts qualify, the Poster is shorter. It never pads with weak picks.
 
-Clicking a name opens its Ticket. Saved names are underlined with a "saved" label. Skipped names are struck through at 35% opacity and stay on the Poster.
+Each Artist appears once. Their other dates sit behind "more dates" on the Ticket. Clicking a name opens its Ticket. Saved names are underlined with a "saved" label. Skipped names are struck through at 35% opacity and stay on the Poster.
 
 If nothing qualifies, the page says so and offers the nearest useful change, such as a wider date range.
 

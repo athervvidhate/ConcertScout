@@ -34,12 +34,22 @@ CONCERTS = [
     Concert(
         id="contract-two",
         name="Contract Concert Two",
-        artists=[Artist(name="Contract Artist", mbid="contract-artist")],
+        artists=[Artist(name="Second Contract Artist", mbid="second-artist")],
         date=DAY + dt.timedelta(days=1),
         venue="Second Hall",
         city="San Francisco",
         region="CA",
         url="https://tickets.example/two",
+    ),
+    Concert(
+        id="contract-three",
+        name="Contract Concert Three",
+        artists=[Artist(name="Contract Artist", mbid="contract-artist")],
+        date=DAY + dt.timedelta(days=3),
+        venue="Third Hall",
+        city="Oakland",
+        region="CA",
+        url="https://tickets.example/three",
     ),
 ]
 
@@ -101,7 +111,9 @@ def install_sources(patch: pytest.MonkeyPatch) -> None:
     )
     patch.setattr(similarity, "find_neighbours", AsyncMock(return_value=[]))
     patch.setattr(
-        listenbrainz, "artist_tags", AsyncMock(return_value={"contract-artist": ["uk garage"]})
+        listenbrainz,
+        "artist_tags",
+        AsyncMock(return_value={"contract-artist": ["uk garage"], "second-artist": ["uk garage"]}),
     )
 
     async def verify(_: httpx.AsyncClient, __: SecretStr, token: str, ___: str) -> None:

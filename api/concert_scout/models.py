@@ -37,9 +37,12 @@ class Concert(BaseModel):
 
 
 class Recommendation(BaseModel):
+    """One Artist on a Poster. `also` holds the same Artist's other dates, from the same source."""
+
     concert: Concert
     reason: str
     score: int | None = None
+    also: list[Concert] = []
 
 
 class Poster(BaseModel):

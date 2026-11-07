@@ -49,8 +49,33 @@ async def test_seed_records_survive_pool_paging_and_ids_are_unique(
             DAY + dt.timedelta(days=1),
             DAY,
         )
-    assert {c.id for c in found} == {c.id for c in CONCERTS}
+    assert {c.id for c in found} == {c.id for c in CONCERTS[:2]}
     assert len(found) == 2
+
+
+async def test_seed_artists_keep_far_off_concerts_unless_the_search_sets_an_end(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    far_off = DAY + pool.DEFAULT_WINDOW + dt.timedelta(days=10)
+    seed_tour = CONCERTS[0].model_copy(update={"id": "seed-tour", "date": far_off})
+    pool_listing = CONCERTS[0].model_copy(update={"id": "pool-listing", "date": far_off})
+    monkeypatch.setattr(ticketmaster, "find_concerts", AsyncMock(return_value=[pool_listing]))
+    monkeypatch.setattr(ticketmaster, "find_artist_concerts", AsyncMock(return_value=[seed_tour]))
+    async with ticketmaster.make_client("unused", httpx.MockTransport(forbidden_http)) as client:
+        no_dates = await pool.find_concerts(
+            client, FakeAsyncRedis(), PLACE, ["Contract Artist"], None, None, DAY
+        )
+        with_end = await pool.find_concerts(
+            client,
+            FakeAsyncRedis(),
+            PLACE,
+            ["Contract Artist"],
+            None,
+            far_off - dt.timedelta(days=1),
+            DAY,
+        )
+    assert [c.id for c in no_dates] == ["seed-tour"]
+    assert with_end == []
 
 
 async def test_states_and_city_circles_never_share_cache_or_filters(

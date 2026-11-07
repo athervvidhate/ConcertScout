@@ -70,7 +70,8 @@ async def test_sse_terminates_and_every_fact_comes_from_its_source(api: httpx.As
     assert data["interpreted"]["place"].startswith("San Francisco")
     source = {c.id: c.model_dump(mode="json", exclude_none=True) for c in CONCERTS}
     picks = data["poster"]["recommendations"]
-    assert {p["concert"]["id"] for p in picks} == set(source)
+    assert [p["concert"]["id"] for p in picks] == ["contract-one", "contract-two"]
+    assert picks[0]["also"] == [source["contract-three"]]
     for pick in picks:
         assert pick["concert"] == source[pick["concert"]["id"]]
     assert "price" not in picks[1]["concert"] and "time" not in picks[1]["concert"]

@@ -67,9 +67,15 @@ async def find_concerts(
         chunks = await asyncio.gather(
             *(_chunk(client, redis, point, m, today, state, radius) for m in months)
         )
-    concerts = (concert for group in [*seeds, *chunks] for concert in group)
-    unique = {c.id: c for c in concerts if c.date and first <= c.date <= last}
-    return list(unique.values())
+    # An Artist lookup already holds every listed date, so only a chosen end cuts it short.
+    seed_last = end or dt.date.max
+    from_seeds = [c for group in seeds for c in group if _within(c, first, seed_last)]
+    from_pool = [c for group in chunks for c in group if _within(c, first, last)]
+    return list({c.id: c for c in [*from_seeds, *from_pool]}.values())
+
+
+def _within(concert: Concert, first: dt.date, last: dt.date) -> bool:
+    return concert.date is not None and first <= concert.date <= last
 
 
 def _scope(point: str | None, state: tuple[str, str] | None, radius: int) -> str:

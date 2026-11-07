@@ -21,7 +21,7 @@ TAGS_WEIGHT = 0.6
 GENRE_WEIGHT = 0.15
 NARROW_GENRE_WEIGHT = 0.3
 NARROW_GENRE_ARTISTS = 30
-SHORTLIST_SIZE = 60
+SHORTLIST_SIZE = 40
 
 ERA_TAG = re.compile(r"\d{2,4}s?( music)?|(19|20)\d\d.*|(fif|six|seven|eigh|nine)ties")
 BLOCKED_TAGS = {
@@ -94,6 +94,8 @@ class Match(BaseModel):
     score: float
     support: float = 0
     via: str | None = None
+    # The shared tags or genre behind a tag or genre signal, strongest first.
+    styles: list[str] = []
 
 
 class Candidate(BaseModel):
@@ -243,7 +245,8 @@ def _tag_match(
         met = sum(weights[tag] for tag in shared) / total
         score = TAGS_WEIGHT * met * max(weights[tag] for tag in shared)
         if score > 0 and (best is None or score > best.score):
-            best = Match(artist=artist.name, signal="tags", score=score, via=via)
+            styles = sorted(shared, key=lambda tag: weights[tag], reverse=True)
+            best = Match(artist=artist.name, signal="tags", score=score, via=via, styles=styles)
     return best
 
 
@@ -259,7 +262,9 @@ def _genre_match(artist: Artist, genres: set[str], sizes: Mapping[str, int]) -> 
     if artist.subgenre and music_tag(artist.subgenre) in genres:
         narrow = sizes[artist.subgenre] < NARROW_GENRE_ARTISTS
         score = NARROW_GENRE_WEIGHT if narrow else GENRE_WEIGHT
-        return Match(artist=artist.name, signal="genre", score=score)
+        style = music_tag(artist.subgenre)
+        return Match(artist=artist.name, signal="genre", score=score, styles=[style])
     if artist.genre and music_tag(artist.genre) in genres:
-        return Match(artist=artist.name, signal="genre", score=GENRE_WEIGHT)
+        style = music_tag(artist.genre)
+        return Match(artist=artist.name, signal="genre", score=GENRE_WEIGHT, styles=[style])
     return None
