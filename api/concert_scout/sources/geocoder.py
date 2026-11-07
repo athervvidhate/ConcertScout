@@ -14,6 +14,8 @@ CACHE_TTL = dt.timedelta(days=30)
 # Below this, Geoapify is guessing from part of the text: "Southern California" scores 0 as
 # "Southern Concord". Saying we could not find a place beats searching the wrong one.
 MIN_CONFIDENCE = 0.8
+# Enough that a bigger place with the same name is among them.
+CANDIDATES = 5
 
 
 class GeocoderError(Exception):
@@ -27,20 +29,18 @@ def make_client(
 
 
 async def geocode(client: httpx.AsyncClient, redis: Redis, text: str) -> Place | None:
-    places = await find_places(client, redis, text, limit=1)
+    places = await find_places(client, redis, text)
     return places[0] if places else None
 
 
-async def find_places(
-    client: httpx.AsyncClient, redis: Redis, text: str, limit: int = 5
-) -> list[Place]:
+async def find_places(client: httpx.AsyncClient, redis: Redis, text: str) -> list[Place]:
     text = place_name(text)
-    key = f"geocode:v3:{limit}:{' '.join(text.casefold().split())}"
+    key = f"geocode:v4:{' '.join(text.casefold().split())}"
     if cached := await cache.read(redis, key, Places):
         return cached.places
 
     # `locality` covers cities, districts, counties and states, but not streets or venues.
-    params = {"text": text, "type": "locality", "limit": limit, "format": "json"}
+    params = {"text": text, "type": "locality", "limit": CANDIDATES, "format": "json"}
     try:
         response = await client.get("/autocomplete", params=params)
         response.raise_for_status()
@@ -58,7 +58,13 @@ async def find_places(
 
 
 def parse_places(body: dict[str, Any]) -> list[Place]:
-    results: list[dict[str, Any]] = body.get("results", [])
+    # Autocomplete orders by text, so a bare "Manchester" leads with New Hampshire. Geoapify's
+    # importance puts the place most people mean first. The sort keeps ties in their order.
+    results: list[dict[str, Any]] = sorted(
+        body.get("results", []),
+        key=lambda record: record.get("rank", {}).get("importance") or 0,
+        reverse=True,
+    )
     places: list[Place] = []
     for record in results:
         if record.get("rank", {}).get("confidence", 1) < MIN_CONFIDENCE:

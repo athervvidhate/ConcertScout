@@ -32,7 +32,7 @@ The prompt receives today's date in the visitor's own time zone, which the brows
 
 ## 2. Resolve
 
-Code geocodes the place, using Geoapify autocomplete in the UI and for free text. An LLM never geocodes. A result under 0.8 confidence does not count as found, so the Search says it could not find the place instead of searching the wrong one.
+Code geocodes the place, using Geoapify autocomplete in the UI and for free text. An LLM never geocodes. Of the first 5 results, the one with Geoapify's highest importance wins, so a bare "Manchester" means England rather than New Hampshire. A result under 0.8 confidence does not count as found, so the Search says it could not find the place instead of searching the wrong one.
 
 Geoapify has no idea what Southern California or New England is. For an area that is neither one city nor one whole state, the interpreter returns a Region: the area's name, a large city near its middle as `place`, and `radius_miles`, capped at 500. Code geocodes that city, and the visitor sees the Region's name. MusicBrainz resolves seed Artists to IDs at 1 request per second, and results cache for 7 days.
 

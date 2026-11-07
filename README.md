@@ -1,24 +1,12 @@
 # Concert Scout
 
-Concert Scout finds live music from a Taste, a place, or both, and turns up to eight Recommendations into a festival-style Poster. Open a name for its Ticket, then Save or Skip. Saved Concerts stay on this device; there is no general account system.
+Find live music you would actually want to see. **[concertscout.app](https://concertscout.app)**
 
-This is a non-commercial portfolio project by [Atherv Vidhate](https://atherv.com). The backend is Python/FastAPI; the frontend is Next.js 16, React 19 and Tailwind 4. Product terms are defined in [GLOSSARY.md](GLOSSARY.md).
+Describe what you like and where you can go, in your own words. "Tame Impala in London next summer" works, and so does "dreamy bands in SoCal next month" or a city on its own. Concert Scout reads the Search, works out which Concerts near you suit it, and sets up to eight of them as a festival Poster. Open a name for its Ticket, with the reason it was picked, the date, venue and a link to buy. Save it or skip it.
 
-## Run locally
+There are no accounts and no ads. Saved Concerts stay in your browser. Connect Spotify and your own Artists get a separate shelf of Concerts near you.
 
-Install Python 3.13+, [uv](https://docs.astral.sh/uv/), Node 24 and Redis (`brew install redis` on macOS).
-
-```sh
-cp api/.env.example api/.env
-# Add TM_KEY, ANTHROPIC_API_KEY and GEOAPIFY_KEY privately. LASTFM_KEY is optional.
-make dev
-```
-
-Open **http://127.0.0.1:3000**. The API runs without reload on port 8000 and uses real Redis, source APIs, limits and spend counters. `make start` builds and serves the production frontend instead. `make phone` does the same and prints an address for a phone on your network. Over plain HTTP, phones block location and Spotify refuses the sign-in redirect, so test those on an HTTPS deployment. For `make dev` through an HTTPS tunnel such as Tailscale Serve, set `DEV_ORIGINS` to the tunnel host, because Next blocks dev scripts requested from any other host. Keys stay on the API server and out of git.
-
-Try `Tame Impala in London next summer`, `Dreamy bands in SoCal next month`, or a city on its own. The empty input rotates through examples. The location button asks for browser location only when pressed, and later Searches with no place look near it. Open an Artist from a Ticket for their Spotify link, top songs and similar Artists. Import Last.fm/ListenBrainz Taste or a local history file/list through Your Taste.
-
-Spotify connection is optional and invite-only. It has its own deterministic shelf and never supplies model input. [Setup and pending live acceptance](docs/development/spotify.md).
+Built by [Atherv Vidhate](https://atherv.com) as a non-commercial portfolio project, with a Python agent service behind a Next.js frontend.
 
 ## How a Search becomes a Poster
 
@@ -34,60 +22,74 @@ flowchart LR
     S --> B
 ```
 
-The interpreter extracts named Artists, style tags, a place and optional dates. Code expands common aliases, geocodes the place, resolves Artist identities and gathers a cached Concert pool. Matching combines seeds, similarity hops, tags and genre signals, then keeps up to 60 candidates. A second model call returns IDs, scores and short reasons. Assembly rejects unknown IDs and fills every Concert fact from the source record.
+1. The interpreter, a Claude Haiku call with no tools, turns the Search into named Artists, style tags, a place and dates.
+2. Code geocodes the place and resolves each Artist through MusicBrainz.
+3. Code gathers every Concert for that place and window from Ticketmaster, cached and shared between Searches.
+4. Code scores those Concerts against the Taste, using similar Artists, tags and genres, and keeps up to 40.
+5. The ranker, a second Haiku call, returns IDs, scores and a short reason. It sees short fields, never a date, price or link.
+6. Code drops any ID it does not recognise and fills in every fact from the source record.
 
-There are two model steps; some Searches need no ranking call. Place-only Searches use a source-linked Artist identity as a notability proxy and order Concerts by date. A ranker failure falls back to strong deterministic matches. Neither path pads a Poster with weak filler. Reasons remain judgments, and recommendation quality still needs human evaluation.
+Each step streams to the browser as it happens, so the page shows real progress. A Search with only a place skips the ranker and lists Concerts by date. If the ranker fails, the Search falls back to the strongest matches from step 4 with a plain reason. Neither path pads a Poster with weak filler.
 
-Dates, venues, times, prices and Ticket links do not come from the model. Missing facts stay absent. Candidate text is untrusted data and neither agent has tools. Spotify account metadata takes a completely separate route: encrypted OAuth session → exact-name lookups → an attributed shelf, with no pipeline/model dependency.
+## Design decisions
 
-## Design choices
+The model never handles a fact. It returns IDs and reasons, so it cannot invent a date or change a Ticket link, and a missing time or price stays missing. [ADR 0002](docs/adr/0002-facts-never-pass-through-the-llm.md)
 
-- **Separate Python service.** FastAPI owns source calls, secrets, SSE and enforcement; Next.js renders the interface. This keeps the agent work visible and testable in Python. [ADR 0001](docs/adr/0001-separate-python-agent-service.md).
-- **Source facts, small model outputs.** Ranking returns IDs and reasons rather than re-emitting Concert records, protecting links and keeping requests smaller. [ADR 0002](docs/adr/0002-facts-never-pass-through-the-llm.md).
-- **Shared Redis.** Public Concert chunks cache for six hours, Artist data for seven days and place lookups for thirty days. Rate and recorded-spend guards share the same store. New Searches stop at the recorded $1 daily or $10 monthly model-spend cap.
-- **Streaming with honest presentation.** Status comes from real work. The name reveal waits for qualified picks, so an empty Search never flashes a misleading wall of Artists. Sparse Posters use less space. Typography and motion follow the [interface spec](docs/specs/04-interface.md); reduced motion skips the fly-in.
-- **Local choices.** Saved Concerts and imported Taste use browser storage. History files are parsed locally; only Artist names leave the browser. Spotify account data never reaches a model. [ADR 0003](docs/adr/0003-official-spotify-access-only.md).
+Python owns the agent. FastAPI holds the source calls, secrets, streaming and limits, and the browser talks to it directly. Next.js only draws the interface. [ADR 0001](docs/adr/0001-separate-python-agent-service.md)
 
-The app checks exact allowed origins, bot-check tokens, input bounds, hashed per-client limits and recorded spend before a paid Search. Errors give a code and an action. Traces record numeric timing/usage, without Taste or exception contents. [Platform details](docs/specs/05-platform.md) and [privacy](frontend/app/privacy/page.tsx).
+Spotify data never reaches a model. A connected account takes its own route, from an encrypted session to exact-name lookups to an attributed shelf, and shares no code path with the agents. [ADR 0003](docs/adr/0003-official-spotify-access-only.md)
 
-## Evaluation and tests
+Candidate text is untrusted. A listing could contain anything, so neither agent has tools, and listings reach the ranker as quoted fields in a JSON object.
 
-Recommendation quality is judged by a person. Twenty drafted Searches cover seeds, sparse genres, descriptions, large/small cities, no place, different date windows and an empty answer. They have not all been judged; there is no claimed quality score yet.
+Dates follow the venue. A Concert's time reads on the venue's clock, and it is over when its date passes there. A visitor in another time zone also sees that zone's name.
 
-```sh
-cd api
-uv run python -m evals.capture    # capture one real Search in advance; costs money
-uv run python -m evals.judge <id> --snapshot <snapshot-id>  # human labels, offline
-uv run python -m evals.judge       # or capture and judge together; costs money
-uv run python -m evals.run         # replay judged Snapshots; no network or model spend
-uv run python -m evals.run --live-model  # opt in to new model calls for a changed prompt
-```
+Spend is capped in code. Before a paid Search, the API checks the exact origin, a bot token, input bounds, a limit of 10 Searches an hour per visitor, and recorded spend. New Searches stop at $1 a day or $10 a month in model cost. Visitor addresses are hashed before Redis sees them.
 
-Snapshots preserve actual source responses and model answers so a changing concert calendar does not erase the evidence. They are gitignored. Measures include bad picks, must-find recall, judged relevance, source-fact integrity, capture latency and measured cost. Targets and tuning procedure: [evaluation spec](docs/specs/06-evals.md). Human labels must never be fabricated.
+## Quality
 
-```sh
-make check       # lint, types and app/data contracts; no paid requests
-make e2e         # production browser journeys at 1280px and 390px, isolated real Redis
-make check-live  # explicitly call configured real providers; one paid interpreter call
-make check-context  # local transcript adapters; no model request
-```
+A person judges recommendation quality, because nothing else can. Twenty drafted Searches cover named Artists, sparse genres, plain descriptions, big and small cities, and different date windows. Each is captured with its real source responses and model answers, so it can be replayed offline after the concert calendar has moved on.
 
-Install the browser once with `cd frontend && npx playwright install chromium`. Browser tests use typed app-owned adapter fixtures rather than inventing vendor API JSON. Live checks validate real providers separately. Failure traces and screenshots are kept by CI. [Testing boundaries and commands](docs/development/testing.md).
+The labels are not finished, so this project claims no quality score yet. The measures are bad picks, must-find recall, judged relevance, source-fact integrity, latency and cost. Runs can also be compared Artist by Artist. The [evaluation spec](docs/specs/06-evals.md) has the targets, and [the latest stability report](docs/validation/2026-11-07-ranker-stability.md) shows how much Posters vary between runs today.
+
+## Stack
+
+| Layer | Tools |
+|---|---|
+| Agent service | Python 3.13, FastAPI, Pydantic AI, Pydantic Evals, OpenTelemetry |
+| Model | Claude Haiku 5.5 |
+| Frontend | Next.js 16, React 19, Tailwind 4, coss ui, Motion |
+| Storage | Redis for the cache, limits, spend and encrypted Spotify sessions. The browser keeps Saved Concerts |
+| Hosting | Vercel, with Upstash Redis and Cloudflare Turnstile |
+
+Contract tests run on every change, along with browser journeys at desktop and phone widths through the real API. [Testing notes](docs/development/testing.md).
 
 ## Where the code lives
 
-- `api/concert_scout/pipeline.py`: the Search steps; `matching.py` is pure scoring and `assemble.py` preserves source facts.
-- `api/concert_scout/sources/`: async adapters; `pool.py` shares public Concert chunks and direct Artist lookups.
-- `api/concert_scout/spotify.py`: encrypted sessions and the isolated shelf; `limits.py`, `security.py`, `telemetry.py`: enforcement and numeric evidence.
-- `api/evals/`: capture, human judging and Pydantic Evals replay.
-- `frontend/components/`: Search, Poster, Ticket, Artist and Taste panels, Saved Concerts and Spotify shelf.
-- `frontend/e2e/`: browser contracts through the production API and frontend.
-- `docs/specs/` and `docs/adr/`: requirements and lasting decisions. `docs/validation/` records checks and their limits.
+```
+api/concert_scout/
+  pipeline.py     the Search steps
+  matching.py     pure scoring
+  assemble.py     builds Recommendations from source facts
+  pool.py         shared Concert chunks and Artist lookups
+  sources/        async adapters for each data source
+  spotify.py      encrypted sessions and the separate shelf
+  limits.py       visitor limits and spend caps
+api/evals/        capture, human judging, replay and run comparison
+frontend/
+  components/     Search, Poster, Ticket, panels and shelf
+  e2e/            browser journeys
+docs/
+  specs/          what the product does
+  adr/            lasting decisions
+  validation/     what was checked, and what that does not prove
+```
 
-## Data credits and current limits
+## Limits
 
-Concert facts and links come from [Ticketmaster](https://www.ticketmaster.com). Artist identities/tags come from [MusicBrainz](https://musicbrainz.org); similarity/tags from [ListenBrainz](https://listenbrainz.org), with [Last.fm / AudioScrobbler](https://www.last.fm) as a similarity fallback and optional Taste import. Places use [Geoapify](https://www.geoapify.com) and [OpenStreetMap contributors](https://www.openstreetmap.org/copyright). The optional account shelf uses [Spotify](https://open.spotify.com) with its logo and links. The site footer links every source; MusicBrainz's [data licenses](https://musicbrainz.org/doc/About/Data_License) apply to its metadata.
+Ticketmaster does not list every show, so small rooms can be missing. Sparse tags and missing Artist IDs can hide a good Concert, and broad electronic genres can still produce weak picks. Reasons are the model's own words about an Artist, so they can be wrong. Dates, venues and links come straight from the source.
 
-Ticketmaster coverage is not the whole live-music calendar. Sparse tags and missing Artist IDs can hide relevant Concerts, while broad electronic genres can still produce weak picks. The similarity Labs API needs its fallback. The dataset still needs owner judgments. Spotify's live OAuth acceptance and public hosting remain pending their respective setup steps. Physical-device drag acceptance also remains a human check. Local implementation and passing CI are not a claim that those steps are finished.
+Spotify is invite-only for now, because of how Spotify limits new apps.
 
-Agent session recovery: [single-agent continuity and host setup](docs/development/session-recovery.md).
+## Data credits
+
+Concert facts and links come from [Ticketmaster](https://www.ticketmaster.com). Artist identities and tags come from [MusicBrainz](https://musicbrainz.org), under its [data licenses](https://musicbrainz.org/doc/About/Data_License). Similarity and tags come from [ListenBrainz](https://listenbrainz.org), with [Last.fm](https://www.last.fm) as a fallback and an optional Taste import. Places use [Geoapify](https://www.geoapify.com) and [OpenStreetMap contributors](https://www.openstreetmap.org/copyright). The account shelf uses [Spotify](https://open.spotify.com).

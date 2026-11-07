@@ -94,3 +94,18 @@ async def test_the_pool_asks_ticketmaster_for_the_region_and_caches_it_apart() -
         await pool.find_concerts(client, redis, city, [], TODAY + day, TODAY + day, NOW)
         await pool.find_concerts(client, redis, region, [], TODAY + day, TODAY + day, NOW)
     assert radii == [str(ticketmaster.RADIUS_MILES), "150"]
+
+
+def test_a_shared_name_means_the_most_important_place() -> None:
+    def result(name: str, importance: float | None) -> dict[str, Any]:
+        rank = {"confidence": 1, "importance": importance}
+        return {"formatted": name, "lat": 1, "lon": 1, "rank": rank, "result_type": "city"}
+
+    places = geocoder.parse_places(
+        {"results": [result("Manchester, NH", 0.57), result("Manchester, ENG", 0.74)]}
+    )
+    assert [place.name for place in places] == ["Manchester, ENG", "Manchester, NH"]
+
+    # An exact "Manchester, UK" comes back with no importance, so Geoapify's order stands.
+    places = geocoder.parse_places({"results": [result("First", None), result("Second", None)]})
+    assert [place.name for place in places] == ["First", "Second"]
