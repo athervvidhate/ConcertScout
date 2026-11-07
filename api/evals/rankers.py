@@ -1,10 +1,13 @@
-"""An experimental ranker: Jev grades every row, and Haiku writes reasons only for the keepers.
+"""Experimental rankers that grade first and write reasons only for the Poster.
 
-Same inputs and output as `ranker.rank`, so the scorecard can swap it in. Not used by the app.
+A grader, Jev or Haiku without reasons, grades every row; code picks the Poster with the app's
+own assembly; Haiku then writes reasons for the Concerts shown. Same inputs and output as
+`ranker.rank`, so the scorecard can swap one in. Not used by the app.
 """
 
 import asyncio
 import json
+import math
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -29,6 +32,8 @@ MODEL = "jev-1.14.0"
 # Dollars per input token. Output tokens are free.
 PRICE = Decimal("0.042") / 1_000_000
 MIN_LEVEL = 2
+# Set by the scorecard: grade by rounded expected level instead of the most likely one.
+ROUNDED = False
 
 LEVELS = [
     "Miss: a different kind of music.",
@@ -79,9 +84,9 @@ class Reasons(BaseModel):
 
 @dataclass
 class Spend:
-    """Jev usage, which pydantic-ai's telemetry cannot see."""
+    """Grading time, and Jev's cost, which pydantic-ai's telemetry cannot see."""
 
-    jev_seconds: list[float] = field(default_factory=list[float])
+    grade_seconds: list[float] = field(default_factory=list[float])
     reason_seconds: list[float] = field(default_factory=list[float])
     jev_cost: Decimal = Decimal(0)
 
@@ -96,13 +101,28 @@ _reasons = Agent(
 )
 
 
-def make(reasons: Literal["haiku", "none"], real_model: Model):
-    """A `rank` replacement. `real_model` writes reasons, outside the replay's recorded answers."""
-    keys = Keys()  # pyright: ignore[reportCallIssue]
-    client = httpx.AsyncClient(
-        timeout=ranker.DEADLINE_SECONDS,
-        headers={"Authorization": f"Bearer {keys.typesafe_api_key.get_secret_value()}"},
-    )
+# The app's grading instructions, with reasons left to the second call.
+GRADE_ONLY = ranker.INSTRUCTIONS[: ranker.INSTRUCTIONS.index("- id: copied exactly")] + (
+    "- id: copied exactly from the candidate.\n- level: 0 to 3.\n- reason: always empty."
+)
+_grader = Agent(
+    output_type=NativeOutput(ranker.Ranking),
+    instructions=GRADE_ONLY,
+    model_settings=AnthropicModelSettings(
+        anthropic_effort="low", anthropic_thinking={"type": "disabled"}, max_tokens=4096
+    ),
+)
+
+
+def make(grader: Literal["jev", "haiku"], reasons: Literal["haiku", "none"], real_model: Model):
+    """A `rank` replacement. `real_model` serves Haiku, outside the replay's recorded answers."""
+    client = None
+    if grader == "jev":
+        keys = Keys()  # pyright: ignore[reportCallIssue]
+        client = httpx.AsyncClient(
+            timeout=ranker.DEADLINE_SECONDS,
+            headers={"Authorization": f"Bearer {keys.typesafe_api_key.get_secret_value()}"},
+        )
 
     async def rank(
         interpretation: Interpretation,
@@ -111,7 +131,10 @@ def make(reasons: Literal["haiku", "none"], real_model: Model):
         model: Model,
     ) -> list[ranker.Fit]:
         rows = ranker.numbered(shortlist, artist_tags)
-        levels = await _grade(client, interpretation, [row for row, _ in rows])
+        if client is not None:
+            levels = await _grade(client, interpretation, [row for row, _ in rows])
+        else:
+            levels = await _haiku_grades(interpretation, shortlist, artist_tags, real_model)
         concerts = {row.id: concert for row, concert in rows}
         # Code picks the Poster from the grades alone, so Haiku writes only the reasons shown.
         placeholder = [
@@ -154,14 +177,49 @@ async def _grade(
         response.raise_for_status()
     except httpx.HTTPError as exc:
         raise ranker.RankerError(type(exc).__name__) from None
-    SPEND.jev_seconds.append(time.perf_counter() - started)
+    SPEND.grade_seconds.append(time.perf_counter() - started)
     data = response.json()
     SPEND.jev_cost += PRICE * data["usage"]["input_tokens"]
+    if ROUNDED:
+        # The expected level, rounded: 1.5 and up counts as fair, so a near tie leans in.
+        return {
+            name.removeprefix("r"): math.floor(answer["score"] + 0.5)
+            for name, answer in data["answers"].items()
+        }
     # The most likely level, the lower one on a tie, so a coin flip never lets a Concert in.
     return {
         name.removeprefix("r"): max(range(4), key=lambda n: (answer["probabilities"][str(n)], -n))
         for name, answer in data["answers"].items()
     }
+
+
+async def _haiku_grades(
+    interpretation: Interpretation,
+    shortlist: Sequence[Candidate],
+    artist_tags: Mapping[str, Sequence[str]],
+    model: Model,
+) -> dict[str, int]:
+    """The app's three shuffled votes and median, with no reasons to write."""
+    prompts = [
+        ranker.build_prompt(interpretation, shortlist, artist_tags, vote)
+        for vote in range(ranker.VOTES)
+    ]
+    usage = RunUsage()
+    started = time.perf_counter()
+
+    async def vote(prompt: str) -> list[ranker.Fit]:
+        async with asyncio.timeout(ranker.DEADLINE_SECONDS):
+            return (await _grader.run(prompt, model=model, usage=usage)).output.fits
+
+    try:
+        votes = await asyncio.gather(*map(vote, prompts), return_exceptions=True)
+    finally:
+        record_usage(usage)
+        SPEND.grade_seconds.append(time.perf_counter() - started)
+    answers = [answer for answer in votes if not isinstance(answer, BaseException)]
+    if not answers:
+        raise ranker.RankerError("every vote failed")
+    return {fit.id: fit.level for fit in ranker.tally(answers)}
 
 
 async def _write(
@@ -199,6 +257,6 @@ def report() -> str:
         return f"median {ordered[len(ordered) // 2]:.2f}s p95 {p95:.2f}s over {len(ordered)}"
 
     return (
-        f"Jev calls {spread(SPEND.jev_seconds)}, cost ${SPEND.jev_cost:.5f}; "
+        f"Grading {spread(SPEND.grade_seconds)}, Jev cost ${SPEND.jev_cost:.5f}; "
         f"Haiku reasons {spread(SPEND.reason_seconds)}"
     )

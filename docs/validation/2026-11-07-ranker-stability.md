@@ -174,7 +174,7 @@ The pool now waits only for a seed Artist's own lookup. What remains for a Searc
 
 ## Jev as the grader, Haiku for reasons
 
-`evals/jev.py` is an experiment, not used by the app. Jev (TypeSafe, `jev-1.14.0`) grades every shortlisted row in one request: one Score question per row with the same four levels, each graded independently against a shared description of the Taste, so no row's place in a list can sway it. Code takes the most likely level, the lower one on a tie, picks the Poster with the same assembly as the app, and only then asks Haiku for the reasons of the Concerts shown, at most 8. `--ranker jev-reasons` swaps it into the scorecard.
+`evals/rankers.py` is an experiment, not used by the app. Jev (TypeSafe, `jev-1.14.0`) grades every shortlisted row in one request: one Score question per row with the same four levels, each graded independently against a shared description of the Taste, so no row's place in a list can sway it. Code takes the most likely level, the lower one on a tie, picks the Poster with the same assembly as the app, and only then asks Haiku for the reasons of the Concerts shown, at most 8. `--ranker jev-reasons` swaps it into the scorecard.
 
 All 28 Searches of `batch-2026-11-07-192838-9bf3e016`, 3 runs each, sources replayed:
 
@@ -186,3 +186,20 @@ All 28 Searches of `batch-2026-11-07-192838-9bf3e016`, 3 runs each, sources repl
 Jev's calls took 0.13 seconds median and cost $0.015 for 84 of them; the Haiku reasons took 2.4 seconds median. Jev was steadier or equal on 23 of 28 Searches and had higher graded precision on 11, lower on 4 (`turnstile-new-york`, `boise-country`, `pop-new-york`, `ambient-seattle`). It is not fully repeatable either: `tyler-childers-chicago` and `khruangbin-chicago` overlapped 50% and 64%, because rows near a level boundary flip. Graded precision is still Sonnet's opinion, not a person's.
 
 Not yet tested: Haiku grading without reasons and then writing 8 reasons, which would show how much of the gain comes from Jev and how much from splitting grading from writing.
+
+## Against the owner's labels
+
+The owner labelled 8 Searches in `evals.rate`: 10 must Artists, 31 good and 8 bad. Three of the musts (Sammy Virji, it's murph, an Ultra Music Festival listing) never reach the shortlist, so no ranker can show them. All four rankers ran on all 28 Searches, 3 runs each, sources replayed. "Must found" and "liked" use the labelled Searches only: liked is the share of labelled Poster Artists the owner called good or must, and bad shown is the share of the Poster called bad.
+
+| Ranker | Overlap | Lowest | Must found | Liked | Bad shown | Ranker median | p95 | Cost |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Haiku, 3 votes with reasons (the app) | 82% | 33% | 95% | 82% | 9% | 3.6s | 4.9s | $0.180 |
+| Jev grades, Haiku writes the Poster's reasons | 92% | 61% | 67% | 88% | 4% | 2.3s | 3.4s | $0.060 |
+| Jev, rounded expected level | 91% | 52% | 70% | 87% | 4% | 2.3s | 3.1s | $0.061 |
+| Haiku grades, then writes the Poster's reasons | 85% | 33% | 85% | 72% | 9% | 4.0s | 5.0s | $0.159 |
+
+Jev is the stricter grader. It shows fewer Artists the owner dislikes and more they like, and it is steadier and faster, but it leaves out must Artists near the boundary: Zeds Dead for Detroit techno was a stretch at 88%, and Doja Cat for melodic rap scored 1.63, between stretch and fair. For `techno-detroit` it graded nothing fair, so the Poster was empty, where Haiku showed Concerts the owner half liked. Rounding the expected level instead of taking the most likely one changed little.
+
+Splitting Haiku into grading and then writing is slower than one call and worse on every label measure, so the gain in the Jev row comes from Jev, not from the split.
+
+The labels cover 8 Searches and 7 reachable musts, so the must gap rests on two or three Artists. It is not enough to tune Jev's threshold against without fitting these exact Searches. The app keeps Haiku. Jev stays an eval option, to retry once more Searches are labelled.

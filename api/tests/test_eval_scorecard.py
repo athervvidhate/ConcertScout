@@ -142,3 +142,24 @@ def test_interpretation_reads_the_recorded_reading_of_the_search() -> None:
 
 def test_cost_starts_at_zero() -> None:
     assert card([set()]).cost == Decimal(0)
+
+
+def test_owner_labels_score_each_poster() -> None:
+    card = Card(
+        id="case",
+        posters=[frozenset({"a", "b", "x"}), frozenset({"a", "c", "y", "z"})],
+        shortlists=1,
+        failures=0,
+        must=frozenset({"a", "m"}),
+        good=frozenset({"b"}),
+        bad=frozenset({"c"}),
+    )
+    # Must: a of {a, m} both times. Liked: both rated (a, b), then a of the rated a and c.
+    assert card.must_found() == 0.5
+    assert card.liked() == (1 + 0.5) / 2
+    assert card.bad_shown() == (0 + 0.25) / 2
+
+
+def test_a_search_without_labels_has_no_owner_measures() -> None:
+    card = Card(id="case", posters=[frozenset({"a"})], shortlists=1, failures=0)
+    assert (card.must_found(), card.liked(), card.bad_shown()) == (None, None, None)
