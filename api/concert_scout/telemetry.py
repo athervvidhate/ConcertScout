@@ -67,6 +67,13 @@ def record_usage(usage: RunUsage) -> None:
             total.cost += usage.cost
 
 
+def record_cost(cost: Decimal) -> None:
+    """A priced call outside pydantic-ai, such as Jev, which bills by the request."""
+    trace.get_current_span().set_attribute("jev_cost_usd", float(cost))
+    if total := _current.get():
+        total.cost += cost
+
+
 @contextmanager
 def step(name: str) -> Generator[None]:
     # Exception messages and stack traces can contain Search text or source data.

@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     tm_key: SecretStr
     anthropic_api_key: SecretStr
     geoapify_key: SecretStr
+    # Typesafe's Jev grades the shortlist. Required.
+    typesafe_api_key: SecretStr
     lastfm_key: SecretStr | None = None
     redis_url: str = "redis://127.0.0.1:6379/0"
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]

@@ -5,7 +5,7 @@ For working on the app. The README describes the deployed product.
 Install Python 3.13+, [uv](https://docs.astral.sh/uv/), Node 24 and Redis.
 
 ```sh
-cp api/.env.example api/.env   # add TM_KEY, ANTHROPIC_API_KEY and GEOAPIFY_KEY
+cp api/.env.example api/.env   # add TM_KEY, ANTHROPIC_API_KEY, GEOAPIFY_KEY and TYPESAFE_API_KEY
 make dev                       # http://127.0.0.1:3000, API on port 8000
 make start                     # the same, with the production frontend
 make phone                     # the same, reachable from a phone on this network

@@ -41,9 +41,10 @@ from concert_scout.models import (
     Status,
 )
 from concert_scout.names import collab_names
-from concert_scout.ranker import RankerError, rank
+from concert_scout.ranker import RankerError
 from concert_scout.sources import (
     geocoder,
+    jev,
     lastfm,
     listenbrainz,
     musicbrainz,
@@ -70,6 +71,7 @@ class Services:
     listenbrainz: httpx.AsyncClient
     lastfm: httpx.AsyncClient | None
     spotify_catalog: httpx.AsyncClient | None
+    jev: httpx.AsyncClient
     redis: Redis
     model: Model
     turnstile: httpx.AsyncClient
@@ -149,7 +151,7 @@ async def _find_taste(
 
 
 # A repeated Search within this window gets the same reading and grades, so the same Poster,
-# and pays for neither model call. It matches the Concert pool's own cache.
+# and pays for no model call. It matches the Concert pool's own cache.
 ANSWER_TTL = pool.CACHE_TTL
 
 
@@ -169,19 +171,36 @@ async def _interpreted(text: str, today: dt.date, services: Services) -> Interpr
     return interpretation
 
 
+class Levels(BaseModel):
+    levels: dict[str, int]
+
+
+class Explained(BaseModel):
+    reasons: list[str]
+
+
 async def _graded(
-    interpretation: Interpretation,
-    shortlist: Sequence[matching.Candidate],
-    artist_tags: Mapping[str, Sequence[str]],
-    services: Services,
-) -> list[ranker.Fit]:
-    prompt = ranker.build_prompt(interpretation, shortlist, artist_tags)
-    key = _answer_key("rank", ranker.INSTRUCTIONS, str(ranker.VOTES), prompt)
-    if cached := await cache.read(services.redis, key, ranker.Ranking):
-        return cached.fits
-    fits = await rank(interpretation, shortlist, artist_tags, services.model)
-    await cache.write(services.redis, key, ranker.Ranking(fits=fits), ANSWER_TTL)
-    return fits
+    interpretation: Interpretation, rows: Mapping[str, ranker.Row], services: Services
+) -> dict[str, int]:
+    as_json = [f"{id_}={row.model_dump_json()}" for id_, row in rows.items()]
+    taste = str(ranker.taste(interpretation))
+    key = _answer_key("grade", jev.MODEL, jev.GUIDE, jev.QUESTION, *jev.LEVELS, taste, *as_json)
+    if cached := await cache.read(services.redis, key, Levels):
+        return cached.levels
+    levels = await ranker.grade(services.jev, interpretation, rows)
+    await cache.write(services.redis, key, Levels(levels=levels), ANSWER_TTL)
+    return levels
+
+
+async def _explained(
+    interpretation: Interpretation, shown: Sequence[ranker.Row], services: Services
+) -> list[str]:
+    key = _answer_key("explain", ranker.REASONS, ranker.reasons_prompt(interpretation, shown))
+    if cached := await cache.read(services.redis, key, Explained):
+        return cached.reasons
+    reasons = await ranker.explain(interpretation, shown, services.model)
+    await cache.write(services.redis, key, Explained(reasons=reasons), ANSWER_TTL)
+    return reasons
 
 
 async def _recommend(
@@ -190,16 +209,27 @@ async def _recommend(
     artist_tags: Mapping[str, Sequence[str]],
     services: Services,
 ) -> list[Recommendation]:
+    rows = ranker.rows(shortlist, artist_tags)
     try:
-        fits = await _graded(interpretation, shortlist, artist_tags, services)
+        levels = await _graded(interpretation, rows, services)
     except RankerError as exc:
         logger.warning("Ranker failed: %s", exc)
         return assemble.from_matches(shortlist)
-    known = {candidate.concert.id for candidate in shortlist}
-    # Grades that all name unknown IDs are a garbled answer, not a verdict that nothing fits.
-    if not any(fit.id in known for fit in fits):
+    if not levels:
         return assemble.from_matches(shortlist)
-    return assemble.from_fits(fits, shortlist)
+    poster = assemble.from_levels(levels, shortlist)
+    candidates = {candidate.concert.id: candidate for candidate in shortlist}
+    shown = [ranker.row(candidates[r.concert.id], artist_tags) for r in poster]
+    try:
+        reasons = await _explained(interpretation, shown, services)
+    except RankerError as exc:
+        # The grades still stand. Each Concert keeps the neutral reason its match gave it.
+        logger.warning("Reasons failed: %s", exc)
+        return poster
+    return [
+        r.model_copy(update={"reason": reason}) if reason else r
+        for r, reason in zip(poster, reasons, strict=True)
+    ]
 
 
 async def _find_elsewhere(

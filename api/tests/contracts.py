@@ -14,7 +14,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from concert_scout import pool, ranker, security, similarity
 from concert_scout.config import Settings
 from concert_scout.models import Artist, Concert, Place, Price, SeedArtist
-from concert_scout.sources import geocoder, listenbrainz, musicbrainz, spotify_catalog
+from concert_scout.sources import geocoder, jev, listenbrainz, musicbrainz, spotify_catalog
 
 PLACE = Place(name="San Francisco, California", lat=37.77, lon=-122.42)
 DAY = dt.date.today() + dt.timedelta(days=14)
@@ -63,6 +63,7 @@ def settings_with(**overrides: Any) -> Settings:
         tm_key=SecretStr("unused-test-key"),
         anthropic_api_key=SecretStr("unused-test-key"),
         geoapify_key=SecretStr("unused-test-key"),
+        typesafe_api_key=SecretStr("unused-test-key"),
         cors_origins=["http://localhost:3000", "http://127.0.0.1:3146"],
         **overrides,
     )
@@ -81,16 +82,12 @@ def contract_model() -> FunctionModel:
             if isinstance(p, UserPromptPart) and isinstance(p.content, str)
         )
         output: dict[str, Any]
-        if info.instructions == ranker.INSTRUCTIONS:
+        if info.instructions == ranker.REASONS:
             prompt = json.loads(text)
-            # An "empty" Taste grades every row a miss, which is a verdict that nothing fits.
-            fits = "empty" not in prompt["taste"]["descriptors"]
             output = {
-                "fits": [
-                    {"id": id, "level": 3, "reason": "A source-backed match"}
-                    if fits
-                    else {"id": id, "level": 0}
-                    for id in [*(row["id"] for row in prompt["candidates"]), "999"]
+                "reasons": [
+                    {"id": row["id"], "reason": "A source-backed match"}
+                    for row in prompt["candidates"]
                 ]
             }
         else:
@@ -109,7 +106,16 @@ def contract_model() -> FunctionModel:
     return FunctionModel(respond)
 
 
+async def contract_grades(
+    _: httpx.AsyncClient, taste: dict[str, list[str]], rows: dict[str, str]
+) -> dict[str, int]:
+    """Every row a strong fit, except that an "empty" Taste is a verdict that nothing fits."""
+    level = 0 if "empty" in taste["descriptors"] else 3
+    return {id_: level for id_ in rows}
+
+
 def install_sources(patch: pytest.MonkeyPatch) -> None:
+    patch.setattr(jev, "grade", contract_grades)
     patch.setattr(geocoder, "geocode", AsyncMock(return_value=PLACE))
     patch.setattr(pool, "find_concerts", AsyncMock(return_value=CONCERTS))
     patch.setattr(pool, "find_elsewhere", AsyncMock(return_value=[]))

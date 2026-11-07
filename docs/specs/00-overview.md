@@ -27,9 +27,9 @@ Terms follow [GLOSSARY.md](../../GLOSSARY.md). Choices with lasting trade-offs l
 | Minimum Search | A Taste or a place. Everything else is optional |
 | Backend | Python FastAPI service |
 | Frontend | Next.js 16, React 19, Tailwind 4, coss ui, Motion |
-| Model | Claude Haiku 5.5 (`claude-haiku-5-5`) for every LLM call |
+| Models | Claude Haiku 5.5 (`claude-haiku-5-5`) reads the Search and writes reasons. Typesafe Jev (`jev-1.14.0`) grades the shortlist |
 | Agent library | Pydantic AI, with Pydantic Evals and OpenTelemetry |
-| LLM calls per Search | Two: an interpreter and a ranker |
+| Model calls per Search | Three: the interpreter, Jev grades and Haiku reasons |
 | Concert data | Ticketmaster Discovery only |
 | Accounts | None in this rebuild. Saved Concerts live in the browser |
 | Streaming | SSE directly from the browser to FastAPI |
@@ -48,7 +48,7 @@ FastAPI service
    |-- geocoder
    |-- Concert pool: Ticketmaster, cached in Redis
    |-- Artist matching: MusicBrainz, ListenBrainz, Last.fm
-   |-- ranker (Haiku): IDs to score and reason
+   |-- ranker: Jev grades each ID, Haiku explains the Poster
    `-- code fills in facts from the source record
 ```
 

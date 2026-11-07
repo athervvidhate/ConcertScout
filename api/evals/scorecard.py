@@ -29,11 +29,11 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from itertools import combinations
 
-from concert_scout import cache, limits, pipeline, ranker, telemetry
+from concert_scout import cache, limits, telemetry
 from concert_scout.config import Settings
 from concert_scout.models import Recommendation
 from concert_scout.names import normalize
-from evals import cases, harness, rankers, snapshots
+from evals import cases, harness, snapshots
 from evals.compare import batch_cases
 from evals.grade import GOOD, Grader, Row, agreement
 from evals.silver import Silver, recall
@@ -55,7 +55,7 @@ class Card:
     levels: dict[str, int] = field(default_factory=dict[str, int])
     shortlisted: set[str] = field(default_factory=set[str])
     playing: set[str] = field(default_factory=set[str])
-    # Seconds the ranker took in each run, its votes included.
+    # Seconds the ranker took in each run, grades and reasons together.
     seconds: list[float] = field(default_factory=list[float])
     # How often the grader sided with the owner's labels, when there are any.
     agreement: float | None = None
@@ -284,24 +284,9 @@ async def main() -> None:
     parser.add_argument(
         "--pool", action="store_true", help="also grade every Artist playing; costs more once"
     )
-    parser.add_argument("--votes", type=int, default=ranker.VOTES, help="ranker votes to try")
-    parser.add_argument(
-        "--ranker",
-        choices=["haiku", "jev", "jev-reasons", "jev-rounded", "haiku-split"],
-        default="haiku",
-        help="haiku: the app's ranker. jev, jev-reasons, jev-rounded: Jev grades (most likely or "
-        "rounded expected level), with Haiku reasons for the Poster in the latter two. "
-        "haiku-split: Haiku grades without reasons, then writes them",
-    )
     parser.add_argument("cases", nargs="*", help="case IDs; all in the batch when left out")
     args = parser.parse_args()
     settings = Settings()  # pyright: ignore[reportCallIssue]
-    ranker.VOTES = args.votes
-    if args.ranker != "haiku":
-        grader = "haiku" if args.ranker == "haiku-split" else "jev"
-        reasons = "none" if args.ranker == "jev" else "haiku"
-        rankers.ROUNDED = args.ranker == "jev-rounded"
-        pipeline.rank = rankers.make(grader, reasons, harness.real_model(settings))
     labels = {search.id: search for search in cases.load() if search.judged}
     chosen = batch_cases(args.batch)
     if args.cases:
@@ -333,8 +318,6 @@ async def main() -> None:
         grader.save()
     if cards:
         print("\n" + summary(cards))
-    if args.ranker != "haiku":
-        print(rankers.report())
 
 
 if __name__ == "__main__":

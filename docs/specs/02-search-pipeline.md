@@ -1,6 +1,6 @@
 # Search pipeline
 
-One Search runs these steps in order. Only steps 1 and 6 use an LLM.
+One Search runs these steps in order. Only steps 1 and 6 use a model.
 
 ```
 1. Interpret   Haiku turns text into a structured request
@@ -8,7 +8,7 @@ One Search runs these steps in order. Only steps 1 and 6 use an LLM.
 3. Pool        Code gathers Concerts for the place and dates
 4. Match       Code scores each Concert against the Taste
 5. Shortlist   Code keeps the top 40
-6. Rank        Haiku grades the shortlist and writes reasons
+6. Rank        Jev grades the shortlist; Haiku explains the Poster
 7. Assemble    Code rejects bad IDs and fills in facts
 ```
 
@@ -95,26 +95,36 @@ This step emits the `candidates` event, whose names fill the loader. Names from 
 
 ## 6. Rank
 
-A second agent, with no tools, receives short fields for each candidate: ID, Artist, genre, tags and match signal. It also gets the Taste. It grades every candidate:
+Rank runs in two calls, neither with tools, and both see only short fields for each candidate: Artist, genre, tags and match signal, plus the Taste. Never a date, price or link.
+
+**Grade.** Typesafe's Jev (`jev-1.14.0`) grades every shortlisted Artist in one request, one question per Artist named by its Concert ID:
+
+- 3 strong: the same style, scene or sound. A seed is always 3.
+- 2 fair: close in style, and many people with this Taste also like them.
+- 1 a stretch: only a broad genre or one loose trait in common.
+- 0 a miss: a different kind of music.
+
+Jev returns a probability for each level. Each Artist takes the most likely level, the lower one on a tie, so a coin flip never lets a Concert in. Jev bills only input tokens, about $0.0002 a Search, and usually answers in well under a second.
+
+**Explain.** After assembly picks the Poster, Haiku writes one reason for each Artist on it, and only for them:
 
 ```python
-class Fit(BaseModel):
-    id: str
-    level: int        # 0 a miss, 1 a stretch, 2 a fair suggestion, 3 a strong fit
-    reason: str       # for level 2 or 3, one sentence, 140 characters at most
+class Reason(BaseModel):
+    id: str           # the row's number in this request
+    reason: str       # one sentence, 140 characters at most
 ```
 
-The ranker grades rather than chooses. Asked to choose up to 8, the model sometimes returned a full Poster and sometimes almost nothing for identical input. Grading every row against fixed levels leaves the choice to code.
+A reason tells someone who has never heard the Artist what they sound like, naming the style, scene, era or the similar Artist that brought them in. It never says the Artist suits the Search, and never mentions dates, venues, prices or links. If the reasons fail or miss their 8 second deadline, each Recommendation keeps its neutral reason from step 7.
 
-Three votes run at once, each with the rows in its own fixed order, so no row gains from its place in the list. Each Concert takes its median level, and its reason comes from the most favourable vote. A vote that fails or misses the deadline drops out, and the others still count. On Haiku the three votes cost about three times one, a fraction of a cent. Thinking is off: with it on, the step took nearly twice as long and the grades were no better.
+Grading rather than choosing leaves the choice to code. Asked to choose up to 8, a model sometimes returned a full Poster and sometimes almost nothing for identical input. Against the owner's labels on 8 rated Searches, 5 runs each, Jev with Haiku reasons showed more liked Artists (89% against 76%) and fewer bad ones (4% against 9%) than three Haiku votes. It also repeated its Posters more closely (93% against 80% overlap), ranked in 3.0 seconds at p95 instead of 4.7, and cost a quarter as much. It found slightly fewer must Artists (88% against 94%). See [the November 7 report](../validation/2026-11-07-ranker-stability.md).
 
-Both model answers are cached for 6 hours, the same as the Concert pool. The interpreter's is keyed by the visitor's date and the Search's words, and the ranker's by its exact prompt, so a repeated Search shows the same Poster and calls no model. Keys are hashed and never hold Search text.
+The grades, the reasons and the interpreter's reading are each cached for 6 hours, the same as the Concert pool. The interpreter's reading is keyed by the visitor's date and the Search's words, the grades by the exact rows and Taste, and the reasons by their exact prompt. A repeated Search shows the same Poster and calls no model. Keys are hashed and never hold Search text.
 
-The ranker should drop poor fits. The spike showed tags pull in misses such as Kim Petras for Four Tet, and this step exists to remove them. A seed Artist is never a poor fit, because the visitor asked for them. Event text is untrusted, so it goes in delimited fields and the model has no tools.
+The grade should drop poor fits. The spike showed tags pull in misses such as Kim Petras for Four Tet, and this step exists to remove them. A seed Artist is never a poor fit, because the visitor asked for them. Event text is untrusted, so it goes in delimited JSON fields.
 
 ## 7. Assemble
 
-Code rejects any ID not in the shortlist, any level below 2 and any row with no reason. It orders by level, then by match score, then by shortlist order, so only the model's level can move a Concert. It puts seed Artists first, keeps one Recommendation per Artist, cuts to 8 and fills in facts from the source record. A seed the model left out still appears, with a neutral reason. An Artist's other dates travel with their Recommendation, and two listings of one Artist on one date count once. If the ranker fails, or grades only unknown IDs, the Search shows the top matches from step 5 with a neutral reason built from the match signal. It says why the Concert matched, such as "Similar to Khruangbin".
+Code rejects any ID not in the shortlist and any level below 2. It orders by level, then by match score, then by shortlist order, so only the grade can move a Concert. It puts seed Artists first, keeps one Recommendation per Artist, cuts to 8 and fills in facts from the source record. Each Recommendation starts with a neutral reason built from its match, which Haiku's reason then replaces. A seed graded low still appears. An Artist's other dates travel with their Recommendation, and two listings of one Artist on one date count once. If grading fails, or returns nothing, the Search shows the top matches from step 5 with a neutral reason built from the match signal. It says why the Concert matched, such as "Similar to Khruangbin".
 
 ## API
 
@@ -164,6 +174,6 @@ api/concert_scout/
 
 ### Qualification and place-only Searches
 
-The ranker grades poor fits below 2 and assembly leaves them out. If ranking fails, only matches with a score strictly greater than 0.3 qualify; genre-only and unmatched Concerts do not fill a Poster. Neutral fallback reasons describe the actual match signal. These thresholds are initial values for evaluation.
+Jev grades poor fits below 2 and assembly leaves them out. If grading fails, only matches with a score strictly greater than 0.3 qualify; genre-only and unmatched Concerts do not fill a Poster. Neutral fallback reasons describe the actual match signal. These thresholds are initial values for evaluation.
 
 For a place-only Search, use Concerts whose headliner has a MusicBrainz ID in Ticketmaster as a practical proxy for notability. Keep the first Concert per headliner, soonest first, up to eight. This proxy may omit notable Artists without linked IDs.

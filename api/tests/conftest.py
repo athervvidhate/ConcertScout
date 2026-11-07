@@ -40,8 +40,8 @@ def model_returning(*outputs: dict[str, Any]) -> FunctionModel:
     remaining = iter(outputs)
 
     def respond(_: list[ModelMessage], info: AgentInfo) -> ModelResponse:
-        if info.instructions == ranker.INSTRUCTIONS:
-            raise RuntimeError("ranker unavailable")
+        if info.instructions == ranker.REASONS:
+            raise RuntimeError("reasons unavailable")
         return ModelResponse(parts=[TextPart(json.dumps(next(remaining)))])
 
     return FunctionModel(respond)

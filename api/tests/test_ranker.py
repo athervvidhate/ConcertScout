@@ -1,10 +1,21 @@
 import datetime as dt
+import json
+from collections.abc import Sequence
+from decimal import Decimal
+from typing import cast
 
-from concert_scout import assemble, ranker
+import httpx
+import pytest
+from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, UserPromptPart
+from pydantic_ai.models.function import AgentInfo, FunctionModel
+
+from concert_scout import assemble, ranker, telemetry
 from concert_scout.interpreter import Interpretation
 from concert_scout.matching import Candidate, Match, Signal
 from concert_scout.models import Artist, Concert
-from concert_scout.ranker import Fit
+from concert_scout.sources import jev
+
+EMPTY = Interpretation(artists=[], descriptors=[], tags=[], place=None, start=None, end=None)
 
 
 def candidate(
@@ -24,40 +35,28 @@ def candidate(
 
 
 def test_unknown_ids_are_dropped_and_facts_come_from_source() -> None:
-    source = candidate("known", 1, "seed")
-    result = assemble.from_fits(
-        [
-            Fit(id="unknown", level=3, reason="fake"),
-            Fit(id="known", level=3, reason="Similar sound"),
-        ],
-        [source],
-    )
+    source = candidate("known", 1, "one_hop")
+    result = assemble.from_levels({"unknown": 3, "known": 3}, [source])
     assert len(result) == 1
     assert result[0].concert == source.concert
-    assert result[0].reason == "Similar sound"
+    assert result[0].reason == "Artist known is similar to Khruangbin"
+    assert result[0].score == 3
 
 
-def test_a_seed_the_model_left_out_still_leads_the_poster() -> None:
+def test_a_seed_graded_low_still_leads_the_poster() -> None:
     seed = candidate("seed", 1, "seed", artist="Niall Horan")
     similar = candidate("similar", 0.8, "one_hop", artist="Harry Styles")
-    poster = assemble.from_fits(
-        [Fit(id="similar", level=3, reason="Soft pop rock")], [seed, similar]
-    )
+    poster = assemble.from_levels({"similar": 3, "seed": 0}, [seed, similar])
     assert [r.concert.id for r in poster] == ["seed", "similar"]
     assert poster[0].reason == "Niall Horan is in your Search"
     assert poster[0].score is None
 
 
-def test_a_seed_the_model_picked_leads_and_keeps_its_reason() -> None:
+def test_a_graded_seed_keeps_its_level() -> None:
     seed = candidate("seed", 1, "seed", artist="Niall Horan")
     similar = candidate("similar", 0.8, "one_hop", artist="Harry Styles")
-    picks = [
-        Fit(id="similar", level=3, reason="Soft pop rock"),
-        Fit(id="seed", level=2, reason="Irish singer-songwriter with bright pop hooks"),
-    ]
-    poster = assemble.from_fits(picks, [seed, similar])
-    assert [r.concert.id for r in poster] == ["seed", "similar"]
-    assert poster[0].reason == "Irish singer-songwriter with bright pop hooks"
+    poster = assemble.from_levels({"similar": 3, "seed": 2}, [seed, similar])
+    assert [(r.concert.id, r.score) for r in poster] == [("seed", 2), ("similar", 3)]
 
 
 def test_fallback_drops_genre_filler_and_unmatched() -> None:
@@ -69,42 +68,6 @@ def test_fallback_drops_genre_filler_and_unmatched() -> None:
     assert [r.concert.id for r in assemble.from_matches(rows)] == ["seed", "near"]
 
 
-async def test_model_output_is_assembled_from_source() -> None:
-    from collections.abc import Sequence
-
-    from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
-    from pydantic_ai.models.function import AgentInfo, FunctionModel
-
-    from concert_scout.interpreter import Interpretation
-    from concert_scout.ranker import rank
-
-    def respond(_: Sequence[ModelMessage], __: AgentInfo) -> ModelResponse:
-        return ModelResponse(
-            parts=[
-                TextPart(
-                    '{"fits":[{"id":"99","level":3,"reason":"fake"},'
-                    '{"id":"1","level":3,"reason":"A close match"}]}'
-                )
-            ]
-        )
-
-    source = candidate("known", 1, "seed")
-    interpretation = Interpretation(
-        artists=["Khruangbin"], descriptors=[], tags=[], place=None, start=None, end=None
-    )
-    fits = await rank(interpretation, [source], {}, FunctionModel(respond))
-    result = assemble.from_fits(fits, [source])
-    assert len(result) == 1
-    assert result[0].concert == source.concert
-    assert result[0].reason == "A close match"
-
-
-def test_a_padded_empty_row_is_not_a_recommendation() -> None:
-    rows = [candidate("real", 1, "seed"), candidate("pad", 0.8, "one_hop")]
-    picks = [Fit(id="real", level=3, reason="Close match"), Fit(id="pad", level=3, reason=" ")]
-    assert [r.concert.id for r in assemble.from_fits(picks, rows)] == ["real"]
-
-
 def test_an_artist_stacks_their_dates_and_one_date_counts_once() -> None:
     first, second = dt.date(2027, 3, 6), dt.date(2027, 3, 7)
     rows = [
@@ -113,8 +76,7 @@ def test_an_artist_stacks_their_dates_and_one_date_counts_once() -> None:
         candidate("next-night", 1, "seed", "49 Winchester", second),
         candidate("other", 1, "seed", "Wade Bowen", first),
     ]
-    picks = [Fit(id=c.concert.id, level=3, reason="Fits") for c in rows]
-    poster = assemble.from_fits(picks, rows)
+    poster = assemble.from_levels({c.concert.id: 3 for c in rows}, rows)
     assert [r.concert.id for r in poster] == ["belly-up", "other"]
     assert [c.id for c in poster[0].also] == ["next-night"]
     assert poster[1].also == []
@@ -128,80 +90,98 @@ def test_fallback_reason_names_the_shared_styles() -> None:
     assert assemble.from_matches([row])[0].reason == "Tagged alt-country, americana and country"
 
 
-def test_ranker_sees_each_artist_once() -> None:
-    rows = [
-        candidate("first", 1, "seed", "49 Winchester"),
-        candidate("second", 1, "seed", "49 Winchester"),
-    ]
-    empty = Interpretation(artists=[], descriptors=[], tags=[], place=None, start=None, end=None)
-    assert ranker.build_prompt(empty, rows, {}).count("49 Winchester") == 1
-
-
-def test_votes_take_the_median_level_and_the_most_favourable_reason() -> None:
-    votes = [
-        [Fit(id="a", level=3, reason="Dusty psych-funk"), Fit(id="b", level=1)],
-        [Fit(id="a", level=2, reason="Groovy"), Fit(id="b", level=2, reason="Close-ish")],
-        [Fit(id="a", level=0), Fit(id="b", level=1)],
-    ]
-    tallied = {fit.id: fit for fit in ranker.tally(votes)}
-    assert tallied["a"] == Fit(id="a", level=2, reason="Dusty psych-funk")
-    assert tallied["b"].level == 1
-
-
-def test_a_vote_that_skipped_a_concert_does_not_count_against_it() -> None:
-    votes = [[Fit(id="a", level=3, reason="Fits")], [], [Fit(id="a", level=3, reason="Fits")]]
-    assert ranker.tally(votes) == [Fit(id="a", level=3, reason="Fits")]
-
-
 def test_ties_go_to_the_stronger_match() -> None:
     weak = candidate("weak", 0.3, "tags")
     strong = candidate("strong", 0.8, "one_hop")
-    fits = [Fit(id="weak", level=3, reason="Fits"), Fit(id="strong", level=3, reason="Fits")]
-    assert [r.concert.id for r in assemble.from_fits(fits, [weak, strong])] == ["strong", "weak"]
+    poster = assemble.from_levels({"weak": 3, "strong": 3}, [weak, strong])
+    assert [r.concert.id for r in poster] == ["strong", "weak"]
 
 
 def test_a_stretch_stays_off_the_poster() -> None:
     rows = [candidate("fair", 0.5, "tags"), candidate("stretch", 0.5, "genre")]
-    fits = [Fit(id="fair", level=2, reason="Close"), Fit(id="stretch", level=1, reason="Loose")]
-    assert [r.concert.id for r in assemble.from_fits(fits, rows)] == ["fair"]
+    assert [r.concert.id for r in assemble.from_levels({"fair": 2, "stretch": 1}, rows)] == ["fair"]
 
 
-def test_later_votes_see_the_rows_in_another_fixed_order() -> None:
-    rows = [candidate(str(n), 1 - n / 10, "one_hop") for n in range(6)]
-    empty = Interpretation(artists=[], descriptors=[], tags=[], place=None, start=None, end=None)
-    first, second = (ranker.build_prompt(empty, rows, {}, vote) for vote in (0, 1))
-    assert first != second
-    assert second == ranker.build_prompt(empty, rows, {}, 1)
-    assert sorted(first) == sorted(second)
-
-
-async def test_a_failed_vote_drops_out_and_the_others_count() -> None:
-    from collections.abc import Sequence
-
-    from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
-    from pydantic_ai.models.function import AgentInfo, FunctionModel
-
-    calls: list[int] = []
-
-    def respond(_: Sequence[ModelMessage], __: AgentInfo) -> ModelResponse:
-        calls.append(1)
-        if len(calls) == 1:
-            raise RuntimeError("one vote fails")
-        return ModelResponse(parts=[TextPart('{"fits":[{"id":"1","level":3,"reason":"Fits"}]}')])
-
-    source = candidate("x", 1, "one_hop")
-    empty = Interpretation(artists=[], descriptors=[], tags=[], place=None, start=None, end=None)
-    fits = await ranker.rank(empty, [source], {}, FunctionModel(respond))
-    assert fits == [Fit(id="x", level=3, reason="Fits")]
-
-
-def test_rows_go_by_number_and_each_artist_once() -> None:
+def test_each_artist_is_graded_once_under_their_first_date() -> None:
     rows = [
         candidate("tm-long-id-1", 1, "seed", "49 Winchester"),
         candidate("tm-long-id-2", 1, "seed", "49 Winchester"),
         candidate("tm-long-id-3", 0.8, "one_hop", "Wade Bowen"),
     ]
-    assert [(row.id, concert) for row, concert in ranker.numbered(rows, {})] == [
-        ("1", "tm-long-id-1"),
-        ("2", "tm-long-id-3"),
-    ]
+    graded = ranker.rows(rows, {})
+    assert list(graded) == ["tm-long-id-1", "tm-long-id-3"]
+    assert graded["tm-long-id-3"].via == "Khruangbin"
+
+
+def jev_answer(probabilities: dict[str, dict[str, float]], tokens: int = 1000) -> httpx.Response:
+    answers = {name: {"score": 0, "probabilities": p} for name, p in probabilities.items()}
+    return httpx.Response(200, json={"answers": answers, "usage": {"input_tokens": tokens}})
+
+
+async def test_jev_grades_by_the_most_likely_level_and_its_cost_counts() -> None:
+    sent: list[dict[str, object]] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return jev_answer(
+            {
+                "strong": {"0": 0.05, "1": 0.05, "2": 0.3, "3": 0.6},
+                "tied": {"0": 0.0, "1": 0.5, "2": 0.5, "3": 0.0},
+                "partial": {"0": 0.9},
+            }
+        )
+
+    client = jev.make_client("key", httpx.MockTransport(handle))
+    rows = {"strong": '{"artist":"A"}', "tied": '{"artist":"B"}', "partial": '{"artist":"C"}'}
+    with telemetry.search() as usage:
+        levels = await jev.grade(client, {"artists": ["Four Tet"]}, rows)
+    # A coin flip between two levels takes the lower one, so it never lets a Concert in.
+    assert levels == {"strong": 3, "tied": 1, "partial": 0}
+    assert usage.cost == Decimal(1000) * jev.PRICE
+    questions = cast(dict[str, object], sent[0]["questions"])
+    assert set(questions) == set(rows)
+    assert "Four Tet" in str(sent[0]["state"])
+
+
+@pytest.mark.parametrize(
+    "response", [httpx.Response(503), httpx.Response(200, json={"answers": "garbled"})]
+)
+async def test_a_failed_jev_answer_is_a_ranker_error(response: httpx.Response) -> None:
+    client = jev.make_client("key", httpx.MockTransport(lambda _: response))
+    graded = ranker.rows([candidate("x", 1, "one_hop")], {})
+    with pytest.raises(ranker.RankerError):
+        await ranker.grade(client, EMPTY, graded)
+
+
+def reasons_model(reply: dict[str, str] | Exception) -> FunctionModel:
+    def respond(messages: Sequence[ModelMessage], info: AgentInfo) -> ModelResponse:
+        assert info.instructions == ranker.REASONS
+        if isinstance(reply, Exception):
+            raise reply
+        prompt = next(
+            json.loads(p.content)
+            for m in messages
+            for p in m.parts
+            if isinstance(p, UserPromptPart) and isinstance(p.content, str)
+        )
+        assert [row["id"] for row in prompt["candidates"]] == ["1", "2"]
+        reasons = [{"id": id_, "reason": reason} for id_, reason in reply.items()]
+        return ModelResponse(parts=[TextPart(json.dumps({"reasons": reasons}))])
+
+    return FunctionModel(respond)
+
+
+async def test_reasons_come_back_in_row_order_and_a_skipped_row_gets_none() -> None:
+    shown = list(
+        ranker.rows([candidate("a", 1, "one_hop"), candidate("b", 1, "tags")], {}).values()
+    )
+    model = reasons_model({"2": "Dusty psych-funk", "99": "made up"})
+    assert await ranker.explain(EMPTY, shown, model) == ["", "Dusty psych-funk"]
+
+
+async def test_failed_reasons_are_a_ranker_error() -> None:
+    shown = list(
+        ranker.rows([candidate("a", 1, "one_hop"), candidate("b", 1, "tags")], {}).values()
+    )
+    with pytest.raises(ranker.RankerError):
+        await ranker.explain(EMPTY, shown, reasons_model(RuntimeError("down")))

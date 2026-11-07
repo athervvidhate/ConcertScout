@@ -23,7 +23,7 @@ Set secrets through the hosting dashboard or private CLI input. Never put values
 
 | Service | Setting | Value or requirement |
 |---|---|---|
-| API | `TM_KEY`, `ANTHROPIC_API_KEY`, `GEOAPIFY_KEY` | Private provider keys |
+| API | `TM_KEY`, `ANTHROPIC_API_KEY`, `GEOAPIFY_KEY`, `TYPESAFE_API_KEY` | Private provider keys |
 | API | `LASTFM_KEY` | Optional private fallback/import key |
 | API | `REDIS_URL` | Password-protected `rediss://` connection from Upstash; not its REST URL |
 | API | `CORS_ORIGINS` | `["https://concertscout.app"]`; no trailing slash or wildcard |
@@ -41,7 +41,7 @@ Set secrets through the hosting dashboard or private CLI input. Never put values
 
 The public entrypoint refuses to start with unencrypted or unauthenticated Redis, non-HTTPS or wildcard origins, published Turnstile test secrets, a missing trusted IP header, or a configured Spotify client using HTTP. Local `make dev` still uses the normal factory and local settings. Test environments can use Cloudflare's published test keys; public deployments must not.
 
-Upstash holds the public cache, hashed limits, encrypted Spotify sessions and recorded spend. Keep its TLS connection private, select a region near the function and use the free tier or a deliberate budget cap. A stopped/reset database loses spend history; do not reset it as a way to clear a visitor limit. API spend guards use recorded usage, not a hard reservation against concurrent calls. Use the Anthropic account's spend controls as well.
+Upstash holds the public cache, hashed limits, encrypted Spotify sessions and recorded spend. Keep its TLS connection private, select a region near the function and use the free tier or a deliberate budget cap. A stopped/reset database loses spend history; do not reset it as a way to clear a visitor limit. API spend guards use recorded usage, not a hard reservation against concurrent calls. Use the Anthropic and Typesafe accounts' spend controls as well.
 
 ## Reviewable rollout
 

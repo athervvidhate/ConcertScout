@@ -113,7 +113,7 @@ async def test_ranker_mode_replays_the_interpreter_and_asks_the_ranker_afresh() 
         return ModelResponse(parts=[TextPart("live")])
 
     interpreter = Agent(instructions="Read the Search.")
-    ranking = Agent(instructions=ranker.INSTRUCTIONS)
+    ranking = Agent(instructions=ranker.REASONS)
     recording = RecordingModel(FunctionModel(recorded))
     await interpreter.run("Chicago", model=recording)
     await ranking.run("rows", model=recording)

@@ -203,3 +203,15 @@ Jev is the stricter grader. It shows fewer Artists the owner dislikes and more t
 Splitting Haiku into grading and then writing is slower than one call and worse on every label measure, so the gain in the Jev row comes from Jev, not from the split.
 
 The labels cover 8 Searches and 10 musts, so the must gap rests on two or three Artists. It is not enough to tune Jev's threshold against without fitting these exact Searches. The app keeps Haiku. Jev stays an eval option, to retry once more Searches are labelled.
+
+## Jev in the app
+
+The owner then corrected two labels: Doja Cat for melodic rap is good, not a must, and Zeds Dead is no Detroit techno act, so no label. They also said some musts were overstated or missed because they did not know the Artist. On the 8 labelled Searches, 5 runs each, sources replayed:
+
+| Ranker | Overlap (lowest) | Must found | Liked | Bad shown | Rank median | Rank p95 | Cost |
+|---|---|---|---|---|---|---|---|
+| Haiku, three votes | 80% (53%) | 94% | 76% | 9% | 3.8s | 4.7s | $0.097 |
+| Jev grades, Haiku reasons (experiment) | 93% (80%) | 88% | 89% | 4% | 2.2s | 3.0s | $0.031 |
+| Jev grades, Haiku reasons (app) | 94% (88%) | 88% | 89% | 4% | 2.6s | 4.3s | $0.031 |
+
+The experiment's cost now includes Jev's $0.008, which its line printed separately. The must gap is about 2 Artists in 40 runs. The owner chose Jev for the app: `concert_scout/sources/jev.py` grades, `ranker.explain` writes reasons for the Poster only, and `evals/rankers.py` is gone. The app row is that code, run through the scorecard. Its p95 is a single slow Haiku reasons call. If Jev fails, the Search shows the top matches, as it did when Haiku failed. If the reasons fail, the Poster keeps its grades and each Concert keeps its neutral reason.

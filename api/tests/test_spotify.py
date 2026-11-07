@@ -239,11 +239,13 @@ def test_invalid_public_configuration_never_echoes_other_secrets() -> None:
         "tm_key": "private-tm",
         "anthropic_api_key": "private-model",
         "geoapify_key": "private-geo",
+        "typesafe_api_key": "private-jev",
         "spotify_redirect_uri": "http://evil.example/auth/spotify/callback",
     }
     with pytest.raises(ValueError) as failure:
         Settings(**fields)
     assert "private-tm" not in str(failure.value)
+    assert "private-jev" not in str(failure.value)
     assert "private-model" not in str(failure.value)
 
 

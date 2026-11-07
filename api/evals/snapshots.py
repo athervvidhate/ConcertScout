@@ -20,7 +20,7 @@ from pydantic_ai.settings import ModelSettings
 from concert_scout import ranker
 from concert_scout.interpreter import Interpretation
 from concert_scout.models import Concert
-from concert_scout.sources import ticketmaster
+from concert_scout.sources import jev, ticketmaster
 
 SNAPSHOTS = Path(__file__).parent / "snapshots"
 SECRET_PARAMS = {"apikey", "api_key", "access_token"}
@@ -99,16 +99,26 @@ class RecordingTransport(httpx.AsyncBaseTransport):
 
 
 TAGS_PATH = "/1/metadata/artist/"
+JEV_HOST = httpx.URL(jev.BASE_URL).host
 HTTP_OK = 200
 
 
 class ReplayTransport(httpx.AsyncBaseTransport):
-    def __init__(self, snapshot: Snapshot) -> None:
+    """Answers from the Snapshot. With `live_grades`, Jev's grades come from Jev itself."""
+
+    def __init__(self, snapshot: Snapshot, live_grades: bool = False) -> None:
         self.records = snapshot.records
         self.misses: list[str] = []
         self.tags = _recorded_tags(snapshot.records)
+        self.live = httpx.AsyncHTTPTransport() if live_grades else None
+
+    async def aclose(self) -> None:
+        if self.live:
+            await self.live.aclose()
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        if self.live and request.url.host == JEV_HOST:
+            return await self.live.handle_async_request(request)
         await request.aread()
         key = request_key(request)
         record = self.records.get(key)
@@ -156,8 +166,8 @@ class RecordingModel(WrapperModel):
         return response
 
 
-# Which model requests go to the real model, at a cost. "ranker" keeps the recorded reading of
-# the Search, so every run sees the same shortlist and only the ranker can differ.
+# Which requests go to the real model and to Jev, at a cost. "ranker" keeps the recorded reading
+# of the Search, so every run sees the same shortlist and only the grades and reasons can differ.
 type Live = Literal["none", "ranker", "all"]
 
 
@@ -176,7 +186,7 @@ class ReplayModel(WrapperModel):
         model_settings: ModelSettings | None,
         model_request_parameters: ModelRequestParameters,
     ) -> ModelResponse:
-        ranking = any(getattr(m, "instructions", None) == ranker.INSTRUCTIONS for m in messages)
+        ranking = any(getattr(m, "instructions", None) == ranker.REASONS for m in messages)
         if self.live == "all" or (self.live == "ranker" and ranking):
             return await super().request(messages, model_settings, model_request_parameters)
         key = model_key(messages)
