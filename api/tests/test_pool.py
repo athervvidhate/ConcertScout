@@ -183,3 +183,15 @@ async def test_each_page_and_cached_chunk_is_reported_as_it_arrives() -> None:
         seen.clear()
         await pool.find_concerts(client, redis, PLACE, [], DAY, DAY, NOW, found)
     assert seen == [[c.id for c in first]]
+
+
+async def test_only_concerts_in_the_window_are_reported(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ticketmaster, "find_concerts", AsyncMock(return_value=CONCERTS))
+    seen: list[str] = []
+    async with ticketmaster.make_client("unused", httpx.MockTransport(forbidden_http)) as client:
+        redis = FakeAsyncRedis()
+        await pool.find_concerts(client, redis, PLACE, [], DAY, DAY, NOW)
+        await pool.find_concerts(
+            client, redis, PLACE, [], DAY, DAY, NOW, lambda cs: seen.extend(c.id for c in cs)
+        )
+    assert seen == [CONCERTS[0].id]

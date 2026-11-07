@@ -51,7 +51,7 @@ async def find_concerts(
     """Every Concert for the Search, seed Artists first, then the pool soonest first.
 
     Chunks and lookups stay whole in the cache, so any date window can share them. `on_found`
-    sees Concerts as they arrive, before the window filter, so later steps can start early.
+    sees each page's Concerts in the window as they arrive, so later steps can start early.
     """
     first, last = date_window(start, end, now.date())
     state = (
@@ -61,18 +61,31 @@ async def find_concerts(
     )
     point = ticketmaster.rounded_point(place) if place and not state else None
     radius = (place.radius_miles if place else None) or ticketmaster.RADIUS_MILES
+    # An Artist lookup already holds every listed date, so only a chosen end cuts it short.
+    seed_last = end or dt.date.max
+
+    def found_within(last_day: dt.date) -> ticketmaster.OnPage | None:
+        if on_found is None:
+            return None
+        report = on_found
+        return lambda concerts: report([c for c in concerts if _ahead(c, start, last_day, now)])
+
     seeds = await asyncio.gather(
-        *(_artist(client, redis, name, point, state, radius, on_found) for name in artists)
+        *(
+            _artist(client, redis, name, point, state, radius, found_within(seed_last))
+            for name in artists
+        )
     )
     chunks: list[list[Concert]] = []
     if state or point:
         earliest = _earliest(first, now.date())
         months = month_chunks(earliest, last)
         chunks = await asyncio.gather(
-            *(_chunk(client, redis, point, m, earliest, state, radius, on_found) for m in months)
+            *(
+                _chunk(client, redis, point, m, earliest, state, radius, found_within(last))
+                for m in months
+            )
         )
-    # An Artist lookup already holds every listed date, so only a chosen end cuts it short.
-    seed_last = end or dt.date.max
     from_seeds = [c for group in seeds for c in group if _ahead(c, start, seed_last, now)]
     from_pool = [c for group in chunks for c in group if _ahead(c, start, last, now)]
     return list({c.id: c for c in [*from_seeds, *from_pool]}.values())
