@@ -1,5 +1,5 @@
 import { formatDate } from "@/lib/format";
-import { API_URL, type Interpreted, type Recommendation, SearchRefused } from "@/lib/search";
+import { API_URL, type Interpreted, type Recommendation, refusal } from "@/lib/search";
 
 export type Report = {
   search: string;
@@ -26,5 +26,5 @@ export async function sendReport({ search, note, interpreted, recommendations, e
       error: error ?? "",
     }),
   });
-  if (!response.ok) throw new SearchRefused(await response.json());
+  if (!response.ok) throw await refusal(response);
 }

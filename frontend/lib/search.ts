@@ -68,6 +68,17 @@ export class SearchRefused extends Error {
   }
 }
 
+export const UNREACHABLE = "Concert Scout's API is not responding.";
+
+// A gateway or host in front of the API answers in its own format, not with a SearchError.
+export async function refusal(response: Response): Promise<SearchRefused> {
+  try {
+    return new SearchRefused(await response.json());
+  } catch {
+    return new SearchRefused({ code: "unreachable", message: UNREACHABLE });
+  }
+}
+
 export type SearchEvent =
   | { event: "status"; data: { step: string; message: string } }
   | { event: "interpreted"; data: Interpreted }
@@ -91,7 +102,7 @@ export async function* streamSearch(
     signal,
   });
   if (!response.ok || !response.body) {
-    throw new SearchRefused(await response.json());
+    throw await refusal(response);
   }
 
   const reader = response.body

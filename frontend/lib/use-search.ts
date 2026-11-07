@@ -8,10 +8,13 @@ import {
   type Recommendation,
   SearchRefused,
   streamSearch,
+  UNREACHABLE,
 } from "@/lib/search";
 
 export type SearchState = {
   phase: "idle" | "searching" | "finished";
+  // Counts Searches, because running the same text again is still a new Poster.
+  run: number;
   searched: string;
   status: string | null;
   interpreted: Interpreted | null;
@@ -24,6 +27,7 @@ export type SearchState = {
 
 const IDLE: SearchState = {
   phase: "idle",
+  run: 0,
   searched: "",
   status: null,
   interpreted: null,
@@ -35,7 +39,6 @@ const IDLE: SearchState = {
 };
 
 const DROPPED = "The connection dropped before the Search finished.";
-const UNREACHABLE = "Concert Scout's API is not responding.";
 
 export function useSearch() {
   const [state, setState] = useState(IDLE);
@@ -47,7 +50,7 @@ export function useSearch() {
     current.current?.abort();
     const controller = new AbortController();
     current.current = controller;
-    setState({ ...IDLE, phase: "searching", searched: text });
+    setState(({ run }) => ({ ...IDLE, phase: "searching", run: run + 1, searched: text }));
 
     let finished = false;
     let error: string | null = null;

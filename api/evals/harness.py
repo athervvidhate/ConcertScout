@@ -62,6 +62,7 @@ async def run(
             services.musicbrainz,
             services.listenbrainz,
             services.lastfm,
+            services.spotify_catalog,
             services.turnstile,
         ):
             if client is not None:

@@ -30,6 +30,7 @@ const TICKET_MOTION = {
     x: direction * Math.max(window.innerWidth, 1000),
     rotate: direction * 14,
     opacity: 0,
+    pointerEvents: "none" as const,
   }),
 };
 
@@ -44,8 +45,9 @@ function useStage(candidates: Candidates | null, hasPoster: boolean, nameCount: 
   const namesStarted = useRef(0);
 
   useEffect(() => {
+    if (!candidates) return;
     namesStarted.current = Date.now();
-    const timer = setTimeout(() => setStage(candidates ? "names" : "opening"), 0);
+    const timer = setTimeout(() => setStage("names"), 0);
     return () => clearTimeout(timer);
   }, [candidates]);
 
@@ -118,15 +120,6 @@ export function Poster(props: Props) {
   const poster = useRef<HTMLDivElement>(null);
   const showPoster = qualified && (stage === "fly" || stage === "ticket");
   useHeadlinerFit(poster, showPoster);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSelected(0);
-      setFinished(false);
-      setNotice("");
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [candidates]);
 
   useEffect(() => {
     if (stage !== "fly" || !wall.current || !poster.current) return;
@@ -250,6 +243,10 @@ export function Poster(props: Props) {
                 dragSnapToOrigin
                 dragElastic={0.7}
                 whileDrag={{ scale: 0.98 }}
+                onPointerDownCapture={() => {
+                  // A touch drag ends with no click, so each press starts clean.
+                  dragged.current = false;
+                }}
                 onDragStart={() => {
                   dragged.current = true;
                 }}
@@ -259,9 +256,9 @@ export function Poster(props: Props) {
                 }}
                 onClickCapture={(event) => {
                   // Letting go over a link or the Artist's name must not also press it.
-                  if (dragged.current) event.preventDefault();
-                  if (dragged.current) event.stopPropagation();
-                  dragged.current = false;
+                  if (!dragged.current) return;
+                  event.preventDefault();
+                  event.stopPropagation();
                 }}
               >
                 <Ticket

@@ -602,3 +602,69 @@ test("the brand returns to the home page, and the Artist panel opens from a Tick
   await page.getByRole("link", {name: "Concert Scout", exact: true}).click();
   await expect(page).toHaveURL(/\/$/);
 });
+
+test("a Ticket's link still opens after dragging the Ticket before it away", async ({page, isMobile}) => {
+  await page.emulateMedia({reducedMotion: "reduce"});
+  await page.goto("/");
+  await search(page);
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await dragTicket(page, 150, Boolean(isMobile));
+  const opened = page.waitForEvent("popup", {timeout: 3000});
+  await page.getByRole("link", {name: "Tickets for Contract Concert Two"}).click();
+  await opened;
+});
+
+test("a location answer that arrives late leaves the running Search alone", async ({page}) => {
+  await page.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = success => {
+      Object.assign(window, {grantLocation: () => success({coords: {latitude: 41.88, longitude: -87.63}} as GeolocationPosition)});
+    };
+  });
+  await page.goto("/");
+  await page.getByRole("button", {name: "Show Concerts near me"}).click();
+  await search(page);
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await page.evaluate(() => (window as unknown as {grantLocation: () => void}).grantLocation());
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await expect(page.locator(".poster-name")).toHaveCount(2);
+});
+
+test("a refusal that is not JSON reads as the API being down", async ({page}) => {
+  await page.route("**/search", route => route.fulfill({status: 502, contentType: "text/html", body: "<html>Bad gateway</html>"}));
+  await page.goto("/");
+  await search(page);
+  await expect(page.locator(".search-error")).toContainText("Concert Scout's API is not responding.");
+});
+
+test("an example waits for the bot check instead of doing nothing", async ({page}) => {
+  await page.route("**/challenges.cloudflare.com/**", route => route.abort());
+  await page.goto("/");
+  await expect(page.getByRole("button", {name: SEARCH_EXAMPLES[0]})).toBeDisabled();
+});
+
+test("a second Search opens on its first Ticket with nothing left from the last one", async ({page}) => {
+  await page.emulateMedia({reducedMotion: "reduce"});
+  await page.goto("/");
+  await search(page);
+  await page.getByRole("button", {name: "Skip", exact: true}).click();
+  await page.getByRole("button", {name: "Skip", exact: true}).click();
+  await expect(page.locator(".ticket-drag")).toHaveCount(0);
+  await search(page);
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await expect(page.locator(".decision-status")).toHaveText("");
+});
+
+test("one Search asks for the Spotify shelf once", async ({page, context}) => {
+  await page.addInitScript(() => localStorage.setItem("concert-scout-place", JSON.stringify({lat: 41.88, lon: -87.63})));
+  await page.goto(await spotifyCallback(context, "account-code"));
+  const shelf = page.getByRole("region", {name: "Concerts from your Spotify Artists"});
+  await expect(shelf.locator(".spotify-artist").first()).toBeVisible();
+  const requests: string[] = [];
+  page.on("request", request => {
+    if (request.url().includes("/auth/spotify/shelf?")) requests.push(request.url());
+  });
+  await search(page);
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await expect(shelf.locator(".spotify-artist").first()).toBeVisible();
+  expect(requests).toHaveLength(1);
+});
