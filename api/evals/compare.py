@@ -13,9 +13,9 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 from pydantic_ai.messages import ModelMessagesTypeAdapter, ModelResponse, TextPart
 
-from concert_scout.assemble import MIN_SCORE
+from concert_scout.assemble import MIN_LEVEL
 from concert_scout.models import Concert
-from concert_scout.ranker import Pick, Ranking
+from concert_scout.ranker import Fit, Ranking, tally
 from concert_scout.sources import ticketmaster
 from evals import snapshots
 from evals.snapshots import Snapshot
@@ -46,9 +46,11 @@ def _concerts(snapshot: Snapshot) -> dict[str, Concert]:
     return concerts
 
 
-def _picks(snapshot: Snapshot) -> list[Pick]:
-    """The ranker's answer. The interpreter's answer is the other kind, and fails to validate."""
-    picks: list[Pick] = []
+def _fits(snapshot: Snapshot) -> list[Fit]:
+    """The ranker's votes, tallied as the pipeline tallies them. The interpreter's answer is the
+    other kind, and fails to validate.
+    """
+    votes: list[list[Fit]] = []
     for answer in snapshot.answers.values():
         for message in ModelMessagesTypeAdapter.validate_json(answer):
             if not isinstance(message, ModelResponse):
@@ -56,21 +58,21 @@ def _picks(snapshot: Snapshot) -> list[Pick]:
             for part in message.parts:
                 if isinstance(part, TextPart):
                     try:
-                        picks.extend(Ranking.model_validate_json(part.content).picks)
+                        votes.append(Ranking.model_validate_json(part.content).fits)
                     except ValidationError:
                         continue
-    return picks
+    return tally(votes)
 
 
 def artists(snapshot: Snapshot) -> dict[str, int]:
-    """Each Artist the model would put on the Poster, with their best score."""
+    """Each Artist the model would put on the Poster, with their level."""
     concerts = _concerts(snapshot)
     scores: dict[str, int] = {}
-    for pick in _picks(snapshot):
-        concert = concerts.get(pick.id)
-        if concert and pick.score >= MIN_SCORE:
+    for fit in _fits(snapshot):
+        concert = concerts.get(fit.id)
+        if concert and fit.level >= MIN_LEVEL:
             name = concert.artists[0].name if concert.artists else concert.name
-            scores[name] = max(scores.get(name, 0), pick.score)
+            scores[name] = max(scores.get(name, 0), fit.level)
     return scores
 
 

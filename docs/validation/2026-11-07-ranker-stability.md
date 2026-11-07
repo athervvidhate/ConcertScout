@@ -54,3 +54,66 @@ The November 7 run took a median of 12.8 seconds and a p95 of 19.9 seconds to re
 ## Next
 
 Stability can be fixed without labels, because it asks whether the same input gets the same answer, not whether the answer is good. Try the old selection wording with the new reason wording, and keep whichever is steadiest on this repeat test. Choosing between sets of Artists still waits on the owner's labels.
+
+# Measuring the ranker without labels — November 7, 2026, later
+
+The repeat test above became `evals.scorecard`, which scores every repeated Poster three ways without labels: overlap, silver recall against Deezer and Last.fm, and a stronger model's grades. [Research note 13](../research/13-similarity-and-ranking-evaluation.md) covers the sources and methods. All runs below use batch `batch-2026-11-07-073158-af052017`, 20 Searches, 5 runs each, with sources replayed and the ranker live.
+
+## Two sources of change
+
+With the interpreter live too, as a visitor sees it, mean overlap was 77% and 29 of 100 runs could not replay at all: the interpreter read the Search differently and asked for source calls the Snapshot never recorded. Six Searches got more than one shortlist. Holding the recorded reading fixed and calling only the ranker live gave 74% mean overlap, lowest 30%. Both the interpreter and the ranker move the Poster. This change fixes only the ranker.
+
+## The ranker grades instead of choosing
+
+Asked to choose up to 8 Concerts, the ranker sometimes picked a full Poster and sometimes almost none for identical input. `ambient-seattle` gave 1, 6, 6, 8 and 1 Artists over five runs. The new ranker grades every row 0 to 3 against fixed levels, runs three votes with the rows in different fixed orders, and takes each row's median. Code includes level 2 and up, ordered by level, then match score.
+
+| | Overlap | Lowest | Silver recall | Graded precision | Graded recall |
+|---|---:|---:|---:|---:|---:|
+| Choose up to 8, one run | 72% | 30% | 15% | 60% | 60% |
+| Grade every row, 3 votes | 82% | 40% | 15% | 64% | 65% |
+
+| Search | Overlap before | Overlap after | Graded precision before | Graded precision after |
+|---|---:|---:|---:|---:|
+| tyler-childers-chicago | 53% | 66% | 84% | 88% |
+| turnstile-new-york | 90% | 93% | 44% | 42% |
+| four-tet-london | 57% | 80% | 88% | 88% |
+| khruangbin-chicago | 54% | 70% | 33% | 56% |
+| dreamy-guitar-seattle | 100% | 79% | 83% | 79% |
+| shoegaze-portland | 100% | 100% | - | - |
+| techno-detroit | 38% | 60% | 0% | 0% |
+| boise-country | 63% | 83% | 81% | 66% |
+| no-place-turnstile | 90% | 100% | 0% | 0% |
+| new-york-jazz | 87% | 92% | 100% | 100% |
+| chicago-far-month | 100% | 100% | - | - |
+| boise-shoegaze | 36% | 40% | 0% | 0% |
+| ambient-seattle | 30% | 90% | 75% | 82% |
+| punk-los-angeles | 30% | 77% | 63% | 45% |
+| folk-austin | 71% | 91% | 88% | 88% |
+| four-tet-boise | 100% | 100% | 0% | - |
+| instrumental-san-francisco | 58% | 76% | 94% | 100% |
+| metal-denver | 91% | 56% | 88% | 92% |
+| no-place-khruangbin | 100% | 87% | 100% | 100% |
+| sparse-answer | 100% | 100% | - | - |
+
+A dash means nothing to measure: no Poster Artists beyond seeds, or none graded. Grading cost $0.15 once and is cached. The ranker part of each run cost about $0.09 before and three times that after, still under a tenth of a cent per Search. Latency of three votes was not measured before the daily spend cap stopped further runs, so the 15-second target is unchecked for this change.
+
+Three Searches got less steady: `metal-denver`, `dreamy-guitar-seattle` and `no-place-khruangbin`. All three still hold their quality. Five runs per Search is a small sample, so single rows move by chance.
+
+## Most misses come before the ranker
+
+The ranker can only pick from the 40 it is given, and the grader rates most shortlists poorly. Under a third of shortlisted Artists grade a fair fit or better. Across seven Searches that name an Artist, 36 silver Artists were playing and 10 reached the shortlist.
+
+Tracing each miss showed why. Charles Wesley Godwin is a ListenBrainz neighbour of Tyler Childers but sits near the end of its list of 50, so he scores 0.22, under the 0.30 a narrow Ticketmaster genre earns. Scoring neighbours by their place in the list instead was tried and changed nothing measurable, because such Artists already sit near the end. That change was reverted.
+
+Grading every Artist playing, with `--pool`, showed that `techno-detroit` and `boise-shoegaze` have no strong fit anywhere in their pools. Ticketmaster lists little underground techno or shoegaze in those cities, so no change to matching or ranking can find one. The remaining pool grades were stopped by the daily cap.
+
+## Grader limits
+
+The grader ranks Bonobo a 3 for ambient and Katseye a 0, as a person would. It rated Arc De Soleil, a band close to Khruangbin, a 1, because it does not know them and its instructions cap unknown Artists there. Silver recall covers that gap only for Searches that name an Artist. No grade here is checked against human labels yet, so graded precision is a model's opinion.
+
+## Next
+
+- Measure the latency of three votes against the 15-second target.
+- Grade the remaining pools, to tell missing candidates from missing Concerts for every Search.
+- Hold the interpreter steady. It changes the shortlist for six Searches out of twenty.
+- Label a sample, so the grader's agreement with the owner is known.

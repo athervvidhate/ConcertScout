@@ -18,7 +18,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.usage import RequestUsage
 
 from concert_scout.models import Artist, Concert, Recommendation
-from concert_scout.ranker import Pick, Ranking
+from concert_scout.ranker import Fit, Ranking
 from evals import cases, compare, harness, judge, run, snapshots
 from evals.cases import Search
 from evals.harness import SearchRun
@@ -337,7 +337,7 @@ def compared_snapshot(picks: dict[str, int]) -> Snapshot:
         }
 
     body = {"_embedded": {"events": [event(id_) for id_ in ("a", "b", "c")]}}
-    ranking = Ranking(picks=[Pick(id=i, score=s, reason="Why") for i, s in picks.items()])
+    ranking = Ranking(fits=[Fit(id=i, level=s, reason="Why") for i, s in picks.items()])
     answer = ModelResponse(parts=[TextPart(ranking.model_dump_json())])
     return Snapshot(
         id="case",
@@ -357,10 +357,10 @@ def compared_snapshot(picks: dict[str, int]) -> Snapshot:
 def test_compare_counts_artists_the_poster_would_show() -> None:
     change = compare.compare(
         "case",
-        compared_snapshot({"a": 80, "b": 60, "c": 49}),
-        compared_snapshot({"a": 70, "c": 90, "unknown": 95}),
+        compared_snapshot({"a": 3, "b": 2, "c": 1}),
+        compared_snapshot({"a": 2, "c": 3, "unknown": 3}),
     )
-    assert change.before == {"Artist a": 80, "Artist b": 60}
-    assert change.after == {"Artist a": 70, "Artist c": 90}
+    assert change.before == {"Artist a": 3, "Artist b": 2}
+    assert change.after == {"Artist a": 2, "Artist c": 3}
     assert change.overlap == pytest.approx(1 / 3)
-    assert "lost Artist b (60)" in compare.report([change])
+    assert "lost Artist b (2)" in compare.report([change])

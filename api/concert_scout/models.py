@@ -52,6 +52,7 @@ class Recommendation(BaseModel):
 
     concert: Concert
     reason: str
+    # The ranker's level, 0 to 3. A seed or a fallback Recommendation has none.
     score: int | None = None
     also: list[Concert] = []
 

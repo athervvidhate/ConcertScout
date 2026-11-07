@@ -143,13 +143,15 @@ async def _recommend(
     services: Services,
 ) -> list[Recommendation]:
     try:
-        picks = await rank(interpretation, shortlist, artist_tags, services.model)
+        fits = await rank(interpretation, shortlist, artist_tags, services.model)
     except RankerError as exc:
         logger.warning("Ranker failed: %s", exc)
         return assemble.from_matches(shortlist)
-    recommendations = assemble.from_picks(picks, shortlist)
-    # Picks that all name unknown IDs are a garbled answer, not a verdict that nothing fits.
-    return assemble.from_matches(shortlist) if picks and not recommendations else recommendations
+    known = {candidate.concert.id for candidate in shortlist}
+    # Grades that all name unknown IDs are a garbled answer, not a verdict that nothing fits.
+    if not any(fit.id in known for fit in fits):
+        return assemble.from_matches(shortlist)
+    return assemble.from_fits(fits, shortlist)
 
 
 async def _find_elsewhere(

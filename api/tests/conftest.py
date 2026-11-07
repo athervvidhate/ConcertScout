@@ -7,7 +7,7 @@ from pydantic_ai import models
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from concert_scout import limits
+from concert_scout import limits, ranker
 from concert_scout.models import Place
 
 models.ALLOW_MODEL_REQUESTS = False
@@ -40,7 +40,7 @@ def model_returning(*outputs: dict[str, Any]) -> FunctionModel:
     remaining = iter(outputs)
 
     def respond(_: list[ModelMessage], info: AgentInfo) -> ModelResponse:
-        if info.instructions and "Choose the Concerts" in info.instructions:
+        if info.instructions == ranker.INSTRUCTIONS:
             raise RuntimeError("ranker unavailable")
         return ModelResponse(parts=[TextPart(json.dumps(next(remaining)))])
 
