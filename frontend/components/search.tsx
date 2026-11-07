@@ -222,12 +222,16 @@ export function Search() {
       {spotify.connected && (
         <SpotifyShelf
           connectHref={spotify.connectHref}
+          onLocate={() => showNearby()}
+          upcoming={home}
           key={JSON.stringify([interpreted, place])}
           place={interpreted?.place}
           lat={interpreted?.place ? undefined : place?.lat}
           lon={interpreted?.place ? undefined : place?.lon}
+          radius={interpreted?.radius_miles}
           start={interpreted?.start}
           end={interpreted?.end}
+          genres={interpreted?.genres}
         />
       )}
       {home && (

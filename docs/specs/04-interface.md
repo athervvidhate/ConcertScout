@@ -8,8 +8,8 @@ Follow `ui-skills.com` rules and Emil Kowalski's motion rules. Use coss ui (Base
 
 The page has one job, so it has one search box in the middle. A city typed there already works, so there is no second place box.
 
-- Top bar, right aligned: Saved Concerts and Your Taste. Your Taste opens a panel from the right edge, and importing happens there.
-- A location button sits inside the search box. It asks for the browser's location only when pressed, then shows Concerts near you below.
+- Top bar, right aligned: Saved Concerts and Your Taste. Your Taste opens a panel from the right edge. Connect Spotify leads it as the one filled button, and the imports sit behind an "Other ways to add your Taste" toggle.
+- A location button sits inside the search box. It asks for the browser's location only when pressed, then shows Concerts near you below. Later Searches that name no place look near that location.
 - The empty Search box rotates eight realistic examples with a typing/deleting effect. Pause while focused, while text is entered, or during a Search. Reduced motion keeps a static example.
 - Links to Tickets and other sites open a new tab, so a Poster is never lost.
 
