@@ -1,41 +1,15 @@
-import type React from "react"
-import type { Metadata } from "next"
-import { Inter } from "next/font/google"
-import "./globals.css"
-import { Analytics } from '@vercel/analytics/react'
-import { Footer } from "@/components/footer"
-
-const inter = Inter({ subsets: ["latin"] })
+import type { Metadata } from "next";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Concert Scout AI",
-  description: "Discover live music events tailored to your taste",
-  icons: {
-    icon: "/favicon.svg",
-    apple: "/favicon.svg",
-  },
-}
+  title: "Concert Scout",
+  description: "Find live music you would want to see.",
+};
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className="dark">
-      <head>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/favicon.svg" />
-      </head>
-      <body className={inter.className}>
-        <div className="flex min-h-screen flex-col">
-          <div className="flex-1">
-            {children}
-          </div>
-          <Footer />
-        </div>
-        <Analytics />
-      </body>
+    <html lang="en">
+      <body className="bg-stone-50 text-stone-900">{children}</body>
     </html>
-  )
+  );
 }
