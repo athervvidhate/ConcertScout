@@ -27,6 +27,14 @@ export function formatDate(date: string): string {
   return dateFormat.format(new Date(`${date}T00:00:00Z`));
 }
 
+/** Today on this device, in the same form as a Concert's date. */
+export function localToday(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
 export function formatMonthDay(date: string): string {
   return monthDayFormat.format(new Date(`${date}T00:00:00Z`));
 }

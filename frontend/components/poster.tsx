@@ -1,14 +1,16 @@
 "use client";
 
 import { Button } from "@base-ui/react/button";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { motion } from "motion/react";
+import { type KeyboardEvent, Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { nameOf, Ticket } from "@/components/ticket";
 import { flyIn } from "@/lib/fly-in";
 import { formatDate } from "@/lib/format";
 import { flyDuration, MAX_CANDIDATE_NAMES, namesDuration, PICK_READ_MS } from "@/lib/poster-timing";
-import { readSaved, saveConcert } from "@/lib/saved";
+import { type Decision, saveConcert, skipConcert, useDecisions } from "@/lib/saved";
 import type { Candidates, Recommendation } from "@/lib/search";
+import { swipeDecision } from "@/lib/swipe";
 
 type Props = {
   candidates: Candidates | null;
@@ -18,7 +20,6 @@ type Props = {
   status: string | null;
 };
 type Stage = "opening" | "names" | "picks" | "fly" | "ticket";
-type Decision = "saved" | "skipped";
 
 function tierOf(rank: number): number {
   if (rank === 0) return 1;
@@ -86,7 +87,7 @@ export function Poster(props: Props) {
   const names = candidates?.names.slice(0, MAX_CANDIDATE_NAMES) ?? [];
   const [stage, setStage] = useStage(candidates, hasPoster, names.length);
   const [selected, setSelected] = useState(0);
-  const [decisions, setDecisions] = useState<Record<string, Decision>>({});
+  const decisions = useDecisions();
   const [notice, setNotice] = useState("");
   const wall = useRef<HTMLDivElement>(null);
   const poster = useRef<HTMLDivElement>(null);
@@ -97,7 +98,6 @@ export function Poster(props: Props) {
     const timer = setTimeout(() => {
       setSelected(0);
       setNotice("");
-      setDecisions(Object.fromEntries(readSaved().map((r) => [r.concert.id, "saved" as const])));
     }, 0);
     return () => clearTimeout(timer);
   }, [candidates]);
@@ -115,19 +115,23 @@ export function Poster(props: Props) {
   const current = recommendations[selected];
 
   function decide(decision: Decision) {
-    if (decision === "saved") {
-      try {
-        saveConcert(current);
-      } catch {
-        setNotice("This browser could not save the Concert. Allow local storage and try again.");
-        return;
-      }
+    try {
+      if (decision === "saved") saveConcert(current);
+      else skipConcert(current.concert.id);
+    } catch {
+      setNotice("This browser could not keep that choice. Allow local storage and try again.");
+      return;
     }
-    setDecisions((previous) => ({ ...previous, [current.concert.id]: decision }));
     const done = decision === "saved" ? "saved on this device" : "skipped";
     setNotice(`${nameOf(current)} ${done}.`);
-    const next = recommendations.findIndex((r, i) => i !== selected && !decisions[r.concert.id]);
-    if (next >= 0) setSelected(next);
+    const after = [...recommendations.slice(selected + 1), ...recommendations.slice(0, selected)];
+    const next = after.find((r) => !decisions[r.concert.id]);
+    if (next) setSelected(recommendations.indexOf(next));
+  }
+
+  function decideByKey(event: KeyboardEvent) {
+    if (event.key === "ArrowRight") decide("saved");
+    if (event.key === "ArrowLeft") decide("skipped");
   }
 
   function nameClass(rank: number) {
@@ -203,8 +207,22 @@ export function Poster(props: Props) {
         {statusText(props)}
       </p>
       {stage === "ticket" && current && (
-        <>
-          <Ticket key={current.concert.id} recommendation={current} rank={selected} />
+        <div onKeyDown={decideByKey}>
+          <motion.div
+            key={current.concert.id}
+            className="ticket-drag"
+            drag="x"
+            dragSnapToOrigin
+            dragElastic={0.7}
+            whileDrag={{ scale: 0.98 }}
+            onDragEnd={(_, { offset, velocity }) => {
+              const decision = swipeDecision(offset.x, velocity.x);
+              if (decision) decide(decision);
+            }}
+          >
+            <Ticket recommendation={current} rank={selected} />
+          </motion.div>
+          <p className="ticket-hint">Drag right to save, left to skip, or use the arrow keys.</p>
           <div className="ticket-controls">
             <Button type="button" onClick={() => decide("skipped")}>
               Skip
@@ -216,7 +234,7 @@ export function Poster(props: Props) {
           <p className="decision-status" role="status">
             {notice}
           </p>
-        </>
+        </div>
       )}
     </section>
   );
