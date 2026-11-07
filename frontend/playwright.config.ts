@@ -10,6 +10,8 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   reporter: process.env.CI ? "github" : "list",
   use: {
+    // Phones do not hint fonts. Linux Chromium does, which widens text and fails fit checks.
+    launchOptions: { args: ["--font-render-hinting=none"] },
     baseURL: "http://127.0.0.1:3146",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
