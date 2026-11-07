@@ -189,7 +189,7 @@ Not yet tested: Haiku grading without reasons and then writing 8 reasons, which 
 
 ## Against the owner's labels
 
-The owner labelled 8 Searches in `evals.rate`: 10 must Artists, 31 good and 8 bad. Three of the musts (Sammy Virji, it's murph, an Ultra Music Festival listing) never reach the shortlist, so no ranker can show them. All four rankers ran on all 28 Searches, 3 runs each, sources replayed. "Must found" and "liked" use the labelled Searches only: liked is the share of labelled Poster Artists the owner called good or must, and bad shown is the share of the Poster called bad.
+The owner labelled 8 Searches in `evals.rate`: 10 must Artists, 31 good and 8 bad. Every must Artist is on a shortlisted bill, but for three the ranker grades another Artist on that bill, the one matching found: Sammy Virji's show is graded as Sam Gellaitry, and the Ultra Music Festival listing, which also holds Dom Dolla and it's murph, as SOFI TUKKER. All four rankers ran on all 28 Searches, 3 runs each, sources replayed. "Must found" and "liked" use the labelled Searches only: liked is the share of labelled Poster Artists the owner called good or must, and bad shown is the share of the Poster called bad.
 
 | Ranker | Overlap | Lowest | Must found | Liked | Bad shown | Ranker median | p95 | Cost |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -202,4 +202,4 @@ Jev is the stricter grader. It shows fewer Artists the owner dislikes and more t
 
 Splitting Haiku into grading and then writing is slower than one call and worse on every label measure, so the gain in the Jev row comes from Jev, not from the split.
 
-The labels cover 8 Searches and 7 reachable musts, so the must gap rests on two or three Artists. It is not enough to tune Jev's threshold against without fitting these exact Searches. The app keeps Haiku. Jev stays an eval option, to retry once more Searches are labelled.
+The labels cover 8 Searches and 10 musts, so the must gap rests on two or three Artists. It is not enough to tune Jev's threshold against without fitting these exact Searches. The app keeps Haiku. Jev stays an eval option, to retry once more Searches are labelled.
