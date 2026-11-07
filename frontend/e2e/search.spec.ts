@@ -148,6 +148,19 @@ test("examples rotate without changing input, and reduced motion stays static", 
 });
 
 
+test("an emptied box stays blank after a Search until home returns", async ({page}) => {
+  await page.goto("/");
+  const input = page.getByRole("textbox", {name: "Search"});
+  await search(page);
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await input.clear();
+  await expect(input).not.toHaveAttribute("placeholder");
+  await page.waitForTimeout(350);
+  await expect(input).not.toHaveAttribute("placeholder");
+  await page.getByRole("link", {name: "Concert Scout"}).click();
+  await expect.poll(() => input.getAttribute("placeholder")).toBeTruthy();
+});
+
 test("a refused storage write never claims a successful Save", async ({ page }) => {
   await page.addInitScript(() => {
     const write = Storage.prototype.setItem;

@@ -10,7 +10,7 @@ The page has one job, so it has one search box in the middle. A city typed there
 
 - Top bar, right aligned: Saved Concerts and Your Taste. Your Taste opens a panel from the right edge. Connect Spotify leads it as the one filled button, and the imports sit behind an "Other ways to add your Taste" toggle.
 - A location button sits inside the search box. It asks for the browser's location only when pressed, then fills in. Later Searches that name no place look near that location, and the Spotify shelf uses it. Pressed again, it forgets the location, which deletes the stored coordinates.
-- The empty Search box rotates three examples with a typing/deleting effect, the same three the home page offers as buttons right below the search box. They show three kinds of Search: an Artist with a place and dates, a genre with a place and dates, and a sound in a Region with dates. Pause while focused, while text is entered, or during a Search. Reduced motion keeps a static example.
+- The empty Search box rotates three examples with a typing/deleting effect, the same three the home page offers as buttons right below the search box. They show three kinds of Search: an Artist with a place and dates, a genre with a place and dates, and a sound in a Region with dates. Pause while focused or while text is entered. Examples belong to the resting home page, so the box stays blank during and after a Search, even with its text deleted. Reduced motion keeps a static example.
 - Links to Tickets and other sites open a new tab, so a Poster is never lost.
 
 ## Tokens

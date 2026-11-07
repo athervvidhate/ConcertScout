@@ -54,7 +54,7 @@ export function Search() {
   const showPoster = phase === "searching" || hasPoster;
   // Home holds everything that isn't about a Search, so a Search replaces all of it.
   const home = phase === "idle";
-  const example = useSearchExample(!text && phase !== "searching");
+  const example = useSearchExample(!text && home);
   const locationLabel = place ? "Forget my location" : "Use my location";
   const canSearch = token !== null && phase !== "searching";
   const searchedFor =
@@ -147,7 +147,7 @@ export function Search() {
           id="search"
           value={text}
           onChange={(event) => setText(event.target.value)}
-          placeholder={example}
+          placeholder={home ? example : undefined}
           required
           maxLength={500}
         />
