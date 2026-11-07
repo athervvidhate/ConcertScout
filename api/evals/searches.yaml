@@ -39,3 +39,19 @@
   text: Concerts by Khruangbin or similar Artists
 - id: sparse-answer
   text: Tuvan throat singing in Boise this weekend
+- id: rap-atlanta
+  text: Artists like JID in Atlanta
+- id: melodic-rap-houston
+  text: Melodic rap in Houston
+- id: pop-new-york
+  text: Pop like Sabrina Carpenter in New York
+- id: dance-pop-los-angeles
+  text: Upbeat dance pop in Los Angeles
+- id: house-chicago
+  text: House music in Chicago
+- id: fred-again-san-francisco
+  text: Something like Fred again.. in San Francisco
+- id: tech-house-miami
+  text: Tech house like John Summit in Miami
+- id: country-nashville
+  text: Country like Zach Bryan in Nashville

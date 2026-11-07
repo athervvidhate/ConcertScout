@@ -42,6 +42,7 @@ class SearchRun:
     seconds_to_poster: float | None = None
     cost: Decimal = Decimal(0)
     cost_complete: bool = True
+    steps: dict[str, float] = field(default_factory=dict[str, float])
 
 
 async def run(
@@ -85,6 +86,7 @@ async def run(
             finally:
                 result.cost = usage.cost
                 result.cost_complete = usage.complete
+                result.steps = usage.steps
                 if spend_redis is not None:
                     await limits.record_spend(spend_redis, usage.cost)
     return result

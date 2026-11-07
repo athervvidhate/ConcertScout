@@ -1,10 +1,11 @@
 """Safe Search telemetry. Only fixed span names and numeric usage leave this module."""
 
 import logging
+import time
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from opentelemetry import trace
@@ -42,6 +43,8 @@ class SearchUsage:
     output_tokens: int = 0
     cost: Decimal = Decimal(0)
     complete: bool = True
+    # Seconds spent in each pipeline step, so a slow Search shows where its time went.
+    steps: dict[str, float] = field(default_factory=dict[str, float])
 
 
 _current: ContextVar[SearchUsage | None] = ContextVar("search_usage", default=None)
@@ -67,8 +70,15 @@ def record_usage(usage: RunUsage) -> None:
 @contextmanager
 def step(name: str) -> Generator[None]:
     # Exception messages and stack traces can contain Search text or source data.
-    with tracer.start_as_current_span(name, record_exception=False, set_status_on_exception=False):
-        yield
+    started = time.perf_counter()
+    try:
+        with tracer.start_as_current_span(
+            name, record_exception=False, set_status_on_exception=False
+        ):
+            yield
+    finally:
+        if total := _current.get():
+            total.steps[name] = total.steps.get(name, 0) + time.perf_counter() - started
 
 
 @contextmanager

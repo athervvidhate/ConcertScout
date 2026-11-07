@@ -44,7 +44,7 @@ async def main() -> None:
         return
     settings = Settings()  # pyright: ignore[reportCallIssue]
     total = Decimal(0)
-    entries: list[dict[str, str | int | float | bool | None]] = []
+    entries: list[dict[str, str | int | float | bool | dict[str, float] | None]] = []
     batch_id = dt.datetime.now(dt.UTC).strftime("batch-%Y-%m-%d-%H%M%S-") + uuid4().hex[:8]
     failed = False
     snapshots.SNAPSHOTS.mkdir(exist_ok=True)
@@ -63,6 +63,7 @@ async def main() -> None:
                 "id": search.id,
                 "snapshot": snapshot.id,
                 "seconds_to_poster": result.seconds_to_poster,
+                "step_seconds": {name: round(t, 2) for name, t in result.steps.items()},
                 "cost_usd": str(result.cost),
                 "cost_complete": result.cost_complete,
                 "recommendations": len(result.recommendations),
@@ -76,7 +77,8 @@ async def main() -> None:
             json.dump({"captures": entries, "total_cost_usd": str(total)}, output, indent=2)
         print(
             f"  {snapshot.id}: {len(result.recommendations)} picks, "
-            f"{result.seconds_to_poster}s, ${result.cost}; error={result.error}",
+            f"{result.seconds_to_poster}s, ${result.cost}; error={result.error}\n    "
+            + ", ".join(f"{name} {t:.1f}s" for name, t in result.steps.items()),
             flush=True,
         )
         if result.error:

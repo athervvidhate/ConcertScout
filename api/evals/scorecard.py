@@ -29,13 +29,13 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from itertools import combinations
 
-from concert_scout import cache, limits, telemetry
+from concert_scout import cache, limits, ranker, telemetry
 from concert_scout.config import Settings
 from concert_scout.models import Recommendation
 from concert_scout.names import normalize
-from evals import harness, snapshots
+from evals import cases, harness, snapshots
 from evals.compare import batch_cases
-from evals.grade import GOOD, Grader, Row
+from evals.grade import GOOD, Grader, Row, agreement
 from evals.silver import Silver, recall
 from evals.snapshots import Live
 
@@ -55,8 +55,10 @@ class Card:
     levels: dict[str, int] = field(default_factory=dict[str, int])
     shortlisted: set[str] = field(default_factory=set[str])
     playing: set[str] = field(default_factory=set[str])
-    # Seconds to the Poster. Sources replay at once, so this is nearly all live model time.
+    # Seconds the ranker took in each run, its votes included.
     seconds: list[float] = field(default_factory=list[float])
+    # How often the grader sided with the owner's labels, when there are any.
+    agreement: float | None = None
     cost: Decimal = Decimal(0)
 
     @property
@@ -158,7 +160,7 @@ async def repeat(
         shortlists=len({tuple(r.names) for r in finished}),
         failures=len(replays) - len(finished),
         shortlisted={normalize(name) for name in shortlist},
-        seconds=[r.seconds_to_poster for r in finished if r.seconds_to_poster is not None],
+        seconds=[r.steps["rank"] for r in finished if "rank" in r.steps],
         cost=sum((r.cost for r, _ in replays), Decimal(0)),
     )
     return card, shown
@@ -197,7 +199,8 @@ def lines(card: Card) -> list[str]:
     head = (
         f"{card.id}: overlap {card.overlap:.0%}, silver recall {_percent(card.silver_recall())}, "
         f"graded precision {_percent(card.graded_precision())}, "
-        f"graded recall {_percent(card.graded_recall())}"
+        f"graded recall {_percent(card.graded_recall())}, "
+        f"grader agrees with labels {_percent(card.agreement)}"
     )
     candidates = (
         f"  shortlist: silver {_percent(card.shortlist_silver())}, "
@@ -234,7 +237,8 @@ def summary(cards: Sequence[Card]) -> str:
         f"shortlist silver {mean([c.shortlist_silver() for c in cards])}, "
         f"shortlist graded {mean([c.shortlist_graded() for c in cards])}, "
         f"pool strong kept {mean([c.shortlist_strong() for c in cards])}; "
-        f"model seconds median {statistics.median(seconds or [0]):.1f} p95 {slowest:.1f}, "
+        f"grader agrees {mean([c.agreement for c in cards])}; "
+        f"ranker seconds median {statistics.median(seconds or [0]):.1f} p95 {slowest:.1f}, "
         f"cost ${cost:.4f}"
     )
 
@@ -247,9 +251,12 @@ async def main() -> None:
     parser.add_argument(
         "--pool", action="store_true", help="also grade every Artist playing; costs more once"
     )
+    parser.add_argument("--votes", type=int, default=ranker.VOTES, help="ranker votes to try")
     parser.add_argument("cases", nargs="*", help="case IDs; all in the batch when left out")
     args = parser.parse_args()
     settings = Settings()  # pyright: ignore[reportCallIssue]
+    ranker.VOTES = args.votes
+    labels = {search.id: search for search in cases.load() if search.judged}
     chosen = batch_cases(args.batch)
     if args.cases:
         chosen = {case: chosen[case] for case in args.cases}
@@ -265,6 +272,10 @@ async def main() -> None:
                 runs = 1 if args.live == "none" else args.runs
                 card, names = await repeat(case, snapshot, runs, args.live, settings)
                 await score(card, snapshot, names, silver, grader, args.pool)
+                if judged := labels.get(case):
+                    card.agreement = agreement(
+                        card.levels, [*judged.must, *judged.good], judged.bad
+                    )
                 await limits.record_spend(ledger, card.cost)
                 cards.append(card)
                 print("\n".join(lines(card)), flush=True)
