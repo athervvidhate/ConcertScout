@@ -53,6 +53,7 @@ async def test_actual_public_entrypoint_serves_health_without_redis_or_provider_
 ) -> None:
     for name, value in PUBLIC.items():
         monkeypatch.setenv(name.upper(), json.dumps(value) if isinstance(value, list) else value)
+    monkeypatch.setenv("SPOTIFY_CLIENT_ID", "")
 
     async def no_io(*_: Any, **__: Any) -> Any:
         raise AssertionError("Health must not call Redis or a provider")

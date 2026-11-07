@@ -30,7 +30,7 @@ Accept one Artist per line, comma-separated text, or a CSV with an obvious Artis
 [ADR 0003](../adr/0003-official-spotify-access-only.md) sets the rules. Details are in [the OAuth research](../research/07-spotify-oauth.md).
 
 - Authorization Code flow, with the client secret on FastAPI.
-- Scopes: `user-top-read` and `user-follow-read`.
+- Scopes: `user-top-read`, `user-follow-read` and `user-library-read`.
 - Up to 5 allowlisted users. The owner needs Premium for Development Mode.
 - Local redirect URI: `http://127.0.0.1:8000/auth/spotify/callback`. Spotify rejects `localhost`.
 - Use Authlib with `httpx`. Do not use spotipy.
@@ -41,6 +41,14 @@ Accept one Artist per line, comma-separated text, or a CSV with an obvious Artis
 
 Spotify developer policy clauses III.13 and III.14 keep this data out of LLM prompts. So the shelf does not use the pipeline. Code takes the user's top Artists, normalizes names, and looks for exact matches in the Concert pool. It shows those Concerts in a separate shelf, ranked by the user's own Artist order.
 
-The separate `/auth/spotify/shelf` route receives a place or explicit coordinates and dates. It never calls the Search pipeline. Only top Artists (up to 50) and the first 50 followed Artists are read, with top Artists first. The shelf shows at most 20 Concerts, using normalized exact Lineup names and their source facts. Its data never becomes imported Taste or enters localStorage.
+The separate `/auth/spotify/shelf` route receives a place or explicit coordinates, dates and the Search's genres. It never calls the Search pipeline. The name list reads, in order: top Artists and the Artists of top songs for all three Spotify time ranges, up to 1,000 followed Artists, and the Artists on the newest 1,000 Liked Songs. Spotify reports no play counts, so a Liked Song only adds its Artists to the list. Nothing is counted or scored. The shelf shows at most 20 Concerts, using normalized exact Lineup names and their source facts. Its data never becomes imported Taste or enters localStorage.
 
-The shelf has no LLM reasons. Each entry says "From your top Artists", or "An Artist you follow" when it came from the followed list. The Spotify logo and attribution follow Spotify's design rules.
+The list takes about 30 Spotify calls for a large library, so it stays encrypted in Redis for one day, keyed to the session. Disconnect deletes it with the tokens.
+
+A Search's genres override favourites. They come from the typed Search and are compared in code with the genres Ticketmaster reports for the matched Lineup entry, so a favourite in another genre or with no reported genre stays out. Spotify's own deprecated `genres` field is not read.
+
+With no Search yet, the shelf sits above the home guide and shows the next two months near the visitor's shared location. Without a location it asks for one. A visitor who has not connected is pointed to it by the home guide's Make it yours text. Add your Taste opens the panel, where Connect Spotify comes first.
+
+The shelf orders Concerts by the name list above, soonest first within an Artist, and every Artist's first date comes before anyone's second. It opens with 5 and adds 5 at a time.
+
+The shelf has no LLM reasons. Each entry names its source: "From your top Artists", "From your top songs", "An Artist you follow" or "From your Liked Songs". The Spotify logo and attribution follow Spotify's design rules.

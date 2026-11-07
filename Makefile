@@ -1,4 +1,7 @@
-.PHONY: install dev start redis api frontend-dev frontend-start check e2e check-live check-context
+.PHONY: install dev start phone redis api frontend-dev frontend-start check e2e check-live check-context
+
+API_HOST ?= 127.0.0.1
+LAN_IP = $(shell ipconfig getifaddr en0)
 
 install:
 	cd api && uv sync --locked
@@ -13,11 +16,18 @@ start: install
 	cd frontend && npm run build
 	$(MAKE) -j3 redis api frontend-start
 
+# The same full run, reachable from a phone on this network. Phones treat plain HTTP as insecure,
+# so location and the Spotify connection need a real HTTPS deployment.
+phone: install
+	cd frontend && npm run build
+	@echo "On your phone, open http://$(LAN_IP):3000"
+	API_HOST=0.0.0.0 CORS_ORIGINS='["http://127.0.0.1:3000","http://localhost:3000","http://$(LAN_IP):3000"]' $(MAKE) -j3 redis api frontend-start
+
 redis:
 	@redis-cli ping >/dev/null 2>&1 || exec redis-server --save "" --appendonly no
 
 api:
-	cd api && uv run uvicorn --factory concert_scout.app:create_app --host 127.0.0.1 --port 8000 --no-proxy-headers
+	cd api && uv run uvicorn --factory concert_scout.app:create_app --host $(API_HOST) --port 8000 --no-proxy-headers
 
 frontend-dev:
 	cd frontend && npm run dev

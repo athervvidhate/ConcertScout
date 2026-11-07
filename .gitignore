@@ -85,3 +85,6 @@ playwright-report/
 
 # Local conversation pointers and working checkpoints.
 .agent-context/
+
+# Vercel CLI link
+.vercel

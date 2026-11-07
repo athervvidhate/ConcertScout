@@ -69,7 +69,7 @@ async def run(
         resources.push_async_callback(services.redis.aclose)
         with telemetry.search() as usage:
             try:
-                async for event in stream_search(text, [], services, today):
+                async for event in stream_search(text, [], None, services, today):
                     data: dict[str, Any] = event.data or {}
                     if event.event == "candidates":
                         result.names = data["names"]

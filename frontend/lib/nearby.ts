@@ -5,6 +5,7 @@ import { API_URL, type Concert, type SearchError } from "@/lib/search";
 export type Place = { lat: number; lon: number };
 
 const PLACE_KEY = "concert-scout-place";
+const HIDDEN_KEY = "concert-scout-nearby-hidden";
 
 async function getJson<T>(path: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { signal });
@@ -42,6 +43,23 @@ export function forgetPlace(): void {
     localStorage.removeItem(PLACE_KEY);
   } catch {
     // Nothing was stored, so there is nothing to forget.
+  }
+}
+
+export function readNearbyHidden(): boolean {
+  try {
+    return localStorage.getItem(HIDDEN_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+export function keepNearbyHidden(hidden: boolean): void {
+  try {
+    if (hidden) localStorage.setItem(HIDDEN_KEY, "1");
+    else localStorage.removeItem(HIDDEN_KEY);
+  } catch {
+    // Without storage, the section only opens again on the next visit.
   }
 }
 

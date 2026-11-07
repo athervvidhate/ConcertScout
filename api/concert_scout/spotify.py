@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import secrets
+from collections import Counter
 from collections.abc import Sequence
 from typing import Annotated
 from urllib.parse import urlsplit
@@ -17,8 +18,9 @@ from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 
 from concert_scout import limits, pool
+from concert_scout.aliases import music_tag
 from concert_scout.config import Settings
-from concert_scout.models import Concert, Place
+from concert_scout.models import MAX_RADIUS_MILES, Artist, Concert, Place
 from concert_scout.names import normalize
 from concert_scout.security import Refused
 from concert_scout.sources import geocoder
@@ -37,10 +39,20 @@ SESSION_COOKIE = "concert_scout_spotify"
 STATE_COOKIE = "concert_scout_spotify_state"
 SESSION_TTL = 7 * 86400
 STATE_TTL = 600
+# Reading a large library takes about 30 Spotify calls, too many to repeat on every Search.
+ARTISTS_TTL = 86400
 
 
 def session_key(session: str) -> str:
     return "spotify:session:" + hashlib.sha256(session.encode()).hexdigest()
+
+
+def artists_key(session: str) -> str:
+    return "spotify:artists:" + hashlib.sha256(session.encode()).hexdigest()
+
+
+class CachedArtists(BaseModel):
+    artists: list[SpotifyArtist]
 
 
 class Sessions:
@@ -78,8 +90,26 @@ class Sessions:
             await self.delete(session)
             return None
 
+    async def save_artists(self, session: str, artists: list[SpotifyArtist]) -> None:
+        raw = CachedArtists(artists=artists).model_dump_json()
+        key = artists_key(session)
+        await self.redis.set(key, self.cipher.encrypt(raw.encode()), ex=ARTISTS_TTL)
+        # A Disconnect during the read must still leave nothing behind.
+        if not await self.redis.exists(session_key(session)):
+            await self.redis.delete(key)
+
+    async def load_artists(self, session: str) -> list[SpotifyArtist] | None:
+        raw = await self.redis.get(artists_key(session))
+        if raw is None:
+            return None
+        try:
+            cached = CachedArtists.model_validate_json(self.cipher.decrypt(raw, ttl=ARTISTS_TTL))
+        except (InvalidToken, ValidationError):
+            return None
+        return cached.artists
+
     async def delete(self, session: str) -> None:
-        await self.redis.delete(session_key(session))
+        await self.redis.delete(session_key(session), artists_key(session))
 
 
 class ShelfConcert(BaseModel):
@@ -87,20 +117,38 @@ class ShelfConcert(BaseModel):
     artist: SpotifyArtist
 
 
+def in_genres(artist: Artist, wanted: set[str]) -> bool:
+    """A Search's genres win over a favourite. A Lineup entry with no genre cannot qualify."""
+    if not wanted:
+        return True
+    return any(g and music_tag(g) in wanted for g in (artist.genre, artist.subgenre))
+
+
 def exact_matches(
-    concerts: Sequence[Concert], artists: Sequence[SpotifyArtist]
+    concerts: Sequence[Concert], artists: Sequence[SpotifyArtist], genres: Sequence[str] = ()
 ) -> list[ShelfConcert]:
     wanted = {normalize(a.name): (rank, a) for rank, a in reversed(list(enumerate(artists)))}
+    styles = {music_tag(genre) for genre in genres}
     matches: dict[str, tuple[int, ShelfConcert]] = {}
     for concert in concerts:
-        found = [wanted[normalize(a.name)] for a in concert.artists if normalize(a.name) in wanted]
+        found = [
+            wanted[normalize(a.name)]
+            for a in concert.artists
+            if normalize(a.name) in wanted and in_genres(a, styles)
+        ]
         if found:
             rank, artist = min(found, key=lambda item: item[0])
             matches.setdefault(concert.id, (rank, ShelfConcert(concert=concert, artist=artist)))
     ordered = sorted(
         matches.values(), key=lambda item: (item[0], item[1].concert.date or dt.date.max)
     )
-    return [item for _, item in ordered[:20]]
+    # Favourites first, but everyone's first date beats anyone's second, so one tour can't fill it.
+    dates_so_far: Counter[int] = Counter()
+    turns: list[tuple[int, ShelfConcert]] = []
+    for rank, item in ordered:
+        turns.append((dates_so_far[rank], item))
+        dates_so_far[rank] += 1
+    return [item for _, item in sorted(turns, key=lambda turn: turn[0])]
 
 
 def router(
@@ -226,8 +274,7 @@ def router(
         if not error and code and len(code) <= 2048:
             try:
                 token = await client.exchange(code)
-                # The protected API returns 403 for a user outside Spotify's dashboard allowlist.
-                await client.artists(token)
+                await client.check(token)
                 session = secrets.token_urlsafe(32)
                 await store.save(session, token)
                 old = request.cookies.get(SESSION_COOKIE)
@@ -256,7 +303,7 @@ def router(
     async def disconnect(request: Request) -> Response:
         guard_origin(request)
         if session := request.cookies.get(SESSION_COOKIE):
-            await redis.delete(session_key(session))
+            await redis.delete(session_key(session), artists_key(session))
         response = Response(status_code=204)
         response.delete_cookie(
             SESSION_COOKIE, path=PREFIX, secure=secure, httponly=True, samesite="lax"
@@ -270,23 +317,31 @@ def router(
         place: Annotated[str | None, Query(max_length=500)] = None,
         lat: Annotated[float | None, Query(ge=-90, le=90)] = None,
         lon: Annotated[float | None, Query(ge=-180, le=180)] = None,
+        radius: Annotated[int | None, Query(ge=1, le=MAX_RADIUS_MILES)] = None,
         start: dt.date | None = None,
         end: dt.date | None = None,
+        genre: Annotated[list[str] | None, Query(max_length=20)] = None,
     ) -> dict[str, list[ShelfConcert]]:
         await limit(request)
         token = await credentials(session)
-        try:
-            artists = await client.artists(token)
-        except SpotifyError as exc:
-            if exc.status in {401, 403} and session:
-                await configured().delete(session)
-            raise
+        store = configured()
+        artists = await store.load_artists(session) if session else None
+        if artists is None:
+            try:
+                artists = await client.artists(token)
+            except SpotifyError as exc:
+                if exc.status in {401, 403} and session:
+                    await store.delete(session)
+                raise
+            if session:
+                await store.save_artists(session, artists)
         where: Place | None = None
         if lat is not None and lon is not None:
             where = Place(name="Nearby", lat=lat, lon=lon)
         elif place:
             try:
                 where = await geocoder.geocode(geo, redis, place)
+                where = where.model_copy(update={"radius_miles": radius}) if where else None
             except geocoder.GeocoderError:
                 raise Refused(
                     503, "geocoder_unavailable", "We could not look up that place. Try again soon."
@@ -295,7 +350,7 @@ def router(
             raise Refused(
                 422,
                 "spotify_needs_place",
-                "Search a place or use your location to see Concerts from your top Artists.",
+                "Search a place or use your location to see Concerts from your Artists.",
             )
         try:
             concerts = await pool.find_concerts(
@@ -312,6 +367,6 @@ def router(
                 "We have used today's Ticketmaster allowance. Try again tomorrow.",
                 exc.retry_after,
             ) from None
-        return {"concerts": exact_matches(concerts, artists)}
+        return {"concerts": exact_matches(concerts, artists, genre or [])}
 
     return routes

@@ -1,0 +1,8 @@
+# CLI deployments do not read .gitignore.
+.env
+.env.*
+.venv
+.pytest_cache
+.ruff_cache
+tests
+evals

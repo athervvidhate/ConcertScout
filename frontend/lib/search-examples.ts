@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 export const SEARCH_EXAMPLES = [
-  "Khruangbin in Chicago next weekend",
+  "Khruangbin in Chicago next week",
   "UKG in SF this month",
   "Indie rock in Texas in December",
   "Jazz in New Orleans this weekend",

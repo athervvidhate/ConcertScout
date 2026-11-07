@@ -58,4 +58,4 @@ Run the evals in CI only by hand or nightly, because they cost money. Fixture te
 
 ## Tuning
 
-Use the evals to set the weights in [02-search-pipeline](02-search-pipeline.md), the top-60 size and the tag blocklist. Change one at a time. Record what moved each score.
+Use the evals to set the weights in [02-search-pipeline](02-search-pipeline.md), the top-40 size and the tag blocklist. Change one at a time. Record what moved each score.

@@ -1,9 +1,10 @@
 "use client";
 
 import { Button } from "@base-ui/react/button";
+import { Collapsible } from "@base-ui/react/collapsible";
 import { Dialog } from "@base-ui/react/dialog";
 import { Popover } from "@base-ui/react/popover";
-import { Info, X } from "lucide-react";
+import { ChevronDown, Info, X } from "lucide-react";
 import { type SubmitEvent, useState } from "react";
 
 import { SpotifyControl } from "@/components/spotify-shelf";
@@ -35,7 +36,7 @@ function explain(caught: unknown): string {
   return UNREADABLE;
 }
 
-function countOf(artists: string[]): string {
+export function countOf(artists: string[]): string {
   return artists.length === 1 ? "1 Artist" : `${artists.length} Artists`;
 }
 
@@ -157,14 +158,17 @@ function ImportForm() {
   );
 }
 
-export function TastePanel({spotify}: {spotify: SpotifyConnection}) {
+type TastePanelProps = {
+  spotify: SpotifyConnection;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
+export function TastePanel({spotify, open, onOpenChange}: TastePanelProps) {
   const taste = useImportedTaste();
 
   return (
-    <Dialog.Root>
-      <Dialog.Trigger className="top-bar-action">
-        {taste ? `Your Taste: ${countOf(taste.artists)}` : "Your Taste"}
-      </Dialog.Trigger>
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Backdrop className="taste-backdrop" />
         <Dialog.Popup className="taste-panel">
@@ -174,9 +178,7 @@ export function TastePanel({spotify}: {spotify: SpotifyConnection}) {
               <X aria-hidden size={24} />
             </Dialog.Close>
           </header>
-          <Dialog.Description>
-            Searches that don&apos;t name an Artist or style use this list. It stays on this device.
-          </Dialog.Description>
+          <SpotifyControl connection={spotify} />
           {taste ? (
             <div className="taste-current">
               <p>
@@ -187,9 +189,17 @@ export function TastePanel({spotify}: {spotify: SpotifyConnection}) {
               </Button>
             </div>
           ) : (
-            <ImportForm />
+            <Collapsible.Root className="taste-other">
+              <Collapsible.Trigger className="taste-other-trigger">
+                Other ways to add your Taste
+                <ChevronDown aria-hidden size={20} />
+              </Collapsible.Trigger>
+              <Collapsible.Panel className="taste-other-panel">
+                <p>Searches that don&apos;t name an Artist or style use this list. It stays on this device.</p>
+                <ImportForm />
+              </Collapsible.Panel>
+            </Collapsible.Root>
           )}
-          <SpotifyControl connection={spotify} />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

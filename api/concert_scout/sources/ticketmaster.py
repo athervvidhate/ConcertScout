@@ -1,6 +1,7 @@
 import asyncio
 import datetime as dt
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -8,7 +9,7 @@ from pygeohash import encode
 from redis.asyncio import Redis
 
 from concert_scout import limits
-from concert_scout.models import Artist, Concert, Place, Price
+from concert_scout.models import Artist, Concert, Place, Presale, Price
 from concert_scout.names import normalize
 from concert_scout.sources import http
 
@@ -19,10 +20,15 @@ PAGE_SIZE = 200
 # Past this many results Ticketmaster answers 200 with no events, so a query is silently cut off.
 MAX_RESULTS = 1000
 RADIUS_MILES = 50
+# Ticketmaster fills an unknown sale date with a date from long ago, such as 1900-01-01.
+FIRST_REAL_SALE = dt.datetime(2000, 1, 1, tzinfo=dt.UTC)
+NOT_A_PRESALE = re.compile(r"vip|onsale", re.IGNORECASE)
 # About 5km, so Searches near each other share a pool without moving its 50-mile circle much.
 POINT_PRECISION = 5
 # Ticketmaster's words for having no classification.
 NO_GENRE = {"other", "undefined"}
+IMAGE_RATIO = "16_9"
+IMAGE_MIN_WIDTH = 640
 
 
 class TicketmasterError(Exception):
@@ -47,8 +53,9 @@ async def find_concerts(
     end: dt.date,
     *,
     state: tuple[str, str] | None = None,
+    radius: int = RADIUS_MILES,
 ) -> list[Concert]:
-    return await _find(client, redis, _base_params(point, state), start, end)
+    return await _find(client, redis, _base_params(point, state, radius), start, end)
 
 
 async def find_artist_concerts(
@@ -58,14 +65,18 @@ async def find_artist_concerts(
     point: str | None,
     *,
     state: tuple[str, str] | None = None,
+    radius: int = RADIUS_MILES,
 ) -> list[Concert]:
     """An Artist's upcoming Concerts. `keyword` is loose, so code checks the Lineup."""
-    concerts = await _find(client, redis, _base_params(point, state) | {"keyword": name})
+    params = _base_params(point, state, radius) | {"keyword": name}
+    concerts = await _find(client, redis, params)
     wanted = normalize(name)
     return [c for c in concerts if wanted in (normalize(a.name) for a in c.artists)]
 
 
-def _base_params(point: str | None, state: tuple[str, str] | None) -> dict[str, str | int]:
+def _base_params(
+    point: str | None, state: tuple[str, str] | None, radius: int
+) -> dict[str, str | int]:
     params: dict[str, str | int] = {
         "segmentName": "Music",
         "size": PAGE_SIZE,
@@ -74,7 +85,7 @@ def _base_params(point: str | None, state: tuple[str, str] | None) -> dict[str, 
     if state:
         params |= {"countryCode": state[0], "stateCode": state[1]}
     elif point:
-        params |= {"geoPoint": point, "radius": RADIUS_MILES, "unit": "miles"}
+        params |= {"geoPoint": point, "radius": radius, "unit": "miles"}
     return params
 
 
@@ -138,6 +149,9 @@ def parse_concert(record: dict[str, Any]) -> Concert:
     venue = venues[0] if venues else {}
     start: dict[str, Any] = record["dates"].get("start", {})
     classifications: list[dict[str, Any]] = record.get("classifications", [])
+    attractions: list[dict[str, Any]] = embedded.get("attractions", [])
+    lead: dict[str, Any] = attractions[0] if attractions else {}
+    general_sale, presales = _parse_sales(record.get("sales", {}))
     return Concert(
         id=record["id"],
         name=record["name"],
@@ -153,7 +167,58 @@ def parse_concert(record: dict[str, Any]) -> Concert:
         city=venue.get("city", {}).get("name"),
         region=venue.get("state", {}).get("stateCode"),
         price=_parse_price(record.get("priceRanges", [])),
+        image=_image(lead.get("images", [])) or _image(record.get("images", [])),
+        general_sale=general_sale,
+        presales=presales,
     )
+
+
+def _parse_sales(sales: dict[str, Any]) -> tuple[dt.datetime | None, list[Presale]]:
+    """The general sale and the presales open to anyone with a code.
+
+    With no general sale date and none announced, nothing says the presales still matter.
+    """
+    public: dict[str, Any] = sales.get("public", {})
+    general = _parse_moment(public.get("startDateTime"))
+    if general and general < FIRST_REAL_SALE:
+        general = None
+    if not general and not public.get("startTBA"):
+        return None, []
+    return general, [p for r in sales.get("presales", []) if (p := _parse_presale(r))]
+
+
+def _parse_presale(record: dict[str, Any]) -> Presale | None:
+    name: str = record.get("name") or ""
+    start = _parse_moment(record.get("startDateTime"))
+    end = _parse_moment(record.get("endDateTime"))
+    if not (name and start and end) or NOT_A_PRESALE.search(name):
+        return None
+    name = name.title() if name.isupper() else name
+    return Presale(
+        name=name if "presale" in name.lower() else f"{name} presale", start=start, end=end
+    )
+
+
+def _parse_moment(value: str | None) -> dt.datetime | None:
+    if not value:
+        return None
+    try:
+        return dt.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _image(images: list[dict[str, Any]]) -> str | None:
+    """The smallest real photo wide enough for a Ticket. `fallback` marks a generic placeholder."""
+    usable = [
+        image
+        for image in images
+        if image.get("url")
+        and image.get("ratio") == IMAGE_RATIO
+        and not image.get("fallback")
+        and (image.get("width") or 0) >= IMAGE_MIN_WIDTH
+    ]
+    return min(usable, key=lambda image: image["width"])["url"] if usable else None
 
 
 def _parse_artist(

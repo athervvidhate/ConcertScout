@@ -10,6 +10,7 @@ from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.usage import RunUsage
 
 from concert_scout.aliases import music_tag, place_name
+from concert_scout.models import MAX_RADIUS_MILES
 from concert_scout.telemetry import record_usage
 
 MODEL_NAME = "claude-haiku-5-5"
@@ -28,13 +29,25 @@ EDM means electronic dance music, RnB means R&B. These are styles, not Artists. 
 specific style in tags alongside related styles. "shoegaze" also gives "dream pop", \
 "noise pop" and "alternative rock". With no \
 descriptors, leave this empty.
+- genres: the broad listing genres those descriptors fall under, chosen only from Rock, \
+Alternative, Pop, Hip-Hop/Rap, R&B, Dance/Electronic, Country, Folk, Jazz, Blues, Metal, Latin, \
+Reggae, World and Classical. UK garage is Dance/Electronic and shoegaze is Alternative. With no \
+descriptors, leave this empty.
 - place: the city, district or region. Expand familiar local abbreviations and nicknames to \
 a full place name with its state/country when clear: SF is San Francisco, LA is Los Angeles, \
 PHL is Philadelphia, the Bay is the San Francisco Bay Area, DMV is Washington DC. Preserve \
 explicit qualifiers (LA, Louisiana means Louisiana). Keep a whole state as a state, not its \
-capital. Never invent an expansion of an unfamiliar or ambiguous abbreviation. \
-With no place, use null. Never guess one from \
-an Artist.
+capital. Name a county with its state, so Orange County means Orange County, California unless \
+the Search says otherwise. Never invent an expansion of an unfamiliar or ambiguous abbreviation. \
+With no place, use null. "Near me", "nearby", "around here" and "local" name no place, so use \
+null. Never guess one from an Artist.
+- region and radius_miles: only for an area that is neither one city nor one whole state, such as \
+Southern California, SoCal, New England, the Midwest, the Pacific Northwest, Long Island or the \
+Inland Empire. Set region to its usual name, place to the full name of a large city near its \
+middle with state and country, and radius_miles to the smallest circle around that city that \
+covers the area. Southern California is Los Angeles, California, United States with 150 miles. \
+"On Long Island" names an area too, so it is Hicksville, New York, United States with 70 miles. \
+Otherwise use null for both.
 - start and end: the first and last dates the visitor can go, inclusive, and never in the past \
 unless the Search asks for that. A single day has the same start and end. A weekend runs Friday \
 to Sunday. "next two weekends" runs from the Friday of the next weekend that has not ended to the \
@@ -46,7 +59,10 @@ class Interpretation(BaseModel):
     artists: list[str]
     descriptors: list[str]
     tags: list[str]
+    genres: list[str] = []
     place: str | None
+    region: str | None = None
+    radius_miles: int | None = None
     start: dt.date | None
     end: dt.date | None
 
@@ -94,9 +110,12 @@ async def interpret(text: str, today: dt.date, model: Model) -> Interpretation:
         expanded = music_tag(descriptor)
         if expanded != descriptor.casefold() and expanded not in tags:
             tags.append(expanded)
+    radius = output.radius_miles if output.place and output.radius_miles else None
     return output.model_copy(
         update={
             "place": place_name(output.place) if output.place else None,
+            "region": output.region if radius else None,
+            "radius_miles": min(max(radius, 1), MAX_RADIUS_MILES) if radius else None,
             "tags": tags,
         }
     )

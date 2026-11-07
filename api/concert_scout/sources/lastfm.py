@@ -1,4 +1,6 @@
+import asyncio
 import datetime as dt
+import re
 from typing import Any
 
 import httpx
@@ -6,13 +8,15 @@ from pydantic import BaseModel
 from redis.asyncio import Redis
 
 from concert_scout import cache
-from concert_scout.models import SimilarArtist
+from concert_scout.models import ArtistProfile, SimilarArtist, Track
 from concert_scout.names import normalize
 from concert_scout.sources import http
 
 BASE_URL = "https://ws.audioscrobbler.com/2.0"
 CACHE_TTL = dt.timedelta(days=7)
 LIMIT = 50
+PROFILE_ITEMS = 5
+READ_MORE = re.compile(r"\s*<a href.*$", re.DOTALL)
 ARTIST_NOT_FOUND = 6
 USER_NOT_FOUND = 6
 PRIVATE_USER = 17
@@ -66,6 +70,45 @@ async def similar_artists(
 
     await cache.write(redis, key, CachedSimilar(artists=artists), CACHE_TTL)
     return artists
+
+
+async def artist_profile(client: httpx.AsyncClient, redis: Redis, name: str) -> ArtistProfile:
+    """Public facts about one Artist. A name Last.fm does not know gives an empty profile."""
+    key = f"artist:lastfm:{normalize(name)}"
+    if cached := await cache.read(redis, key, ArtistProfile):
+        return cached
+    try:
+        info, tracks = await asyncio.gather(
+            client.get("/", params={"method": "artist.getInfo", "artist": name}),
+            client.get(
+                "/",
+                params={"method": "artist.getTopTracks", "artist": name, "limit": PROFILE_ITEMS},
+            ),
+        )
+        profile = parse_profile(name, info.json(), tracks.json())
+    except httpx.HTTPError as exc:
+        raise LastfmError(type(exc).__name__) from None
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise LastfmError(f"unreadable response: {type(exc).__name__}") from None
+    await cache.write(redis, key, profile, CACHE_TTL)
+    return profile
+
+
+def parse_profile(name: str, info: dict[str, Any], tracks: dict[str, Any]) -> ArtistProfile:
+    if info.get("error") == ARTIST_NOT_FOUND:
+        return ArtistProfile(name=name)
+    artist: dict[str, Any] = info["artist"]
+    bio = READ_MORE.sub("", artist.get("bio", {}).get("summary", "")).strip()
+    records: list[dict[str, Any]] = tracks.get("toptracks", {}).get("track", [])
+    return ArtistProfile(
+        name=name,
+        lastfm_url=artist.get("url"),
+        listeners=int(artist["stats"]["listeners"]) if "stats" in artist else None,
+        bio=bio or None,
+        tags=[t["name"] for t in artist.get("tags", {}).get("tag", [])][:PROFILE_ITEMS],
+        top_tracks=[Track(name=t["name"], url=t["url"]) for t in records[:PROFILE_ITEMS]],
+        similar=[a["name"] for a in artist.get("similar", {}).get("artist", [])][:PROFILE_ITEMS],
+    )
 
 
 async def top_artists(client: httpx.AsyncClient, username: str, limit: int) -> list[str]:
