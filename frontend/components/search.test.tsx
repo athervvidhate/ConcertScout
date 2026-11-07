@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Search } from "@/components/search";
 import type { Concert } from "@/lib/search";
@@ -46,15 +46,18 @@ async function searchFor(text: string) {
 }
 
 const poster = (...concerts: Concert[]) =>
-  sse("poster", { recommendations: concerts.map((concert) => ({ concert })) });
+  sse("poster", { recommendations: concerts.map((concert) => ({ concert, reason: "Similar to Khruangbin" })) });
 
 describe("Search", () => {
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+  });
   it("says how much of a big pool the list shows and keeps reading after the total", async () => {
     stubStream(sse("pool", { total: 1189 }), poster(full), sse("done", {}));
 
     await searchFor("Chicago");
 
-    await screen.findByRole("link", { name: full.name });
+    await screen.findByRole("link", { name: `Tickets for ${full.name}` });
     expect(screen.getByText("Showing 1 of 1,189 Concerts")).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
   });
@@ -68,8 +71,9 @@ describe("Search", () => {
 
     await searchFor("Something like Khruangbin");
 
-    await screen.findByRole("link", { name: full.name });
-    expect(screen.getByText("Close matches: Khruangbin, Men I Trust")).toBeTruthy();
+    await screen.findByRole("link", { name: `Tickets for ${full.name}` });
+    expect(screen.getByText("Men I Trust")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Khruangbin" })).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -79,9 +83,8 @@ describe("Search", () => {
 
     await searchFor("Chicago");
 
-    const line = await screen.findByText(/^Close matches:/);
-    expect(line.textContent).toContain("Artist 37");
-    expect(line.textContent).not.toContain("Artist 38");
+    expect(await screen.findByText("Artist 37")).toBeTruthy();
+    expect(screen.queryByText("Artist 38")).toBeNull();
   });
 
   it("hides Try again when the error says when to come back", async () => {
@@ -117,9 +120,11 @@ describe("Search", () => {
 
     await searchFor(text);
 
-    const link = await screen.findByRole("link", { name: full.name });
+    const link = await screen.findByRole("link", { name: `Tickets for ${full.name}` });
     expect(link.getAttribute("href")).toBe(full.url);
-    expect(screen.getByText("Fri, Nov 20, 2026 at 7:30 PM")).toBeTruthy();
+    expect(screen.getByText("Fri, Nov 20, 2026")).toBeTruthy();
+    expect(screen.getByText("7:30 PM")).toBeTruthy();
+    expect(screen.getByText("Similar to Khruangbin")).toBeTruthy();
     expect(screen.getByText("The Salt Shed, Chicago, IL")).toBeTruthy();
     expect(screen.getByText("$45.50 to $120.00")).toBeTruthy();
     expect(
@@ -168,7 +173,7 @@ describe("Search", () => {
     const fetchStub = stubStream(poster(full), sse("done", {}));
     await user.click(screen.getByRole("button", { name: "Try again" }));
 
-    expect(await screen.findByRole("link", { name: full.name })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: `Tickets for ${full.name}` })).toBeTruthy();
     expect(fetchStub.mock.calls[0][1].body).toBe(JSON.stringify({ text: "Chicago" }));
     expect(screen.queryByRole("alert")).toBeNull();
   });

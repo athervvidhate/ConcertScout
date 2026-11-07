@@ -1,1 +1,29 @@
 @import "tailwindcss";
+:root { color: #10291F; background: #FF5A1F; font-family: Arial, sans-serif; }
+body { margin: 0; }
+main { position: relative; isolation: isolate; overflow: hidden; min-height: 100vh; max-width: none !important; text-align: center; }
+main::before { content: ""; position: fixed; z-index: -1; inset: -100vmax; background: repeating-conic-gradient(#FF5A1F 0deg 7.5deg, #FF7A1F 7.5deg 15deg); animation: sun 90s linear infinite; }
+@keyframes sun { to { transform: rotate(360deg); } }
+form { max-width: 760px; margin: auto; background: #10291F; padding: 5px; border-radius: 6px; }
+form input { background: transparent !important; border: 0 !important; color: #fff; min-height: 44px; }
+form button { background: #FFD3E4 !important; color: #10291F !important; min-height: 44px; font-weight: 700; }
+.poster-area { max-width: 760px; margin: auto; }
+.poster-stage { min-height: 230px; display: grid; place-items: center; }
+.poster-stage > * { grid-area: 1 / 1; }
+.equalizer { display: flex; align-items: center; gap: 5px; height: 50px; }
+.equalizer i { width: 6px; height: 32px; background: #10291F; animation: beat .7s ease-in-out infinite alternate; }
+.equalizer i:nth-child(even) { animation-delay: -.4s; }
+@keyframes beat { to { transform: scaleY(.25); } }
+.wall { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 12px; max-width: 640px; font-weight: 600; }
+.wall span { animation: appear .2s both; transition: opacity .28s; }
+@keyframes appear { from { opacity: 0; } to { opacity: 1; } }
+.wall .faded { opacity: 0; } .wall .pick { color: #FFD3E4; } .wall-hidden { visibility: hidden; }
+.poster { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 14px; width: 100%; }
+.poster-name { position: relative; border: 0; background: none; color: #10291F; cursor: pointer; font-weight: 700; line-height: 1; letter-spacing: -.02em; max-width: 100%; overflow-wrap: anywhere; }
+.poster-name .pink { position: absolute; inset: 0; color: #FFD3E4; opacity: 0; pointer-events: none; } .poster-name.selected .pink { opacity: 1; }
+.tier-1 { flex-basis: 100%; font-size: clamp(46px, 12.4vw, 92px); font-weight: 800; } .tier-2 { font-size: clamp(32px, 7.8vw, 58px); } .tier-3 { font-size: clamp(20px, 4.1vw, 29px); }
+.loader-status { min-height: 24px; margin: 14px 0; }
+.ticket { text-align: left; background: #F7C5D5; color: #1A1A18; max-width: 470px; margin: 20px auto; padding: 24px; border-radius: 8px; animation: rise 420ms cubic-bezier(.22,.61,.36,1) both; }
+.ticket h2 { font-size: 32px; font-weight: 800; } .ticket a { display: inline-block; padding: 12px 0; text-decoration: underline; } .date { font-weight: 800; font-variant-numeric: tabular-nums; }
+@keyframes rise { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; } }
