@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   type Candidates,
+  type Coordinates,
   type Interpreted,
   NEEDS_A_NEW_SEARCH,
   type Recommendation,
@@ -42,7 +43,7 @@ export function useSearch() {
 
   useEffect(() => () => current.current?.abort(), []);
 
-  const search = useCallback(async (text: string, token: string, taste: string[]) => {
+  const search = useCallback(async (text: string, token: string, taste: string[], near: Coordinates | null) => {
     current.current?.abort();
     const controller = new AbortController();
     current.current = controller;
@@ -52,7 +53,7 @@ export function useSearch() {
     let error: string | null = null;
     let retryable = true;
     try {
-      for await (const { event, data } of streamSearch(text, token, taste, controller.signal)) {
+      for await (const { event, data } of streamSearch(text, token, taste, near, controller.signal)) {
         if (event === "status") {
           setState((state) => ({ ...state, status: data.message }));
         } else if (event === "interpreted") {

@@ -84,7 +84,7 @@ def contract_model() -> FunctionModel:
                 "artists": [],
                 "descriptors": ["empty"] if "empty" in text else ["UKG"],
                 "tags": ["ukg"],
-                "place": "SF",
+                "place": None if "near me" in text else "SF",
                 "start": None,
                 "end": None,
             }

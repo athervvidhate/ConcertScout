@@ -66,7 +66,7 @@ function formatDates({ start, end }: Interpreted): string | null {
 }
 
 export function formatInterpreted(interpreted: Interpreted): string {
-  return [interpreted.place, formatDates(interpreted), ...interpreted.artists]
+  return [interpreted.region ?? interpreted.place, formatDates(interpreted), ...interpreted.artists]
     .filter(Boolean)
     .join(" · ");
 }
@@ -74,6 +74,9 @@ export function formatInterpreted(interpreted: Interpreted): string {
 function headingDates(start?: string, end?: string): string | null {
   if (start && end) {
     if (start === end) return formatMonthDay(start);
+    if (start.slice(0, 4) !== end.slice(0, 4)) {
+      return `${formatMonthDay(start)}, ${start.slice(0, 4)} to ${formatMonthDay(end)}, ${end.slice(0, 4)}`;
+    }
     const sameMonth = start.slice(0, 7) === end.slice(0, 7);
     return `${formatMonthDay(start)} to ${sameMonth ? Number(end.slice(8)) : formatMonthDay(end)}`;
   }
@@ -82,6 +85,6 @@ function headingDates(start?: string, end?: string): string | null {
   return null;
 }
 
-export function formatPosterHeading({ place, start, end, artists }: Interpreted): string {
-  return [place, headingDates(start, end)].filter(Boolean).join(", ") || artists.join(", ");
+export function formatPosterHeading({ place, region, start, end, artists }: Interpreted): string {
+  return [region ?? place, headingDates(start, end)].filter(Boolean).join(", ") || artists.join(", ");
 }

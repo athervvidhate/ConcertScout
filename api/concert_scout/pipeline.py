@@ -1,8 +1,9 @@
 import asyncio
 import datetime as dt
 import logging
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Coroutine, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import anyio
 import httpx
@@ -31,6 +32,7 @@ from concert_scout.sources import geocoder, listenbrainz, musicbrainz, ticketmas
 logger = logging.getLogger(__name__)
 
 ASK_FOR_A_SEARCH = "Tell us an Artist, a style or a place."
+NEEDS_A_PLACE = "Add a place or an Artist, or press the location button."
 # The home page shows the soonest of these, so a month of Concerts is plenty.
 NEARBY_WINDOW = dt.timedelta(days=30)
 NEARBY_SIZE = 12
@@ -87,7 +89,7 @@ async def _find_taste(
         services.listenbrainz, services.lastfm, services.redis, seeds
     )
     extra = [SeedArtist(name=name) for name in names_only]
-    return matching.Taste([*seeds, *extra], neighbours, interpretation.tags)
+    return matching.Taste([*seeds, *extra], neighbours, interpretation.tags, interpretation.genres)
 
 
 async def _recommend(
@@ -107,7 +109,7 @@ async def _recommend(
 
 
 async def _steps(
-    text: str, imported: Sequence[str], services: Services, today: dt.date
+    text: str, imported: Sequence[str], near: Place | None, services: Services, today: dt.date
 ) -> AsyncIterator[ServerSentEvent]:
     yield _event("status", Status(step="interpret", message="Reading your Search"))
     with telemetry.step("interpret"):
@@ -121,54 +123,90 @@ async def _steps(
         "interpreted",
         Interpreted(
             place=interpretation.place,
+            region=interpretation.region,
+            radius_miles=interpretation.radius_miles,
             start=interpretation.start,
             end=interpretation.end,
             artists=interpretation.artists,
+            genres=interpretation.genres,
         ),
     )
 
-    if not (interpretation.place or interpretation.artists):
+    if not (interpretation.place or near or interpretation.artists):
         if interpretation.descriptors or interpretation.tags:
             # Similar Artists start from a seed, so a style alone has nothing to look up.
-            yield _error("needs_place", "Add a place or an Artist to your Search.")
+            yield _error("needs_place", NEEDS_A_PLACE)
         else:
             yield _error("needs_taste_or_place", ASK_FOR_A_SEARCH)
         return
 
-    place = None
-    if interpretation.place:
-        message = f"Finding {interpretation.place}"
-        yield _event("status", Status(step="resolve", message=message))
+    async def find_place() -> Place | None:
+        if not interpretation.place:
+            return near
         with telemetry.step("resolve_place"):
             place = await geocoder.geocode(services.geocoder, services.redis, interpretation.place)
-        if place is None:
-            message = f"We could not find {interpretation.place}. Check the spelling."
+            radius = interpretation.radius_miles
+            return place.model_copy(update={"radius_miles": radius}) if place else None
+
+    async def find_taste() -> matching.Taste:
+        with telemetry.step("resolve_artists"):
+            return await _find_taste(interpretation, names_only, services)
+
+    async def find_pool(place: Place | None, lookups: Sequence[str]) -> list[Concert]:
+        with telemetry.step("pool"):
+            return await pool.find_concerts(
+                services.ticketmaster,
+                services.redis,
+                place,
+                lookups,
+                interpretation.start,
+                interpretation.end,
+                today,
+            )
+
+    # With a place, the pool needs nothing from the Taste, so the slowest steps overlap.
+    tasks: list[asyncio.Task[Any]] = []
+
+    def start[T](work: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
+        task = asyncio.create_task(work)
+        tasks.append(task)
+        return task
+
+    try:
+        place_lookup = start(find_place())
+        taste_lookup = start(find_taste())
+        if interpretation.place:
+            message = f"Finding {interpretation.region or interpretation.place}"
+            yield _event("status", Status(step="resolve", message=message))
+        if interpretation.artists:
+            message = f"Finding Artists like {', '.join(interpretation.artists)}"
+            yield _event("status", Status(step="resolve", message=message))
+
+        place = await place_lookup
+        if interpretation.place and place is None:
+            where = interpretation.region or interpretation.place
+            message = f"We could not find {where}. Check the spelling."
             yield _error("place_not_found", message)
             return
 
-    if interpretation.artists:
-        message = f"Finding Artists like {', '.join(interpretation.artists)}"
-        yield _event("status", Status(step="resolve", message=message))
-    with telemetry.step("resolve_artists"):
-        taste = await _find_taste(interpretation, names_only, services)
-
-    if place:
-        message = f"Looking for Concerts near {place.name}"
-        lookups = interpretation.artists
-    else:
-        message = f"Looking for Concerts by {', '.join(interpretation.artists)} and similar Artists"
-        lookups = [*interpretation.artists, *similarity.closest(taste.neighbours, DIRECT_LOOKUPS)]
-    yield _event("status", Status(step="pool", message=message))
-    with telemetry.step("pool"):
-        concerts = await pool.find_concerts(
-            services.ticketmaster,
-            services.redis,
-            place,
-            lookups,
-            interpretation.start,
-            interpretation.end,
-            today,
-        )
+        if place:
+            near_place = "you" if place is near else interpretation.region or place.name
+            message = f"Looking for Concerts near {near_place}"
+            yield _event("status", Status(step="pool", message=message))
+            concert_lookup = start(find_pool(place, interpretation.artists))
+            taste = await taste_lookup
+        else:
+            taste = await taste_lookup
+            closest = similarity.closest(taste.neighbours, DIRECT_LOOKUPS)
+            names = ", ".join(interpretation.artists)
+            message = f"Looking for Concerts by {names} and similar Artists"
+            yield _event("status", Status(step="pool", message=message))
+            concert_lookup = start(find_pool(None, [*interpretation.artists, *closest]))
+        concerts = await concert_lookup
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
     yield _event("pool", PoolTotal(total=len(concerts)))
 
     artist_tags: dict[str, list[str]] = {}
@@ -196,11 +234,11 @@ async def _steps(
 
 
 async def run_search(
-    text: str, imported: Sequence[str], services: Services
+    text: str, imported: Sequence[str], near: Place | None, services: Services
 ) -> AsyncIterator[ServerSentEvent]:
     with telemetry.search() as usage:
         try:
-            async for event in stream_search(text, imported, services, dt.date.today()):
+            async for event in stream_search(text, imported, near, services, dt.date.today()):
                 yield event
         finally:
             # A visitor who leaves early has still cost money, so a cancel must not skip this.
@@ -211,10 +249,10 @@ async def run_search(
 
 
 async def stream_search(
-    text: str, imported: Sequence[str], services: Services, today: dt.date
+    text: str, imported: Sequence[str], near: Place | None, services: Services, today: dt.date
 ) -> AsyncIterator[ServerSentEvent]:
     try:
-        async for event in _steps(text, imported, services, today):
+        async for event in _steps(text, imported, near, services, today):
             yield event
     except InterpreterError as exc:
         logger.warning("Interpreter failed: %s", exc)

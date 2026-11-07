@@ -29,7 +29,7 @@ async def test_cached_chunks_are_shared_but_filtered_to_each_search(
     assert fetch.await_count == 1
     assert (
         0
-        < await redis.ttl(f"pool:{ticketmaster.rounded_point(PLACE)}:{DAY:%Y-%m}")
+        < await redis.ttl(f"pool:{ticketmaster.rounded_point(PLACE)}:50:{DAY:%Y-%m}")
         <= pool.CACHE_TTL.total_seconds()
     )
 

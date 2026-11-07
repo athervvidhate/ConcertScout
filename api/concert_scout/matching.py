@@ -76,6 +76,8 @@ class Taste:
     seeds: Sequence[SeedArtist]
     neighbours: Sequence[Neighbour]
     tags: Sequence[str]
+    # Ticketmaster's broad genres, so a style with no tagged Artists still reaches its neighbours.
+    genres: Sequence[str] = ()
 
     def __bool__(self) -> bool:
         return bool(self.seeds or self.tags)
@@ -250,7 +252,7 @@ def _wanted_genres(lineups: Sequence[Artist], taste: Taste, known: Mapping[str, 
     seeds = [a for a in lineups if (m := _known_match(a, known)) and m.signal == "seed"]
     reported = {genre for a in seeds for genre in (a.genre, a.subgenre) if genre}
     tags = [tag for seed in taste.seeds for tag in seed.tags] + list(taste.tags)
-    return {name.casefold() for name in reported} | usable_tags(tags)
+    return {name.casefold() for name in reported} | usable_tags([*tags, *taste.genres])
 
 
 def _genre_match(artist: Artist, genres: set[str], sizes: Mapping[str, int]) -> Match | None:

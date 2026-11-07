@@ -4,7 +4,7 @@ import datetime as dt
 import json
 from collections.abc import AsyncIterator
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import httpx
@@ -13,12 +13,19 @@ from fakeredis import FakeAsyncRedis
 from pydantic_ai.usage import RunUsage
 from redis.exceptions import ConnectionError as RedisConnectionError
 
-from concert_scout import limits, pipeline
+from concert_scout import limits, pipeline, pool
 from concert_scout.app import create_app
 from concert_scout.interpreter import InterpreterError
-from concert_scout.sources import ticketmaster
+from concert_scout.sources import geocoder, ticketmaster
 from concert_scout.telemetry import record_usage
-from tests.contracts import CONCERTS, contract_model, forbidden_http, install_sources, settings_with
+from tests.contracts import (
+    CONCERTS,
+    PLACE,
+    contract_model,
+    forbidden_http,
+    install_sources,
+    settings_with,
+)
 
 TOKEN = "test-token"
 
@@ -67,6 +74,34 @@ async def test_sse_terminates_and_every_fact_comes_from_its_source(api: httpx.As
     for pick in picks:
         assert pick["concert"] == source[pick["concert"]["id"]]
     assert "price" not in picks[1]["concert"] and "time" not in picks[1]["concert"]
+
+
+async def test_a_search_with_no_place_uses_the_shared_location(api: httpx.AsyncClient) -> None:
+    near = {"lat": 32.7, "lon": -117.1}
+    response = await api.post("/search", json={"text": "rap near me", "token": TOKEN, "near": near})
+    data = dict(parse_sse(response.text))
+    assert "place" not in data["interpreted"]
+    assert len(data["poster"]["recommendations"]) == 2
+    place = cast(AsyncMock, pool.find_concerts).call_args.args[2]
+    assert (place.lat, place.lon) == (32.7, -117.1)
+    cast(AsyncMock, geocoder.geocode).assert_not_called()
+
+
+async def test_a_typed_place_beats_the_shared_location(api: httpx.AsyncClient) -> None:
+    near = {"lat": 32.7, "lon": -117.1}
+    await api.post("/search", json={"text": "UKG in SF", "token": TOKEN, "near": near})
+    assert cast(AsyncMock, pool.find_concerts).call_args.args[2] == PLACE
+
+
+async def test_a_style_with_no_place_asks_for_one(api: httpx.AsyncClient) -> None:
+    response = await api.post("/search", json={"text": "rap near me", "token": TOKEN})
+    assert dict(parse_sse(response.text))["error"]["code"] == "needs_place"
+
+
+async def test_impossible_coordinates_are_refused(api: httpx.AsyncClient) -> None:
+    near = {"lat": 300, "lon": 0}
+    response = await api.post("/search", json={"text": "rap", "token": TOKEN, "near": near})
+    assert response.status_code == 422
 
 
 async def test_a_pipeline_failure_finishes_with_a_safe_error(
