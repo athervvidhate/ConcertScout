@@ -18,6 +18,8 @@ from concert_scout.sources import geocoder, listenbrainz, musicbrainz, spotify_c
 
 PLACE = Place(name="San Francisco, California", lat=37.77, lon=-122.42)
 DAY = dt.date.today() + dt.timedelta(days=14)
+# A week before the Concerts, so a Search dated DAY never reaches back past its month.
+NOW = dt.datetime.combine(DAY - dt.timedelta(days=7), dt.time(12), dt.UTC)
 CONCERTS = [
     Concert(
         id="contract-one",

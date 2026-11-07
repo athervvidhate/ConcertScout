@@ -8,7 +8,7 @@ import httpx
 from pygeohash import encode
 from redis.asyncio import Redis
 
-from concert_scout import limits
+from concert_scout import clock, limits
 from concert_scout.models import Artist, Concert, Place, Presale, Price
 from concert_scout.names import normalize
 from concert_scout.sources import http
@@ -178,6 +178,7 @@ def parse_concert(record: dict[str, Any]) -> Concert:
         ],
         date=_parse_date(start),
         time=_parse_time(start),
+        time_zone=venue.get("timezone") if clock.known_zone(venue.get("timezone")) else None,
         venue=venue.get("name"),
         city=venue.get("city", {}).get("name"),
         region=venue.get("state", {}).get("stateCode"),

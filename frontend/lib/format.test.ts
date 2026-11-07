@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { byVenue, formatDate, formatPosterHeading, formatPrice, formatTime, presaleLine } from "@/lib/format";
+import { byVenue, dateIn, formatConcertTime, formatDate, formatPosterHeading, formatPrice, formatTime, presaleLine } from "@/lib/format";
 
 describe("formatDate", () => {
   it("keeps the venue's calendar day", () => {
@@ -84,5 +84,39 @@ describe("Search headings", () => {
     expect(formatPosterHeading({ ...read, place, region: "Southern California" })).toBe(
       "Southern California",
     );
+  });
+});
+
+describe("formatConcertTime", () => {
+  const show = { id: "one", name: "One", url: "https://tickets.example", artists: [], date: "2027-01-15", time: "19:30:00" };
+
+  it("keeps the venue's clock and leaves the zone out when the visitor shares it", () => {
+    expect(formatConcertTime({ ...show, time_zone: "America/Chicago" }, "America/Chicago")).toBe("7:30 PM");
+  });
+
+  it("treats two names for the same clock as one zone", () => {
+    expect(formatConcertTime({ ...show, time_zone: "America/New_York" }, "America/Detroit")).toBe("7:30 PM");
+  });
+
+  it("names the venue's zone for a visitor somewhere else", () => {
+    expect(formatConcertTime({ ...show, time_zone: "America/Chicago" }, "America/Los_Angeles")).toBe("7:30 PM CST");
+    expect(formatConcertTime({ ...show, time_zone: "Europe/London" }, "America/Los_Angeles")).toBe("7:30 PM GMT");
+  });
+
+  it("reads the zone in force on the Concert's date", () => {
+    expect(formatConcertTime({ ...show, date: "2027-07-15", time_zone: "America/Chicago" }, "UTC")).toBe("7:30 PM CDT");
+  });
+
+  it("invents nothing for a missing time or zone", () => {
+    expect(formatConcertTime({ ...show, time: undefined, time_zone: "America/Chicago" }, "UTC")).toBeUndefined();
+    expect(formatConcertTime(show, "UTC")).toBe("7:30 PM");
+  });
+});
+
+describe("dateIn", () => {
+  it("gives the calendar day in that zone", () => {
+    const moment = new Date("2026-11-07T07:30:00Z");
+    expect(dateIn("America/Los_Angeles", moment)).toBe("2026-11-06");
+    expect(dateIn("America/New_York", moment)).toBe("2026-11-07");
   });
 });

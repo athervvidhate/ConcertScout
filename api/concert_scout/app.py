@@ -62,6 +62,8 @@ class SearchRequest(BaseModel):
     taste: Annotated[list[ArtistName], Field(max_length=MAX_TASTE)] = []
     # A location the visitor already shared, used when the Search names no place.
     near: Coordinates | None = None
+    # The browser's zone, so "this weekend" and "today" mean the visitor's own days.
+    time_zone: Annotated[str, StringConstraints(max_length=64)]
 
 
 def _catalog_client(
@@ -251,7 +253,7 @@ def create_app(
     async def search(search: SearchRequest) -> AsyncIterator[ServerSentEvent]:
         here = search.near
         near = Place(name="Near you", lat=here.lat, lon=here.lon) if here else None
-        async for event in run_search(search.text, search.taste, near, services):
+        async for event in run_search(search.text, search.taste, near, search.time_zone, services):
             yield event
 
     return app

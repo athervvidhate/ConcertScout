@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { Board, Listings } from "@/components/board";
 import { Listing } from "@/components/listing";
+import { viewerZone } from "@/lib/format";
 import type { Concert } from "@/lib/search";
 import { keepShelfHidden, readShelfHidden, SPOTIFY_ROOT, type SpotifyConnection } from "@/lib/spotify";
 
@@ -64,7 +65,7 @@ export function SpotifyShelf({connectHref, onLocate, upcoming, place, lat, lon, 
   useEffect(() => {
     if (!hasPlace || hidden) return;
     const controller = new AbortController();
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ time_zone: viewerZone() });
     if (place) {
       params.set("place", place);
       if (radius) params.set("radius", String(radius));

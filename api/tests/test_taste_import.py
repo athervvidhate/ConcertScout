@@ -13,7 +13,7 @@ from tests.contracts import install_sources
 from tests.test_app import TOKEN, api_for, parse_sse
 
 USERNAME = "private-listener"
-PLACE_ONLY = {"text": "place only in SF", "token": TOKEN}
+PLACE_ONLY = {"text": "place only in SF", "token": TOKEN, "time_zone": "UTC"}
 
 
 @pytest.fixture(autouse=True)

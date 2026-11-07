@@ -13,7 +13,7 @@ from fakeredis import FakeAsyncRedis
 from pydantic_ai.usage import RunUsage
 from redis.exceptions import ConnectionError as RedisConnectionError
 
-from concert_scout import limits, pipeline, pool
+from concert_scout import clock, limits, pipeline, pool
 from concert_scout.app import create_app
 from concert_scout.interpreter import InterpreterError
 from concert_scout.sources import geocoder, ticketmaster
@@ -61,7 +61,9 @@ async def api() -> AsyncIterator[httpx.AsyncClient]:
 
 
 async def test_sse_terminates_and_every_fact_comes_from_its_source(api: httpx.AsyncClient) -> None:
-    response = await api.post("/search", json={"text": "UKG in SF", "token": TOKEN})
+    response = await api.post(
+        "/search", json={"text": "UKG in SF", "token": TOKEN, "time_zone": "UTC"}
+    )
     assert response.headers["content-type"].startswith("text/event-stream")
     events = parse_sse(response.text)
     assert events[-1] == ("done", {})
@@ -79,7 +81,9 @@ async def test_sse_terminates_and_every_fact_comes_from_its_source(api: httpx.As
 
 async def test_a_search_with_no_place_uses_the_shared_location(api: httpx.AsyncClient) -> None:
     near = {"lat": 32.7, "lon": -117.1}
-    response = await api.post("/search", json={"text": "rap near me", "token": TOKEN, "near": near})
+    response = await api.post(
+        "/search", json={"text": "rap near me", "token": TOKEN, "time_zone": "UTC", "near": near}
+    )
     data = dict(parse_sse(response.text))
     assert "place" not in data["interpreted"]
     assert len(data["poster"]["recommendations"]) == 2
@@ -90,18 +94,24 @@ async def test_a_search_with_no_place_uses_the_shared_location(api: httpx.AsyncC
 
 async def test_a_typed_place_beats_the_shared_location(api: httpx.AsyncClient) -> None:
     near = {"lat": 32.7, "lon": -117.1}
-    await api.post("/search", json={"text": "UKG in SF", "token": TOKEN, "near": near})
+    await api.post(
+        "/search", json={"text": "UKG in SF", "token": TOKEN, "time_zone": "UTC", "near": near}
+    )
     assert cast(AsyncMock, pool.find_concerts).call_args.args[2] == PLACE
 
 
 async def test_a_style_with_no_place_asks_for_one(api: httpx.AsyncClient) -> None:
-    response = await api.post("/search", json={"text": "rap near me", "token": TOKEN})
+    response = await api.post(
+        "/search", json={"text": "rap near me", "token": TOKEN, "time_zone": "UTC"}
+    )
     assert dict(parse_sse(response.text))["error"]["code"] == "needs_place"
 
 
 async def test_impossible_coordinates_are_refused(api: httpx.AsyncClient) -> None:
     near = {"lat": 300, "lon": 0}
-    response = await api.post("/search", json={"text": "rap", "token": TOKEN, "near": near})
+    response = await api.post(
+        "/search", json={"text": "rap", "token": TOKEN, "time_zone": "UTC", "near": near}
+    )
     assert response.status_code == 422
 
 
@@ -122,7 +132,9 @@ async def test_a_pipeline_failure_finishes_with_a_safe_error(
         "find_concerts",
         AsyncMock(side_effect=ticketmaster.TicketmasterError("status 503")),
     )
-    response = await api.post("/search", json={"text": "UKG in SF", "token": TOKEN})
+    response = await api.post(
+        "/search", json={"text": "UKG in SF", "token": TOKEN, "time_zone": "UTC"}
+    )
     events = parse_sse(response.text)
     assert events[-1] == ("done", {})
     assert dict(events)["error"]["code"] == "ticketmaster_unavailable"
@@ -136,7 +148,7 @@ async def test_a_pipeline_failure_finishes_with_a_safe_error(
         {"text": " "},
         {"text": "x" * 501},
         {"text": "SF"},
-        {"text": "SF", "token": TOKEN, "taste": ["x"] * 101},
+        {"text": "SF", "token": TOKEN, "time_zone": "UTC", "taste": ["x"] * 101},
     ],
 )
 async def test_invalid_input_is_refused_before_any_work(
@@ -151,7 +163,9 @@ async def test_origin_policy_is_enforced_on_the_server(api: httpx.AsyncClient) -
     allowed = await api.get("/health", headers={"Origin": "http://localhost:3000"})
     assert allowed.headers["access-control-allow-origin"] == "http://localhost:3000"
     denied = await api.post(
-        "/search", json={"text": "SF", "token": TOKEN}, headers={"Origin": "https://evil.example"}
+        "/search",
+        json={"text": "SF", "token": TOKEN, "time_zone": "UTC"},
+        headers={"Origin": "https://evil.example"},
     )
     assert denied.status_code == 403 and denied.json()["code"] == "origin_refused"
     assert "access-control-allow-origin" not in denied.headers
@@ -162,14 +176,14 @@ async def test_a_failed_bot_check_never_reaches_the_pipeline(
 ) -> None:
     interpret = AsyncMock(side_effect=AssertionError("must not run"))
     monkeypatch.setattr(pipeline, "interpret", interpret)
-    response = await api.post("/search", json={"text": "SF", "token": "reject"})
+    response = await api.post("/search", json={"text": "SF", "token": "reject", "time_zone": "UTC"})
     assert response.status_code == 403 and response.json()["code"] == "bot_check_failed"
     interpret.assert_not_awaited()
 
 
 async def test_rate_limits_are_per_client_and_ignore_untrusted_forwarding() -> None:
     async with api_for(searches_per_hour=1, client_ip_header="x-real-ip") as api:
-        body = {"text": "SF", "token": TOKEN}
+        body = {"text": "SF", "token": TOKEN, "time_zone": "UTC"}
         assert (
             await api.post("/search", json=body, headers={"x-real-ip": "1.1.1.1"})
         ).status_code == 200
@@ -186,7 +200,7 @@ async def test_forging_a_forwarding_chain_cannot_reset_the_limit(
     trusted_header: str | None,
 ) -> None:
     async with api_for(searches_per_hour=1, client_ip_header=trusted_header) as api:
-        body = {"text": "SF", "token": TOKEN}
+        body = {"text": "SF", "token": TOKEN, "time_zone": "UTC"}
         await api.post("/search", json=body, headers={"x-forwarded-for": "fake-one, 1.1.1.1"})
         denied = await api.post(
             "/search", json=body, headers={"x-forwarded-for": "fake-two, 1.1.1.1"}
@@ -205,7 +219,7 @@ async def test_costly_search_fails_closed(stop: str) -> None:
     if stop == "spend":
         await limits.record_spend(redis, limits.DAILY_SPEND)
     async with api_for(redis, search_enabled=stop != "kill") as api:
-        search = await api.post("/search", json={"text": "SF", "token": TOKEN})
+        search = await api.post("/search", json={"text": "SF", "token": TOKEN, "time_zone": "UTC"})
     assert search.status_code == 503
     assert (
         search.json()["code"]
@@ -223,7 +237,7 @@ async def test_failed_model_usage_still_counts_toward_the_budget(
     monkeypatch.setattr(pipeline, "interpret", costly)
     redis = FakeAsyncRedis()
     async with api_for(redis) as api:
-        await api.post("/search", json={"text": "SF", "token": TOKEN})
+        await api.post("/search", json={"text": "SF", "token": TOKEN, "time_zone": "UTC"})
     assert await redis.get(f"spend:day:{dt.datetime.now(dt.UTC).date()}") == b"250000"
 
 
@@ -242,7 +256,7 @@ async def test_an_empty_poster_looks_elsewhere_with_one_lookup(
     here = CONCERTS[1].model_copy(update={"city": PLACE.name.split(",")[0].upper()})
     lookup = AsyncMock(return_value=[other, here])
     monkeypatch.setattr(pool, "find_elsewhere", lookup)
-    response = await api.post("/search", json={"text": "empty", "token": TOKEN})
+    response = await api.post("/search", json={"text": "empty", "token": TOKEN, "time_zone": "UTC"})
     events = [event for event, _ in parse_sse(response.text)]
     assert events[-3:] == ["poster", "elsewhere", "done"]
     elsewhere = dict(parse_sse(response.text))["elsewhere"]
@@ -256,7 +270,7 @@ async def test_a_full_poster_never_looks_elsewhere(
 ) -> None:
     lookup = AsyncMock()
     monkeypatch.setattr(pool, "find_elsewhere", lookup)
-    await api.post("/search", json={"text": "UKG in SF", "token": TOKEN})
+    await api.post("/search", json={"text": "UKG in SF", "token": TOKEN, "time_zone": "UTC"})
     lookup.assert_not_awaited()
 
 
@@ -265,6 +279,35 @@ async def test_a_failed_elsewhere_lookup_still_finishes_the_search(
 ) -> None:
     lookup = AsyncMock(side_effect=ticketmaster.TicketmasterError("down"))
     monkeypatch.setattr(pool, "find_elsewhere", lookup)
-    response = await api.post("/search", json={"text": "empty", "token": TOKEN})
+    response = await api.post("/search", json={"text": "empty", "token": TOKEN, "time_zone": "UTC"})
     events = [event for event, _ in parse_sse(response.text)]
     assert events[-2:] == ["poster", "done"] and "error" not in events
+
+
+@pytest.mark.parametrize(
+    ("zone", "day"),
+    [
+        ("Pacific/Pago_Pago", dt.date(2026, 11, 6)),
+        ("Pacific/Kiritimati", dt.date(2026, 11, 7)),
+        ("Not/A_Zone", dt.date(2026, 11, 7)),
+    ],
+)
+async def test_a_search_reads_today_in_the_visitors_own_zone(
+    api: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch, zone: str, day: dt.date
+) -> None:
+    moment = dt.datetime(2026, 11, 7, 3, tzinfo=dt.UTC)
+    days: list[dt.date] = []
+
+    class Frozen(dt.datetime):
+        @classmethod
+        def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:
+            return moment.astimezone(tz)
+
+    async def interpret(text: str, today: dt.date, model: Any) -> None:
+        days.append(today)
+        raise InterpreterError("stop here")
+
+    monkeypatch.setattr(clock.dt, "datetime", Frozen)
+    monkeypatch.setattr(pipeline, "interpret", interpret)
+    await api.post("/search", json={"text": "SF", "token": TOKEN, "time_zone": zone})
+    assert days == [day]

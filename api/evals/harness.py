@@ -54,6 +54,8 @@ async def run(
     """A fresh fake Redis means a cold cache, and so the same requests on every run."""
     services = make_services(settings, transport, FakeAsyncRedis(), model)
     result = SearchRun()
+    # A Snapshot keeps only its date. Noon UTC is that same date in almost every zone.
+    noon = dt.datetime.combine(today, dt.time(12), dt.UTC)
     started = time.perf_counter()
     async with AsyncExitStack() as resources:
         for client in (
@@ -70,7 +72,7 @@ async def run(
         resources.push_async_callback(services.redis.aclose)
         with telemetry.search() as usage:
             try:
-                async for event in stream_search(text, [], None, services, today):
+                async for event in stream_search(text, [], None, services, noon):
                     data: dict[str, Any] = event.data or {}
                     if event.event == "candidates":
                         result.names = data["names"]

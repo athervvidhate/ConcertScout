@@ -3,7 +3,7 @@ import Image from "next/image";
 import { Fragment } from "react";
 
 import { ArtistPanel } from "@/components/artist-panel";
-import { byVenue, formatDate, formatDayShort, formatMonthDay, formatPrice, formatTime, presaleLine } from "@/lib/format";
+import { byVenue, formatDate, formatDayShort, formatMonthDay, formatConcertTime, formatPrice, presaleLine } from "@/lib/format";
 import type { Concert, Recommendation } from "@/lib/search";
 
 export function nameOf({ concert }: Recommendation): string {
@@ -78,7 +78,7 @@ export function Ticket({ recommendation, rank, artistHint, onArtistOpen }: Ticke
   const details = [
     placeOf(concert),
     concert.date && formatDayShort(concert.date),
-    concert.time && formatTime(concert.time),
+    formatConcertTime(concert),
   ].filter(Boolean);
   const presale = presaleLine(concert);
 

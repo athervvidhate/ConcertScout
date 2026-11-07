@@ -5,15 +5,16 @@ import { X } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
 import { Ticket } from "@/components/ticket";
-import { localToday } from "@/lib/format";
 import { removeSaved, upcoming, useSavedConcerts } from "@/lib/saved";
 
 const noSubscription = () => () => {};
+const MINUTE = 60_000;
+const thisMinute = () => Math.floor(Date.now() / MINUTE);
 
 export function SavedConcerts() {
   const saved = useSavedConcerts();
-  const today = useSyncExternalStore(noSubscription, localToday, () => "");
-  const concerts = upcoming(saved, today);
+  const minute = useSyncExternalStore(noSubscription, thisMinute, () => 0);
+  const concerts = upcoming(saved, new Date(minute * MINUTE));
 
   if (concerts.length === 0) {
     return <p className="saved-empty">Nothing saved yet. Save a Concert from a Poster.</p>;

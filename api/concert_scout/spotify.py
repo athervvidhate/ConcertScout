@@ -17,7 +17,7 @@ from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 
-from concert_scout import limits, pool
+from concert_scout import clock, limits, pool
 from concert_scout.aliases import music_tag
 from concert_scout.config import Settings
 from concert_scout.models import MAX_RADIUS_MILES, Artist, Concert, Place
@@ -313,6 +313,7 @@ def router(
     @routes.get("/shelf", response_model_exclude_none=True)
     async def shelf(
         request: Request,
+        time_zone: Annotated[str, Query(max_length=64)],
         session: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
         place: Annotated[str | None, Query(max_length=500)] = None,
         lat: Annotated[float | None, Query(ge=-90, le=90)] = None,
@@ -354,7 +355,7 @@ def router(
             )
         try:
             concerts = await pool.find_concerts(
-                ticketmaster, redis, where, [], start, end, dt.date.today()
+                ticketmaster, redis, where, [], start, end, clock.now_in(time_zone)
             )
         except tm.TicketmasterError:
             raise Refused(
