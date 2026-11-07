@@ -29,11 +29,11 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from itertools import combinations
 
-from concert_scout import cache, limits, ranker, telemetry
+from concert_scout import cache, limits, pipeline, ranker, telemetry
 from concert_scout.config import Settings
 from concert_scout.models import Recommendation
 from concert_scout.names import normalize
-from evals import cases, harness, snapshots
+from evals import cases, harness, jev, snapshots
 from evals.compare import batch_cases
 from evals.grade import GOOD, Grader, Row, agreement
 from evals.silver import Silver, recall
@@ -252,10 +252,19 @@ async def main() -> None:
         "--pool", action="store_true", help="also grade every Artist playing; costs more once"
     )
     parser.add_argument("--votes", type=int, default=ranker.VOTES, help="ranker votes to try")
+    parser.add_argument(
+        "--ranker",
+        choices=["haiku", "jev", "jev-reasons"],
+        default="haiku",
+        help="jev grades with Jev; jev-reasons adds Haiku reasons for the keepers",
+    )
     parser.add_argument("cases", nargs="*", help="case IDs; all in the batch when left out")
     args = parser.parse_args()
     settings = Settings()  # pyright: ignore[reportCallIssue]
     ranker.VOTES = args.votes
+    if args.ranker != "haiku":
+        reasons = "haiku" if args.ranker == "jev-reasons" else "none"
+        pipeline.rank = jev.make(reasons, harness.real_model(settings))
     labels = {search.id: search for search in cases.load() if search.judged}
     chosen = batch_cases(args.batch)
     if args.cases:
@@ -284,6 +293,8 @@ async def main() -> None:
         grader.save()
     if cards:
         print("\n" + summary(cards))
+    if args.ranker != "haiku":
+        print(jev.report())
 
 
 if __name__ == "__main__":

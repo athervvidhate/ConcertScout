@@ -171,3 +171,18 @@ The same 18 Searches in warmed cities, run live once on an empty cache and once 
 | After warming | 7.5s | 13.1s | 0.2s | 0.4s | 0.1s |
 
 The pool now waits only for a seed Artist's own lookup. What remains for a Search that names an Artist is resolving that Artist and its neighbours (up to 8.5 seconds for `khruangbin-chicago` and `pop-new-york`) and the ranker. A city off the list, or a Search more than 6 hours after the run, is still cold.
+
+## Jev as the grader, Haiku for reasons
+
+`evals/jev.py` is an experiment, not used by the app. Jev (TypeSafe, `jev-1.14.0`) grades every shortlisted row in one request: one Score question per row with the same four levels, each graded independently against a shared description of the Taste, so no row's place in a list can sway it. Code takes the most likely level, the lower one on a tie, picks the Poster with the same assembly as the app, and only then asks Haiku for the reasons of the Concerts shown, at most 8. `--ranker jev-reasons` swaps it into the scorecard.
+
+All 28 Searches of `batch-2026-11-07-192838-9bf3e016`, 3 runs each, sources replayed:
+
+| Ranker | Overlap | Lowest | Silver recall | Graded precision | Graded recall | Ranker median | p95 | Cost |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Haiku, 3 votes with reasons | 86% | 38% | 25% | 60% | 60% | 3.5s | 4.8s | $0.263 |
+| Jev grades, Haiku writes 8 reasons | 92% | 50% | 26% | 68% | 70% | 2.4s | 3.0s | $0.060 |
+
+Jev's calls took 0.13 seconds median and cost $0.015 for 84 of them; the Haiku reasons took 2.4 seconds median. Jev was steadier or equal on 23 of 28 Searches and had higher graded precision on 11, lower on 4 (`turnstile-new-york`, `boise-country`, `pop-new-york`, `ambient-seattle`). It is not fully repeatable either: `tyler-childers-chicago` and `khruangbin-chicago` overlapped 50% and 64%, because rows near a level boundary flip. Graded precision is still Sonnet's opinion, not a person's.
+
+Not yet tested: Haiku grading without reasons and then writing 8 reasons, which would show how much of the gain comes from Jev and how much from splitting grading from writing.
