@@ -92,7 +92,10 @@ agent = Agent(
     output_type=NativeOutput(Ranking),
     instructions=INSTRUCTIONS,
     model_settings=AnthropicModelSettings(
-        anthropic_effort="low", max_tokens=4096, timeout=DEADLINE_SECONDS
+        anthropic_effort="low",
+        anthropic_thinking={"type": "disabled"},
+        max_tokens=4096,
+        timeout=DEADLINE_SECONDS,
     ),
 )
 
@@ -101,20 +104,35 @@ def _short(text: str) -> str:
     return text[:MAX_FIELD_LENGTH]
 
 
-def _row(candidate: Candidate, artist_tags: Mapping[str, Sequence[str]]) -> Row:
+def _row(candidate: Candidate, artist_tags: Mapping[str, Sequence[str]], number: int) -> Row:
     match = candidate.match
     artists = candidate.concert.artists
     first = artists[0] if artists else None
     artist = next((a for a in artists if match and a.name == match.artist), first)
     tags = usable_tags(artist_tags.get(artist.mbid or "", [])) if artist else set[str]()
     return Row(
-        id=candidate.concert.id,
+        id=str(number),
         artist=_short(artist.name if artist else candidate.concert.name),
         genre=artist and artist.subgenre or artist and artist.genre,
         tags=[_short(tag) for tag in sorted(tags)[:MAX_TAGS]],
         signal=match and match.signal,
         via=match and match.via,
     )
+
+
+def numbered(
+    shortlist: Sequence[Candidate], artist_tags: Mapping[str, Sequence[str]]
+) -> list[tuple[Row, str]]:
+    """Each row with the Concert ID it stands for. Rows go by number, because a short number
+    costs the model a few tokens to repeat where a Ticketmaster ID costs many, in every vote.
+
+    An Artist's other dates would only repeat a row, so each Artist appears once.
+    """
+    rows: dict[str, tuple[Row, str]] = {}
+    for candidate in shortlist:
+        row = _row(candidate, artist_tags, len(rows) + 1)
+        rows.setdefault(row.artist.casefold(), (row, candidate.concert.id))
+    return list(rows.values())
 
 
 def build_prompt(
@@ -125,20 +143,16 @@ def build_prompt(
 ) -> str:
     """One JSON object, so a listing's text stays inside its own quoted field.
 
-    An Artist's other dates would only repeat a row, so each Artist appears once. The first vote
-    sees the shortlist's own order and each later one a fixed shuffle of it.
+    The first vote sees the shortlist's own order and each later one a fixed shuffle of it.
     """
-    rows: dict[str, Row] = {}
-    for candidate in shortlist:
-        row = _row(candidate, artist_tags)
-        rows.setdefault(row.artist.casefold(), row)
+    rows = [row for row, _ in numbered(shortlist, artist_tags)]
     prompt = Prompt(
         taste={
             "artists": interpretation.artists,
             "descriptors": interpretation.descriptors,
             "tags": interpretation.tags,
         },
-        candidates=list(rows.values()),
+        candidates=rows,
     )
     if vote:
         random.Random(vote).shuffle(prompt.candidates)
@@ -170,7 +184,12 @@ async def rank(
     if not answers:
         failure = next(answer for answer in votes if isinstance(answer, BaseException))
         raise RankerError(type(failure).__name__)
-    return tally(answers)
+    concerts = {row.id: concert for row, concert in numbered(shortlist, artist_tags)}
+    # A row number the model made up names no Concert, so it stays unknown and is dropped later.
+    return [
+        fit.model_copy(update={"id": concerts.get(fit.id, f"unknown:{fit.id}")})
+        for fit in tally(answers)
+    ]
 
 
 def tally(answers: Sequence[Sequence[Fit]]) -> list[Fit]:

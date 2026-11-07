@@ -95,9 +95,30 @@ Asked to choose up to 8 Concerts, the ranker sometimes picked a full Poster and 
 | no-place-khruangbin | 100% | 87% | 100% | 100% |
 | sparse-answer | 100% | 100% | - | - |
 
-A dash means nothing to measure: no Poster Artists beyond seeds, or none graded. Grading cost $0.15 once and is cached. The ranker part of each run cost about $0.09 before and three times that after, still under a tenth of a cent per Search. Latency of three votes was not measured before the daily spend cap stopped further runs, so the 15-second target is unchecked for this change.
+A dash means nothing to measure: no Poster Artists beyond seeds, or none graded. Grading cost $0.15 once and is cached. The ranker part of each run cost about $0.09 before and three times that after, still under a tenth of a cent per Search. Latency is measured in the next section.
 
 Three Searches got less steady: `metal-denver`, `dreamy-guitar-seattle` and `no-place-khruangbin`. All three still hold their quality. Five runs per Search is a small sample, so single rows move by chance.
+
+## Speed: thinking off
+
+Three votes with thinking on made the rank step the slowest in a cold Search: 8.2 seconds median, 10.8 at p95, in 20 captures (`batch-2026-11-07-183818-f8570535`). The scorecard compared three settings on that batch, 3 runs each, with sources replayed:
+
+| Ranker | Overlap | Lowest | Graded precision | Graded recall | Ranker call median | p95 | Cost |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Thinking on, 3 votes | 89% | 66% | 61% | 56% | 6.1s | 10.6s | $0.186 |
+| Thinking off, 3 votes | 87% | 60% | 58% | 56% | 3.6s | 5.5s | $0.124 |
+| Thinking off, 1 vote | 78% | 33% | 62% | 52% | 2.9s | 4.6s | $0.057 |
+
+Thinking off with 3 votes keeps the quality within the noise of 3 runs and nearly halves the time. One vote saves another 0.7 seconds but loses the steadiness this change exists for. The ranker now runs with thinking off and 3 votes.
+
+A cold capture of all 28 Searches with that setting (`batch-2026-11-07-185048-ea95fcc0`, $0.059) gave:
+
+| | Search median | Search p95 | Rank median | Rank p95 |
+|---|---:|---:|---:|---:|
+| Thinking on (20 Searches) | 15.7s | 21.9s | 8.2s | 10.8s |
+| Thinking off (28 Searches) | 12.6s | 19.0s | 3.8s | 4.9s |
+
+The Search p95 still misses 15 seconds. The slow Searches now lose their time in the Ticketmaster pool (up to 8.6 seconds for `pop-new-york`) and in matching (up to 6 seconds), not in the ranker.
 
 ## Most misses come before the ranker
 
@@ -113,7 +134,7 @@ The grader ranks Bonobo a 3 for ambient and Katseye a 0, as a person would. It r
 
 ## Next
 
-- Measure the latency of three votes against the 15-second target.
+- Profile the pool and match steps, which now hold the Search p95 above 15 seconds.
 - Grade the remaining pools, to tell missing candidates from missing Concerts for every Search.
 - Hold the interpreter steady. It changes the shortlist for six Searches out of twenty.
 - Label a sample, so the grader's agreement with the owner is known.

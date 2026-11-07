@@ -105,7 +105,7 @@ class Fit(BaseModel):
 
 The ranker grades rather than chooses. Asked to choose up to 8, the model sometimes returned a full Poster and sometimes almost nothing for identical input. Grading every row against fixed levels leaves the choice to code.
 
-Three votes run at once, each with the rows in its own fixed order, so no row gains from its place in the list. Each Concert takes its median level, and its reason comes from the most favourable vote. A vote that fails or misses the deadline drops out, and the others still count. On Haiku the three votes cost about three times one, a fraction of a cent.
+Three votes run at once, each with the rows in its own fixed order, so no row gains from its place in the list. Each Concert takes its median level, and its reason comes from the most favourable vote. A vote that fails or misses the deadline drops out, and the others still count. On Haiku the three votes cost about three times one, a fraction of a cent. Thinking is off: with it on, the step took nearly twice as long and the grades were no better.
 
 Both model answers are cached for 6 hours, the same as the Concert pool. The interpreter's is keyed by the visitor's date and the Search's words, and the ranker's by its exact prompt, so a repeated Search shows the same Poster and calls no model. Keys are hashed and never hold Search text.
 

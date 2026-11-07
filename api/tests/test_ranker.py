@@ -82,8 +82,8 @@ async def test_model_output_is_assembled_from_source() -> None:
         return ModelResponse(
             parts=[
                 TextPart(
-                    '{"fits":[{"id":"fake","level":3,"reason":"fake"},'
-                    '{"id":"known","level":3,"reason":"A close match"}]}'
+                    '{"fits":[{"id":"99","level":3,"reason":"fake"},'
+                    '{"id":"1","level":3,"reason":"A close match"}]}'
                 )
             ]
         )
@@ -187,9 +187,21 @@ async def test_a_failed_vote_drops_out_and_the_others_count() -> None:
         calls.append(1)
         if len(calls) == 1:
             raise RuntimeError("one vote fails")
-        return ModelResponse(parts=[TextPart('{"fits":[{"id":"x","level":3,"reason":"Fits"}]}')])
+        return ModelResponse(parts=[TextPart('{"fits":[{"id":"1","level":3,"reason":"Fits"}]}')])
 
     source = candidate("x", 1, "one_hop")
     empty = Interpretation(artists=[], descriptors=[], tags=[], place=None, start=None, end=None)
     fits = await ranker.rank(empty, [source], {}, FunctionModel(respond))
     assert fits == [Fit(id="x", level=3, reason="Fits")]
+
+
+def test_rows_go_by_number_and_each_artist_once() -> None:
+    rows = [
+        candidate("tm-long-id-1", 1, "seed", "49 Winchester"),
+        candidate("tm-long-id-2", 1, "seed", "49 Winchester"),
+        candidate("tm-long-id-3", 0.8, "one_hop", "Wade Bowen"),
+    ]
+    assert [(row.id, concert) for row, concert in ranker.numbered(rows, {})] == [
+        ("1", "tm-long-id-1"),
+        ("2", "tm-long-id-3"),
+    ]

@@ -90,7 +90,7 @@ def contract_model() -> FunctionModel:
                     {"id": id, "level": 3, "reason": "A source-backed match"}
                     if fits
                     else {"id": id, "level": 0}
-                    for id in [*(c.id for c in CONCERTS), "unknown-id"]
+                    for id in [*(row["id"] for row in prompt["candidates"]), "999"]
                 ]
             }
         else:
