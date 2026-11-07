@@ -5,7 +5,7 @@ import httpx
 import pytest
 from fakeredis import FakeAsyncRedis
 
-from concert_scout.models import Price
+from concert_scout.models import Artist, Price
 from concert_scout.sources import ticketmaster
 from concert_scout.sources.http import USER_AGENT
 from concert_scout.sources.ticketmaster import (
@@ -13,7 +13,6 @@ from concert_scout.sources.ticketmaster import (
     find_artist_concerts,
     find_concerts,
     make_client,
-    normalize,
     parse_concert,
     parse_concerts,
     rounded_point,
@@ -47,7 +46,7 @@ def test_parse_concert_copies_facts_from_the_record() -> None:
     assert concert.id == "vvG18Z_ueUZbii"
     assert concert.name == "Khruangbin: The Ether Tour"
     assert concert.url == "https://www.ticketmaster.com/event/040064D0B6018B2C"
-    assert concert.artists == ["Khruangbin", "Men I Trust"]
+    assert [artist.name for artist in concert.artists] == ["Khruangbin", "Men I Trust"]
     assert concert.date == dt.date(2026, 11, 20)
     assert concert.time == dt.time(19, 30)
     assert concert.venue == "The Salt Shed"
@@ -230,8 +229,33 @@ async def test_find_artist_concerts_can_look_anywhere() -> None:
     assert "radius" not in requests[0].url.params
 
 
-def test_normalize_ignores_case_accents_and_spacing() -> None:
-    assert normalize("  Beyoncé   KNOWLES ") == "beyonce knowles"
+def test_a_lineup_keeps_each_attractions_id_and_genre() -> None:
+    attraction = {
+        "name": "Orville Peck",
+        "externalLinks": {"musicbrainz": [{"id": "an-mbid", "url": "https://musicbrainz.org/x"}]},
+        "classifications": [
+            {"genre": {"name": "Country"}, "subGenre": {"name": "Alternative Country"}}
+        ],
+    }
+    record = tm_record(_embedded={"attractions": [attraction]})
+
+    assert parse_concert(record).artists == [
+        Artist(name="Orville Peck", mbid="an-mbid", genre="Country", subgenre="Alternative Country")
+    ]
+
+
+def test_an_attraction_with_no_classification_takes_the_concerts() -> None:
+    classifications = [{"genre": {"name": "Rock"}, "subGenre": {"name": "Punk"}}]
+    record = tm_record(classifications=classifications)
+
+    assert parse_concert(record).artists[0].subgenre == "Punk"
+
+
+def test_ticketmasters_words_for_no_genre_are_left_out() -> None:
+    classifications = [{"genre": {"name": "Undefined"}, "subGenre": {"name": "Other"}}]
+    artist = parse_concert(tm_record(classifications=classifications)).artists[0]
+
+    assert (artist.genre, artist.subgenre) == (None, None)
 
 
 async def test_find_concerts_retries_a_temporary_failure() -> None:

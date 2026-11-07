@@ -1,7 +1,6 @@
 import asyncio
 import datetime as dt
 import logging
-import unicodedata
 from typing import Any
 
 import httpx
@@ -9,7 +8,8 @@ from pygeohash import encode
 from redis.asyncio import Redis
 
 from concert_scout import limits
-from concert_scout.models import Concert, Place, Price
+from concert_scout.models import Artist, Concert, Place, Price
+from concert_scout.names import normalize
 from concert_scout.sources import http
 
 logger = logging.getLogger(__name__)
@@ -21,6 +21,8 @@ MAX_RESULTS = 1000
 RADIUS_MILES = 50
 # About 5km, so Searches near each other share a pool without moving its 50-mile circle much.
 POINT_PRECISION = 5
+# Ticketmaster's words for having no classification.
+NO_GENRE = {"other", "undefined"}
 
 
 class TicketmasterError(Exception):
@@ -37,12 +39,6 @@ def rounded_point(place: Place) -> str:
     return encode(place.lat, place.lon, precision=POINT_PRECISION)
 
 
-def normalize(name: str) -> str:
-    decomposed = unicodedata.normalize("NFKD", name)
-    unaccented = "".join(c for c in decomposed if not unicodedata.combining(c))
-    return " ".join(unaccented.casefold().split())
-
-
 async def find_concerts(
     client: httpx.AsyncClient, redis: Redis, point: str, start: dt.date, end: dt.date
 ) -> list[Concert]:
@@ -55,7 +51,7 @@ async def find_artist_concerts(
     """An Artist's upcoming Concerts. `keyword` is loose, so code checks the Lineup."""
     concerts = await _find(client, redis, _base_params(point) | {"keyword": name})
     wanted = normalize(name)
-    return [c for c in concerts if wanted in map(normalize, c.artists)]
+    return [c for c in concerts if wanted in (normalize(a.name) for a in c.artists)]
 
 
 def _base_params(point: str | None) -> dict[str, str | int]:
@@ -128,11 +124,16 @@ def parse_concert(record: dict[str, Any]) -> Concert:
     venues: list[dict[str, Any]] = embedded.get("venues", [])
     venue = venues[0] if venues else {}
     start: dict[str, Any] = record["dates"].get("start", {})
+    classifications: list[dict[str, Any]] = record.get("classifications", [])
     return Concert(
         id=record["id"],
         name=record["name"],
         url=record["url"],
-        artists=[a["name"] for a in embedded.get("attractions", []) if "name" in a],
+        artists=[
+            _parse_artist(a, classifications)
+            for a in embedded.get("attractions", [])
+            if "name" in a
+        ],
         date=_parse_date(start),
         time=_parse_time(start),
         venue=venue.get("name"),
@@ -140,6 +141,25 @@ def parse_concert(record: dict[str, Any]) -> Concert:
         region=venue.get("state", {}).get("stateCode"),
         price=_parse_price(record.get("priceRanges", [])),
     )
+
+
+def _parse_artist(
+    attraction: dict[str, Any], event_classifications: list[dict[str, Any]]
+) -> Artist:
+    links: list[dict[str, Any]] = attraction.get("externalLinks", {}).get("musicbrainz", [])
+    classifications = attraction.get("classifications") or event_classifications
+    classification: dict[str, Any] = classifications[0] if classifications else {}
+    return Artist(
+        name=attraction["name"],
+        mbid=links[0].get("id") if links else None,
+        genre=_genre_name(classification.get("genre")),
+        subgenre=_genre_name(classification.get("subGenre")),
+    )
+
+
+def _genre_name(genre: dict[str, Any] | None) -> str | None:
+    name = genre.get("name") if genre else None
+    return name if name and name.casefold() not in NO_GENRE else None
 
 
 def _parse_date(start: dict[str, Any]) -> dt.date | None:

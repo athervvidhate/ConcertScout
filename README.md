@@ -1,6 +1,6 @@
 # Concert Scout
 
-Concert Scout finds live music a person would want to see. It is being rebuilt in vertical slices: right now you type a plain-text Search and real Concerts from Ticketmaster stream in, for the place and dates it names. [docs/specs](docs/specs/00-overview.md) describes the full product.
+Concert Scout finds live music a person would want to see. It is being rebuilt in vertical slices: right now you type a plain-text Search and real Concerts from Ticketmaster stream in for the place and dates it names, with the closest matches to any Artist or style first. [docs/specs](docs/specs/00-overview.md) describes the full product.
 
 - `api/`: FastAPI service, managed with `uv`
 - `frontend/`: Next.js 16, React 19 and Tailwind 4

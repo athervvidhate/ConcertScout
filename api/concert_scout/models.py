@@ -9,13 +9,22 @@ class Price(BaseModel):
     currency: str
 
 
+class Artist(BaseModel):
+    """A Lineup entry, as reported by the Concert's source. A missing fact stays None."""
+
+    name: str
+    mbid: str | None = None
+    genre: str | None = None
+    subgenre: str | None = None
+
+
 class Concert(BaseModel):
     """A Concert's facts, as reported by its source. A missing fact stays None."""
 
     id: str
     name: str
     url: str
-    artists: list[str]
+    artists: list[Artist]
     date: dt.date | None = None
     time: dt.time | None = None
     venue: str | None = None
@@ -40,6 +49,22 @@ class Place(BaseModel):
     lon: float
 
 
+class SeedArtist(BaseModel):
+    """An Artist named in a Search. With no MusicBrainz match, only the name is known."""
+
+    name: str
+    mbid: str | None = None
+    tags: list[str] = []
+
+
+class SimilarArtist(BaseModel):
+    """A neighbour from a similarity source. `score` is that source's own raw number."""
+
+    name: str
+    mbid: str | None = None
+    score: float
+
+
 class Status(BaseModel):
     step: str
     message: str
@@ -53,6 +78,11 @@ class Interpreted(BaseModel):
 
 
 class PoolTotal(BaseModel):
+    total: int
+
+
+class Candidates(BaseModel):
+    names: list[str]
     total: int
 
 

@@ -67,6 +67,10 @@ Rules from the spike:
 - Treat a Ticketmaster subgenre as narrow only if it holds under 30 Artists in the pool. "Pop" held 192 and was useless.
 - If ListenBrainz similar-artists fails, fall back to Last.fm `artist.getSimilar`, then to MusicBrainz tags. The ListenBrainz endpoint is an unsupported Labs API, so it needs a tested fallback.
 - Fetch tags in batches of 50 from the ListenBrainz metadata endpoint. Cache similarity and tags for 7 days.
+- Scale a hop by how close the neighbour is, as a share of the list's top score. Listening counts fall off fast, so one hop uses the square root.
+- Add up every two-hop path to an Artist, capped at 1. On the live Tyler Childers data a good neighbour had 5 or 6 paths and a miss such as Kim Petras had 1.
+- Take seed tags from the MusicBrainz lookup, so tag matching needs no working similarity source. Without ListenBrainz at all, pool Artists have no tags and the seed, Last.fm and Ticketmaster genre signals remain.
+- Break ties by adding up every signal an Artist has.
 
 ## 5. Shortlist
 
@@ -127,6 +131,7 @@ api/concert_scout/
   interpreter.py    step 1
   ranker.py         step 6
   matching.py       steps 4 and 5, pure functions
+  similarity.py     one and two hops, with the Last.fm fallback
   sources/          ticketmaster, musicbrainz, listenbrainz, lastfm, geocoder
   cache.py          Redis helpers
   limits.py         rate limits and spend

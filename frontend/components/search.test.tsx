@@ -9,7 +9,7 @@ const full: Concert = {
   id: "1",
   name: "Khruangbin: The Ether Tour",
   url: "https://www.ticketmaster.com/event/1",
-  artists: ["Khruangbin"],
+  artists: [{ name: "Khruangbin" }],
   date: "2026-11-20",
   time: "19:30:00",
   venue: "The Salt Shed",
@@ -57,6 +57,31 @@ describe("Search", () => {
     await screen.findByRole("link", { name: full.name });
     expect(screen.getByText("Showing 1 of 1,189 Concerts")).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows the shortlisted names and still waits for the Poster after them", async () => {
+    stubStream(
+      sse("candidates", { names: ["Khruangbin", "Men I Trust"], total: 2 }),
+      poster(full),
+      sse("done", {}),
+    );
+
+    await searchFor("Something like Khruangbin");
+
+    await screen.findByRole("link", { name: full.name });
+    expect(screen.getByText("Close matches: Khruangbin, Men I Trust")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("caps the shortlisted names at what the loader shows", async () => {
+    const names = Array.from({ length: 60 }, (_, n) => `Artist ${n}`);
+    stubStream(sse("candidates", { names, total: 60 }), poster(full), sse("done", {}));
+
+    await searchFor("Chicago");
+
+    const line = await screen.findByText(/^Close matches:/);
+    expect(line.textContent).toContain("Artist 37");
+    expect(line.textContent).not.toContain("Artist 38");
   });
 
   it("hides Try again when the error says when to come back", async () => {

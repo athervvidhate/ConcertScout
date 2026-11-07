@@ -14,7 +14,9 @@ function ConcertItem({ concert }: { concert: Concert }) {
         {concert.name}
       </a>
       {concert.artists.length > 0 && (
-        <p className="text-sm text-stone-600">{concert.artists.join(", ")}</p>
+        <p className="text-sm text-stone-600">
+          {concert.artists.map((artist) => artist.name).join(", ")}
+        </p>
       )}
       {when.length > 0 && <p className="text-sm">{when.join(" at ")}</p>}
       {where.length > 0 && <p className="text-sm">{where.join(", ")}</p>}
