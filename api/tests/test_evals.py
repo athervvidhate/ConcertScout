@@ -12,7 +12,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.usage import RequestUsage
 
 from concert_scout.models import Artist, Concert, Recommendation
-from evals import cases, judge, run, snapshots
+from evals import cases, harness, judge, run, snapshots
 from evals.cases import Search
 from evals.harness import SearchRun
 from evals.metrics import Measures
@@ -36,6 +36,7 @@ def snapshot_with(records: dict[str, Recorded]) -> Snapshot:
         text="Chicago",
         today=dt.date(2026, 11, 5),
         seconds_to_poster=3.0,
+        lastfm_enabled=False,
         records=records,
         answers={},
     )
@@ -113,7 +114,9 @@ def test_the_sample_puts_the_poster_first_and_stops_at_twenty() -> None:
 
 def test_cases_round_trip_and_only_labelled_searches_count_as_judged(tmp_path: Path) -> None:
     path = tmp_path / "searches.yaml"
-    labelled = Search(id="a", text="A", snapshot="a-1", must=["Altın Gün"], notes="Groove")
+    labelled = Search(
+        id="a", text="A", snapshot="a-1", must=["Altın Gün"], notes="Groove", judged=True
+    )
     cases.save([labelled, Search(id="b", text="B")], path)
 
     loaded = cases.load(path)
@@ -151,7 +154,7 @@ async def test_a_run_reports_a_snapshot_miss_instead_of_a_silent_score(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(snapshots, "load", load_empty)
-    search = Search(id="a", text="Chicago", snapshot="s", good=["One"])
+    search = Search(id="a", text="Chicago", snapshot="s", good=["One"], judged=True)
 
     report = await run.evaluate([search], None, live_model=False)
 
@@ -173,10 +176,144 @@ async def test_a_replayed_search_scores_the_poster_against_source_facts(
     monkeypatch.setattr(snapshots, "load", load_empty)
     monkeypatch.setattr(snapshots, "source_concerts", source)
     monkeypatch.setattr(run.harness, "replay", replay)
-    search = Search(id="a", text="Chicago", snapshot="s", must=["One"], bad=["Two"])
+    search = Search(id="a", text="Chicago", snapshot="s", must=["One"], bad=["Two"], judged=True)
 
     report = await run.evaluate([search], None, live_model=False)
 
     case = report.cases[0]
     assert case.output.measures == Measures(0, 1, 1, 1, 1, 0)
     assert case.scores["must_found"].value == 1
+
+
+async def test_recording_redacts_echoed_keys_but_does_not_change_the_live_response() -> None:
+    # A generic HTTP echo exercises the recorder boundary, not a vendor response schema.
+    secret = "sensitive/key+123"
+    raw = f'{{"echo":"{secret}","encoded":"sensitive%2Fkey%2B123"}}'
+    recorder = RecordingTransport(
+        httpx.MockTransport(lambda _: httpx.Response(200, content=raw)), secrets=[secret]
+    )
+    response = await recorder.handle_async_request(
+        request("https://example.com/echo?APIKEY=" + secret)
+    )
+    assert (await response.aread()).decode() == raw
+    stored = str(recorder.records)
+    assert secret not in stored and "sensitive%2Fkey%2B123" not in stored
+    assert "[redacted]" in stored
+    await recorder.aclose()
+
+
+def test_snapshots_are_private_and_cannot_overwrite_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(snapshots, "SNAPSHOTS", tmp_path)
+    original = snapshot_with({})
+    snapshots.save(original)
+    assert snapshots.path_for(original.id).stat().st_mode & 0o777 == 0o600
+    with pytest.raises(FileExistsError):
+        snapshots.save(original.model_copy(update={"text": "different"}))
+    assert snapshots.load(original.id) == original
+
+
+def test_an_explicit_all_neutral_judgment_is_complete_and_typos_are_not_silent() -> None:
+    answers = iter(["typo", "neutral", "", ""])
+    labels = judge.label_artists(["One", "Two"], lambda _: next(answers))
+    completed = judge.apply_labels(
+        Search(id="neutral", text="Sparse Search"), "snapshot", labels, ""
+    )
+    assert completed.judged
+    assert not (completed.must or completed.good or completed.bad)
+    assert not Search(id="draft", text="Sparse Search", snapshot="snapshot").judged
+
+
+async def test_replay_restores_live_source_pacing_even_after_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from concert_scout import limits
+
+    before = limits.SLOT_SECONDS, limits.MUSICBRAINZ_GAP
+
+    async def fail(*_: Any, **__: Any) -> SearchRun:
+        raise RuntimeError("replay failed")
+
+    monkeypatch.setattr(harness, "run", fail)
+    with pytest.raises(RuntimeError, match="replay failed"):
+        await harness.replay(snapshot_with({}), None)
+    assert (limits.SLOT_SECONDS, limits.MUSICBRAINZ_GAP) == before
+
+
+async def test_offline_judging_needs_no_settings_and_refuses_changed_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def replay(_: Snapshot, settings: Any) -> tuple[SearchRun, list[str]]:
+        assert settings is None
+        return SearchRun(names=["One"]), []
+
+    monkeypatch.setattr(harness, "replay", replay)
+    answers = iter(["neutral", "", "Sparse"])
+    completed = await judge.judge(
+        Search(id="a", text="Chicago"), None, lambda _: next(answers), snapshot_with({})
+    )
+    assert completed.judged and completed.notes == "Sparse"
+    with pytest.raises(ValueError, match="text differs"):
+        await judge.judge(Search(id="a", text="Detroit"), None, lambda _: "", snapshot_with({}))
+
+
+async def test_failed_paid_capture_still_records_spend_and_closes_source_clients(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from collections.abc import AsyncIterator
+
+    from fakeredis import FakeAsyncRedis
+    from fastapi.sse import ServerSentEvent
+    from pydantic_ai.usage import RunUsage
+
+    from concert_scout import telemetry
+    from concert_scout.pipeline import Services
+    from tests.contracts import contract_model, forbidden_http, settings_with
+
+    allocated: list[Services] = []
+    original = harness.make_services
+
+    def services(*args: Any, **kwargs: Any) -> Services:
+        created = original(*args, **kwargs)
+        allocated.append(created)
+        return created
+
+    async def fail(*_: Any) -> AsyncIterator[ServerSentEvent]:
+        telemetry.record_usage(RunUsage(input_tokens=100, output_tokens=10, cost=Decimal("0.002")))
+        raise RuntimeError("failed after model request")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(harness, "make_services", services)
+    monkeypatch.setattr(harness, "stream_search", fail)
+    async with FakeAsyncRedis() as ledger:
+        with pytest.raises(RuntimeError, match="failed after model"):
+            await harness.run(
+                "Chicago",
+                dt.date.today(),
+                settings_with(),
+                httpx.MockTransport(forbidden_http),
+                contract_model(),
+                ledger,
+            )
+        day = dt.datetime.now(dt.UTC).date()
+        assert await ledger.get(f"spend:day:{day}") == b"2000"
+    assert all(
+        client.is_closed
+        for client in (allocated[0].ticketmaster, allocated[0].geocoder, allocated[0].turnstile)
+    )
+
+
+async def test_a_pipeline_error_is_a_failed_case_not_a_successful_empty_poster(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def replay(*_: Any) -> tuple[SearchRun, list[str]]:
+        return SearchRun(error="ticketmaster_unavailable"), []
+
+    monkeypatch.setattr(snapshots, "load", load_empty)
+    monkeypatch.setattr(run.harness, "replay", replay)
+    report = await run.evaluate(
+        [Search(id="a", text="Chicago", snapshot="s", judged=True)], None, live_model=False
+    )
+    assert not report.cases
+    assert "no quality score" in report.failures[0].error_message

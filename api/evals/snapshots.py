@@ -3,9 +3,10 @@
 import datetime as dt
 import hashlib
 import json
+import os
 from collections.abc import Sequence
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import quote, quote_plus, urlencode
 
 import httpx
 from pydantic import BaseModel
@@ -19,7 +20,7 @@ from concert_scout.models import Concert
 from concert_scout.sources import ticketmaster
 
 SNAPSHOTS = Path(__file__).parent / "snapshots"
-SECRET_PARAMS = {"apikey", "apiKey", "api_key"}
+SECRET_PARAMS = {"apikey", "api_key", "access_token"}
 
 
 class Recorded(BaseModel):
@@ -35,13 +36,16 @@ class Snapshot(BaseModel):
     text: str
     today: dt.date
     seconds_to_poster: float | None
+    lastfm_enabled: bool
     records: dict[str, Recorded]
     answers: dict[str, str]
 
 
 def request_key(request: httpx.Request) -> str:
     """Names a request without its API key, which must never reach a snapshot."""
-    params = sorted((k, v) for k, v in request.url.params.multi_items() if k not in SECRET_PARAMS)
+    params = sorted(
+        (k, v) for k, v in request.url.params.multi_items() if k.casefold() not in SECRET_PARAMS
+    )
     url = request.url.copy_with(query=None)
     digest = hashlib.sha256(request.content).hexdigest()[:16]
     return f"{request.method} {url}?{urlencode(params)} {digest}"
@@ -57,17 +61,34 @@ def model_key(messages: Sequence[ModelMessage]) -> str:
 
 
 class RecordingTransport(httpx.AsyncBaseTransport):
-    def __init__(self, inner: httpx.AsyncBaseTransport | None = None) -> None:
+    def __init__(
+        self, inner: httpx.AsyncBaseTransport | None = None, secrets: Sequence[str] = ()
+    ) -> None:
         self.inner = inner or httpx.AsyncHTTPTransport()
         self.records: dict[str, Recorded] = {}
+        self.secrets = {value for value in secrets if value}
+
+    def redact(self, text: str) -> str:
+        for value in sorted(self.secrets, key=len, reverse=True):
+            for encoded in {value, quote(value, safe=""), quote_plus(value)}:
+                text = text.replace(encoded, "[redacted]")
+        return text
+
+    async def aclose(self) -> None:
+        await self.inner.aclose()
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         await request.aread()
+        self.secrets.update(
+            value
+            for key, value in request.url.params.multi_items()
+            if key.casefold() in SECRET_PARAMS and value
+        )
         response = await self.inner.handle_async_request(request)
         body = await response.aread()
         content_type = response.headers.get("content-type", "application/json")
-        self.records[request_key(request)] = Recorded(
-            status=response.status_code, content_type=content_type, body=body.decode()
+        self.records[self.redact(request_key(request))] = Recorded(
+            status=response.status_code, content_type=content_type, body=self.redact(body.decode())
         )
         return httpx.Response(
             response.status_code, headers={"content-type": content_type}, content=body
@@ -140,7 +161,10 @@ def path_for(snapshot_id: str) -> Path:
 
 def save(snapshot: Snapshot) -> None:
     SNAPSHOTS.mkdir(exist_ok=True)
-    path_for(snapshot.id).write_text(snapshot.model_dump_json())
+    # Snapshots hold Search text and third-party data. Do not overwrite earlier evidence.
+    descriptor = os.open(path_for(snapshot.id), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "w") as output:
+        output.write(snapshot.model_dump_json())
 
 
 def load(snapshot_id: str) -> Snapshot:

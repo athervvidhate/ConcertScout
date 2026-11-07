@@ -52,6 +52,8 @@ def scorer(settings: Settings | None, live_model: bool):
                 f"{len(misses)} requests are not in the Snapshot, such as {misses[0]}. "
                 "Use --live-model if only model requests changed, or judge the Search again."
             )
+        if result.error:
+            raise RuntimeError(f"Search ended with {result.error}; no quality score was assigned")
         measures = measure(
             result.recommendations,
             snapshots.source_concerts(snapshot),
@@ -92,7 +94,11 @@ def summary(scored: list[Scored]) -> list[str]:
         time_line = f"{slowest:.1f}s as captured, cold  ({mark(slowest < 15)}, under 15s)"
     return [
         f"Bad Artists on a Poster:  {bad}  ({mark(bad == 0)}, target 0)",
-        f"Must Artists found:       {must_share:.0%}  ({mark(must_share >= 0.9)}, at least 90%)",
+        (
+            f"Must Artists found:       {must_share:.0%}  ({mark(must_share >= 0.9)}, at least 90%)"
+            if must_total
+            else "Must Artists found:       no must labels; recall not measurable"
+        ),
         f"Poster judged good:       {good_share:.0%}  ({mark(good_share >= 0.6)}, at least 60%)",
         f"Invented or unknown IDs:  {invented}  ({mark(invented == 0)}, target 0)",
         f"Time to poster, p95:      {time_line}",

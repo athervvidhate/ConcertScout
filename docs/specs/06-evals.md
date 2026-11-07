@@ -18,9 +18,10 @@ Ticketmaster data changes every day, so a judged Search would go stale. Each cas
   good: [Altın Gün, Men I Trust]
   bad: [Weezer, Nickelback]
   notes: Patient, groove-led instrumental music
+  judged: true
 ```
 
-`must` Artists should appear, `good` ones may, and `bad` ones must not. Anything unlisted counts as neutral.
+`judged: true` records a completed human review, including a valid all-neutral review. A captured draft alone is not judged. `must` Artists should appear, `good` ones may, and `bad` ones must not. Anything unlisted counts as neutral.
 
 ## Search set
 
@@ -37,6 +38,8 @@ The 20 Searches should cover the pipeline's weak spots:
 ## Judging
 
 `uv run python -m evals.judge` snapshots a Search, runs the pipeline, and lists the shortlist. The judge marks each Artist `must`, `good`, `bad` or neutral, and the tool writes the YAML. It takes a few minutes per Search. Marking a sample of 20 Artists per Search is enough.
+
+For advance capture, `uv run python -m evals.capture --limit 20` records the drafts serially without writing labels. Its measured cost threshold stops before another Search, not during one; the shared recorded-spend guard also applies. `uv run python -m evals.judge <id> --snapshot <snapshot-id>` then judges one capture offline, without keys or another paid request. See [the eval workflow](../development/evals.md).
 
 ## Measures
 

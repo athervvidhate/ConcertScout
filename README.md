@@ -56,7 +56,9 @@ Recommendation quality is judged by a person. Twenty drafted Searches cover seed
 
 ```sh
 cd api
-uv run python -m evals.judge       # capture one real Search and enter human labels; costs money
+uv run python -m evals.capture    # capture one real Search in advance; costs money
+uv run python -m evals.judge <id> --snapshot <snapshot-id>  # human labels, offline
+uv run python -m evals.judge       # or capture and judge together; costs money
 uv run python -m evals.run         # replay judged Snapshots; no network or model spend
 uv run python -m evals.run --live-model  # opt in to new model calls for a changed prompt
 ```
