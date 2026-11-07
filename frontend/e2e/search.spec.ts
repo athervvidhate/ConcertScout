@@ -428,6 +428,19 @@ test("examples sit right below the search box, above the shelf", async ({page, c
   await expect(page.getByRole("region", {name: "Try one of these"})).toHaveCount(0);
 });
 
+test("examples share a width and line up with the search box", async ({page}) => {
+  await page.goto("/");
+  const bar = (await page.locator(".search-bar").boundingBox())!;
+  const boxes = await page.locator(".home-examples button").evaluateAll(buttons =>
+    buttons.map(button => {
+      const {left, right, width} = button.getBoundingClientRect();
+      return {left, right, width};
+    }));
+  expect(new Set(boxes.map(box => Math.round(box.width))).size).toBe(1);
+  expect(Math.min(...boxes.map(box => box.left))).toBeCloseTo(bar.x, 0);
+  expect(Math.max(...boxes.map(box => box.right))).toBeCloseTo(bar.x + bar.width, 0);
+});
+
 test("every example fits the search box, even on a small phone", async ({page}) => {
   await page.setViewportSize({width: 320, height: 640});
   await page.emulateMedia({reducedMotion: "reduce"});
