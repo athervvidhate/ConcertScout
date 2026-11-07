@@ -1,22 +1,27 @@
 """Repeat each captured Search and score every Poster it gets:
-`uv run python -m evals.scorecard --batch <name> [--runs 5] [--live all] [case ...]`.
+`uv run python -m evals.scorecard --batch <name> [--runs 5] [--live none|all] [case ...]`.
 
 Sources replay from each Snapshot. By default only the ranker is called live, so every run sees
 the same shortlist and only the ranker can differ. `--live all` also reads the Search afresh,
-which is what a visitor sees. Both cost money.
+which is what a visitor sees. Both cost money. `--live none` calls no model and scores only the
+shortlist, so a matching change can be measured for the price of grading new Artists.
 
-Three measures, none of which needs a human label:
+Measures, none of which needs a human label:
 - overlap: how alike repeated Posters are. The same input should get the same answer.
 - silver recall: for a Search that names an Artist, how many of the Artists Deezer or Last.fm
   call similar and who are playing reach the Poster. See `evals.silver`.
 - graded precision and recall: what share of the Poster a stronger model grades a fair fit or
   better, and how many of the shortlist's strong fits made it. See `evals.grade`.
+- shortlist silver and graded share: the same two checks on what the ranker was given.
+- pool strong fits kept: with `--pool`, the strong fits among everyone playing that reached the
+  shortlist. A Search whose pool holds none has nothing for matching to find.
 
 Seeds always lead the Poster, so they count in none of the quality measures.
 """
 
 import argparse
 import asyncio
+import math
 import statistics
 from collections import Counter
 from collections.abc import Sequence
@@ -50,6 +55,8 @@ class Card:
     levels: dict[str, int] = field(default_factory=dict[str, int])
     shortlisted: set[str] = field(default_factory=set[str])
     playing: set[str] = field(default_factory=set[str])
+    # Seconds to the Poster. Sources replay at once, so this is nearly all live model time.
+    seconds: list[float] = field(default_factory=list[float])
     cost: Decimal = Decimal(0)
 
     @property
@@ -65,6 +72,21 @@ class Card:
         """Out of every silver Artist playing, so a candidate the pipeline missed counts too."""
         playing = self.silver & self.playing
         return _mean([recall(set(p - self.seeds), playing, len(self.seeds)) for p in self.posters])
+
+    def shortlist_silver(self) -> float | None:
+        """Silver Artists playing that the shortlist kept. Only matching decides this."""
+        playing = (self.silver & self.playing) - self.seeds
+        return len(playing & self.shortlisted) / len(playing) if playing else None
+
+    def shortlist_strong(self) -> float | None:
+        """Strong fits in the whole pool that the shortlist kept. Needs `--pool`."""
+        strong = {n for n in self.playing if self.levels.get(n, 0) >= STRONG} - self.seeds
+        return len(strong & self.shortlisted) / len(strong) if strong else None
+
+    def shortlist_graded(self) -> float | None:
+        """The shortlist's share graded a fair fit or better: what the ranker had to work with."""
+        graded = [self.levels[n] for n in self.shortlisted - self.seeds if n in self.levels]
+        return sum(level >= GOOD for level in graded) / len(graded) if graded else None
 
     def graded_precision(self) -> float | None:
         def share(poster: frozenset[str]) -> float | None:
@@ -113,12 +135,12 @@ async def repeat(
 
     replays = await asyncio.gather(*(once() for _ in range(runs)))
     # A live interpreter can read the Search differently and ask for a source call the Snapshot
-    # never saw, so that run has no fair Poster. With only the ranker live, a miss can only come
-    # after the Poster, from the search elsewhere that follows an empty one.
+    # never saw, so that run has no fair Poster. Otherwise the reading is recorded, and a miss
+    # comes from a ranker with no answer or from the search elsewhere after an empty Poster.
     finished = [
         r
         for r, misses in replays
-        if r.error is None and r.seconds_to_poster is not None and (live == "ranker" or not misses)
+        if r.error is None and r.seconds_to_poster is not None and (live != "all" or not misses)
     ]
     shortlist = list(dict.fromkeys(name for r in finished for name in r.names))
     # A Poster can name a Lineup's headliner where the shortlist named the matched Artist.
@@ -130,18 +152,25 @@ async def repeat(
     shown = list(dict.fromkeys([*shortlist, *headliners]))
     card = Card(
         id=case_id,
-        posters=[poster_artists(r.recommendations) for r in finished],
+        # With no model the Poster is the fallback, which says nothing about the ranker.
+        posters=[] if live == "none" else [poster_artists(r.recommendations) for r in finished],
         # A different shortlist means the interpreter read the Search differently.
         shortlists=len({tuple(r.names) for r in finished}),
         failures=len(replays) - len(finished),
         shortlisted={normalize(name) for name in shortlist},
+        seconds=[r.seconds_to_poster for r in finished if r.seconds_to_poster is not None],
         cost=sum((r.cost for r, _ in replays), Decimal(0)),
     )
     return card, shown
 
 
 async def score(
-    card: Card, snapshot: snapshots.Snapshot, names: list[str], silver: Silver, grader: Grader
+    card: Card,
+    snapshot: snapshots.Snapshot,
+    names: list[str],
+    silver: Silver,
+    grader: Grader,
+    pool: bool,
 ) -> None:
     reading = snapshots.interpretation(snapshot)
     seeds = reading.artists if reading else []
@@ -151,6 +180,8 @@ async def score(
     lineups = [a for concert in snapshots.source_concerts(snapshot) for a in concert.artists]
     card.playing = {normalize(artist.name) for artist in lineups}
     genres = {normalize(artist.name): artist.subgenre or artist.genre for artist in lineups}
+    if pool:
+        names = list(dict.fromkeys([*names, *(artist.name for artist in lineups)]))
     rows = [Row(artist=name, genre=genres.get(normalize(name))) for name in names]
     with telemetry.search() as usage:
         card.levels = await grader.grade(snapshot.text, rows) if rows else {}
@@ -168,6 +199,11 @@ def lines(card: Card) -> list[str]:
         f"graded precision {_percent(card.graded_precision())}, "
         f"graded recall {_percent(card.graded_recall())}"
     )
+    candidates = (
+        f"  shortlist: silver {_percent(card.shortlist_silver())}, "
+        f"graded fair or better {_percent(card.shortlist_graded())}, "
+        f"pool strong fits kept {_percent(card.shortlist_strong())}"
+    )
     detail = (
         f"  Artists per run {sizes}; {card.shortlists} shortlist(s), {card.failures} failed; "
         f"silver {len(card.silver & card.playing)} playing, "
@@ -177,7 +213,9 @@ def lines(card: Card) -> list[str]:
         f"  {n}/{len(card.posters)}  {name} (grade {card.levels.get(name, '?')})"
         for name, n in card.sometimes()
     ]
-    return [head, detail, *flaky]
+    if not card.posters:
+        return [card.id + candidates.removeprefix(" ")]
+    return [head, candidates, detail, *flaky]
 
 
 def summary(cards: Sequence[Card]) -> str:
@@ -186,11 +224,18 @@ def summary(cards: Sequence[Card]) -> str:
 
     overlaps = [card.overlap for card in cards]
     cost = sum((card.cost for card in cards), Decimal(0))
+    seconds = sorted(s for card in cards for s in card.seconds)
+    slowest = seconds[math.ceil(len(seconds) * 0.95) - 1] if seconds else 0.0
     return (
         f"Overlap {mean(overlaps)} (lowest {min(overlaps):.0%}), "
         f"silver recall {mean([c.silver_recall() for c in cards])}, "
         f"graded precision {mean([c.graded_precision() for c in cards])}, "
-        f"graded recall {mean([c.graded_recall() for c in cards])}, cost ${cost:.4f}"
+        f"graded recall {mean([c.graded_recall() for c in cards])}; "
+        f"shortlist silver {mean([c.shortlist_silver() for c in cards])}, "
+        f"shortlist graded {mean([c.shortlist_graded() for c in cards])}, "
+        f"pool strong kept {mean([c.shortlist_strong() for c in cards])}; "
+        f"model seconds median {statistics.median(seconds or [0]):.1f} p95 {slowest:.1f}, "
+        f"cost ${cost:.4f}"
     )
 
 
@@ -198,7 +243,10 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--batch", nargs="+", required=True, help="batch report names")
     parser.add_argument("--runs", type=int, default=5)
-    parser.add_argument("--live", choices=["ranker", "all"], default="ranker")
+    parser.add_argument("--live", choices=["none", "ranker", "all"], default="ranker")
+    parser.add_argument(
+        "--pool", action="store_true", help="also grade every Artist playing; costs more once"
+    )
     parser.add_argument("cases", nargs="*", help="case IDs; all in the batch when left out")
     args = parser.parse_args()
     settings = Settings()  # pyright: ignore[reportCallIssue]
@@ -214,8 +262,9 @@ async def main() -> None:
             for case, snapshot_id in chosen.items():
                 await limits.check_spend(ledger)
                 snapshot = snapshots.load(snapshot_id)
-                card, names = await repeat(case, snapshot, args.runs, args.live, settings)
-                await score(card, snapshot, names, silver, grader)
+                runs = 1 if args.live == "none" else args.runs
+                card, names = await repeat(case, snapshot, runs, args.live, settings)
+                await score(card, snapshot, names, silver, grader, args.pool)
                 await limits.record_spend(ledger, card.cost)
                 cards.append(card)
                 print("\n".join(lines(card)), flush=True)

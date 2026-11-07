@@ -6,6 +6,7 @@ model, so it only counts once it agrees with human labels: see `agreement`. Grad
 per Search and Artist, so every ranker variant is measured against the same grades.
 """
 
+import asyncio
 import json
 from collections.abc import Mapping, Sequence
 
@@ -22,6 +23,8 @@ from evals import snapshots
 MODEL_NAME = "claude-sonnet-5-5"
 CACHE = snapshots.SNAPSHOTS / "grade-cache.json"
 GOOD = 2
+# Artists per call, so a whole pool fits in a few answers of reasonable length.
+BATCH = 100
 
 INSTRUCTIONS = """\
 Grade how well each Artist suits a concert Search. The message is one JSON object holding a \
@@ -73,22 +76,27 @@ class Grader:
 
     async def grade(self, search: str, rows: Sequence[Row]) -> dict[str, int]:
         """Each Artist's level by normalized name. Only Artists not yet graded cost a call."""
-        missing = [row for row in rows if _key(search, row.artist) not in self.cache]
-        if missing:
-            prompt = json.dumps(
-                {"search": search, "artists": [row.model_dump() for row in missing]}
-            )
-            usage = RunUsage()
-            try:
-                result = await agent.run(prompt, model=self.model, usage=usage)
-            finally:
-                record_usage(usage)
-            asked = {normalize(row.artist) for row in missing}
-            for grade in result.output.grades:
-                if normalize(grade.artist) in asked:
-                    self.cache[_key(search, grade.artist)] = grade.level
+        missing = list(
+            {
+                _key(search, r.artist): r for r in rows if _key(search, r.artist) not in self.cache
+            }.values()
+        )
+        batches = [missing[n : n + BATCH] for n in range(0, len(missing), BATCH)]
+        await asyncio.gather(*(self._grade(search, batch) for batch in batches))
         found = ((row.artist, self.cache.get(_key(search, row.artist))) for row in rows)
         return {normalize(name): level for name, level in found if level is not None}
+
+    async def _grade(self, search: str, rows: Sequence[Row]) -> None:
+        prompt = json.dumps({"search": search, "artists": [row.model_dump() for row in rows]})
+        usage = RunUsage()
+        try:
+            result = await agent.run(prompt, model=self.model, usage=usage)
+        finally:
+            record_usage(usage)
+        asked = {normalize(row.artist) for row in rows}
+        for grade in result.output.grades:
+            if normalize(grade.artist) in asked:
+                self.cache[_key(search, grade.artist)] = grade.level
 
 
 def _key(search: str, artist: str) -> str:

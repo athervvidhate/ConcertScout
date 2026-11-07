@@ -34,6 +34,22 @@ Read the Search and Poster, then label at most20 Artists with `m`/`must`, `g`/`g
 
 The tool does not infer why a person likes an Artist or label a missing Artist for them. Snapshot responses alone cannot prove Recommendation quality.
 
+## Scorecard
+
+```sh
+uv run python -m evals.scorecard --batch <batch> [--runs 5] [case ...]   # ranker live, about $0.10 for 20 Searches
+uv run python -m evals.scorecard --batch <batch> --live all              # the interpreter too, as a visitor sees it
+uv run python -m evals.scorecard --batch <batch> --live none [--pool]    # shortlist only, no ranker calls
+```
+
+This repeats each captured Search and scores every Poster without labels: overlap between runs, silver recall against Deezer and Last.fm, and the share a stronger model grades a fair fit. The measures and their limits are in [the evals spec](../specs/06-evals.md#measures-without-labels). A line per Search lists the Artists that came and went between runs, with their grade, so a flaky pick is easy to see.
+
+With the default `--live ranker`, every run sees the same shortlist, so any change is the ranker's. `--live all` also reads the Search afresh. A run whose new reading asks for a source call the Snapshot lacks has no fair Poster and counts as failed; that count is itself a measure of how steady the interpreter is.
+
+`--live none` is for matching changes. It calls no ranker, scores only the shortlist and pays only to grade Artists not graded before. `--pool` grades everyone playing as well, to show how many strong fits matching could have found. A large pool costs several cents the first time.
+
+Deezer answers and grades are cached in `evals/snapshots/silver-cache.json` and `grade-cache.json`, so a second run only pays for the ranker. Deezer permits only private, non-commercial use, so its answers stay in that private folder and never reach the app. Every paid call counts toward the shared daily and monthly spend caps, and the scorecard stops before a Search once a cap is reached.
+
 ## Compare two runs
 
 ```sh
@@ -48,11 +64,12 @@ Two runs of the same input differ too, so a change only means something if it is
 
 ```sh
 uv run python -m evals.run
-uv run python -m evals.run --live-model  # explicit new model spend after a prompt/weight change
+uv run python -m evals.run --live ranker  # new ranker spend after a ranker change
+uv run python -m evals.run --live all     # new spend for every model request, after an interpreter change
 ```
 
 The ordinary run reads completed human labels and replays recorded HTTP/model answers through the real pipeline. It reports all measures in the spec, including captured cold latency and recorded token cost; replay wall time is not a production-speed measurement. Optional source configuration is restored from the Snapshot. Replay-only pacing is scoped and restored before any later capture.
 
-Missing requests or a pipeline error produce a failed case rather than a silent quality score. No must labels means recall is not measurable; it does not mean100% recall. With no human reviews the runner says that none are judged. The paid `--live-model` mode uses fresh model answers against the recorded sources; it is not an offline run.
+Missing requests or a pipeline error produce a failed case rather than a silent quality score. No must labels means recall is not measurable; it does not mean100% recall. With no human reviews the runner says that none are judged. The paid `--live` modes use fresh model answers against the recorded sources; they are not offline runs. `--live ranker` keeps the recorded reading of the Search, so the shortlist cannot change under it.
 
 Run the app/contracts with `make check`. Transport tests use generic echo data and typed app-owned seams, not invented vendor response schemas. Real capture/replay evidence is recorded separately under `docs/validation/` without publishing third-party snapshots or secrets.
