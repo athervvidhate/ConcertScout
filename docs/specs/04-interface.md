@@ -73,13 +73,13 @@ Names must never feel rushed. Growing while travelling caused the collisions, so
 |---|---|
 | Glide duration | 750ms per name |
 | Start gap | 100ms, headliner first, in rank order |
-| Glide easing | `cubic-bezier(.65, 0, .35, 1)` |
+| Glide easing | `cubic-bezier(.22, .61, .36, 1)` |
 | Rest | 80ms after the last name lands |
 | Grow duration | 450ms, all names together |
 | Grow easing | `cubic-bezier(.22, .61, .36, 1)` |
 | Total | 1,980ms |
 
-1. Each name glides to the center of its final spot at small size. Using ease-in-out means it starts and stops softly.
+1. Each name glides to the center of its final spot at small size. Ease-out starts it fast and settles it softly, which makes the app feel quick.
 2. Once every name has landed, all of them grow together.
 
 Each name scales up inside its own final box during the grow step, so names cannot touch there. The owner shortened the first version, 2,890ms long, because it felt slow. The shorter start gap lets small names cross a little more often during the glide.

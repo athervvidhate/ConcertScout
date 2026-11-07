@@ -8,7 +8,7 @@ import { PosterDone } from "@/components/poster-done";
 import { nameOf, Ticket } from "@/components/ticket";
 import { dismissArtistHint, useArtistHint } from "@/lib/artist-hint";
 import { flyIn } from "@/lib/fly-in";
-import { flyDuration, MAX_CANDIDATE_NAMES, namesDuration, PICK_READ_MS } from "@/lib/poster-timing";
+import { EASE_OUT, flyDuration, MAX_CANDIDATE_NAMES, namesDuration, PICK_READ_MS } from "@/lib/poster-timing";
 import { type Decision, saveConcert, skipConcert, useDecisions } from "@/lib/saved";
 import type { Candidates, Recommendation } from "@/lib/search";
 import { swipeDecision } from "@/lib/swipe";
@@ -238,7 +238,7 @@ export function Poster(props: Props) {
                 initial="enter"
                 animate="rest"
                 exit="gone"
-                transition={{ duration: stillTicket ? 0 : 0.3, ease: "easeOut" }}
+                transition={stillTicket ? { duration: 0 } : { duration: 0.3, ease: EASE_OUT }}
                 drag="x"
                 dragSnapToOrigin
                 dragElastic={0.7}

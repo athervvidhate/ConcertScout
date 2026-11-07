@@ -305,6 +305,8 @@ async function tabTo(page: Page, target: Locator) {
 
 async function dragTicket(page: Page, distance: number, touch: boolean) {
   const ticket = page.locator(".ticket-drag");
+  // The last Ticket can still be leaving, and it must not stay.
+  await expect(ticket).toHaveCount(1);
   await ticket.scrollIntoViewIfNeeded();
   const box = (await ticket.boundingBox())!;
   const x = box.x + box.width / 2;

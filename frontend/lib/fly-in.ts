@@ -1,7 +1,4 @@
-import { flyDuration, GLIDE_GAP_MS, GLIDE_MS, GROW_MS } from "@/lib/poster-timing";
-
-const GLIDE_EASING = "cubic-bezier(.65,0,.35,1)";
-const GROW_EASING = "cubic-bezier(.22,.61,.36,1)";
+import { EASE_OUT_CSS, flyDuration, GLIDE_GAP_MS, GLIDE_MS, GROW_MS } from "@/lib/poster-timing";
 
 /**
  * Glides each Poster name from the wall to its spot at small size, then grows them together.
@@ -30,9 +27,9 @@ export function flyIn(wall: HTMLElement, poster: HTMLElement): () => void {
     const move = target.animate(
       [
         { transform: start, offset: 0 },
-        { transform: start, offset: glideStart, easing: GLIDE_EASING },
+        { transform: start, offset: glideStart, easing: EASE_OUT_CSS },
         { transform: land, offset: glideEnd },
-        { transform: land, offset: growStart, easing: GROW_EASING },
+        { transform: land, offset: growStart, easing: EASE_OUT_CSS },
         { transform: "translate(0, 0) scale(1)", offset: 1 },
       ],
       { duration, fill: "both" },
@@ -47,7 +44,7 @@ export function flyIn(wall: HTMLElement, poster: HTMLElement): () => void {
         ? [{ opacity: 1 }, { opacity: 1 }]
         : [
             { opacity: 1, offset: 0 },
-            { opacity: 1, offset: growStart },
+            { opacity: 1, offset: growStart, easing: EASE_OUT_CSS },
             { opacity: 0, offset: 1 },
           ],
       { duration, fill: "both" },
@@ -59,7 +56,7 @@ export function flyIn(wall: HTMLElement, poster: HTMLElement): () => void {
           target.animate(
             [
               { opacity: 0, offset: 0 },
-              { opacity: 0, offset: glideStart },
+              { opacity: 0, offset: glideStart, easing: EASE_OUT_CSS },
               { opacity: 1, offset: glideEnd },
               { opacity: 1, offset: 1 },
             ],
