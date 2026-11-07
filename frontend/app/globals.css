@@ -251,7 +251,8 @@ body:has(.information)::before { animation:none; opacity:.35; }
 
 /* Home: one long Ticket torn into stubs, on solid stock so it reads over the rays. */
 .home-guide { display:grid; gap:clamp(36px,6vh,64px); max-width:1100px; margin:clamp(32px,7vh,72px) auto clamp(16px,4vh,40px); text-align:left; }
-.home-guide h2 { margin:0 0 14px; font:400 clamp(30px,4.4vw,48px)/1.05 var(--font-poster),sans-serif; }
+.home-try { max-width:1100px; margin:clamp(20px,4vh,32px) auto 0; text-align:left; }
+.home-guide h2,.home-try h2 { margin:0 0 14px; font:400 clamp(30px,4.4vw,48px)/1.05 var(--font-poster),sans-serif; }
 .home-examples { display:flex; flex-wrap:wrap; gap:10px; margin:0; padding:0; list-style:none; }
 .home-examples button { min-height:44px; padding:6px 16px; border:2px solid #10291F; border-radius:999px; background:#FFD3E4; color:#10291F; font:600 17px var(--font-body),sans-serif; cursor:pointer; }
 .home-examples button:hover:enabled { background:#10291F; color:#FFD3E4; }

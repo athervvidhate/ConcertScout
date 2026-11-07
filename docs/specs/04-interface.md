@@ -10,7 +10,7 @@ The page has one job, so it has one search box in the middle. A city typed there
 
 - Top bar, right aligned: Saved Concerts and Your Taste. Your Taste opens a panel from the right edge. Connect Spotify leads it as the one filled button, and the imports sit behind an "Other ways to add your Taste" toggle.
 - A location button sits inside the search box. It asks for the browser's location only when pressed, then fills in. Later Searches that name no place look near that location, and the Spotify shelf uses it. Pressed again, it forgets the location, which deletes the stored coordinates.
-- The empty Search box rotates four examples with a typing/deleting effect, the same four the home page offers as buttons. They show four kinds of Search: an Artist with a place and dates, a genre with a place and dates, a sound in a Region with dates, and similar Artists in a city. Pause while focused, while text is entered, or during a Search. Reduced motion keeps a static example.
+- The empty Search box rotates three examples with a typing/deleting effect, the same three the home page offers as buttons right below the search box. They show three kinds of Search: an Artist with a place and dates, a genre with a place and dates, and a sound in a Region with dates. Pause while focused, while text is entered, or during a Search. Reduced motion keeps a static example.
 - Links to Tickets and other sites open a new tab, so a Poster is never lost.
 
 ## Tokens
@@ -109,7 +109,7 @@ With `prefers-reduced-motion`, the sun and equalizer stop, there is no fly-in, a
 
 ## Site navigation and home
 
-Every page has a small header: the brand on the left and a menu button on the right, holding Saved Concerts and Your Taste. The resting home page drops the brand, because the wordmark already says it. The brand returns a Poster to the resting home page. The home page adds example Searches, how a Search works, and the location and Taste actions below the search box. The Privacy page names each data source.
+Every page has a small header: the brand on the left and a menu button on the right, holding Saved Concerts and Your Taste. The resting home page drops the brand, because the wordmark already says it. The brand returns a Poster to the resting home page. The home page adds how a Search works, and the location and Taste actions below the search box. The Privacy page names each data source.
 
 ## Artist hint
 

@@ -11,6 +11,7 @@ import { Listing } from "@/components/listing";
 import { Poster } from "@/components/poster";
 import { SearchFeedback } from "@/components/search-feedback";
 import { SiteHeader } from "@/components/site-header";
+import { SearchExamples } from "@/components/search-examples";
 import { SpotifyShelf } from "@/components/spotify-shelf";
 import { useSpotifyConnection } from "@/lib/spotify";
 import { countOf, TastePanel } from "@/components/taste-panel";
@@ -182,6 +183,8 @@ export function Search() {
         </p>
       )}
 
+      {home && <SearchExamples onExample={tryExample} ready={token !== null} />}
+
       <div aria-live="polite" className="search-context">
         {searchedFor && (
           <p title={formatInterpreted(searchedFor)}>{formatPosterHeading(searchedFor)}</p>
@@ -250,8 +253,6 @@ export function Search() {
       )}
       {home && (
         <HomeGuide
-          onExample={tryExample}
-          examplesReady={token !== null}
           personal={!spotify.connected}
           locationLabel={locationLabel}
           onLocation={toggleLocation}

@@ -401,6 +401,20 @@ test("an Artist with several dates is one Ticket, and arrow keys decide nothing"
   await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
 });
 
+test("examples sit right below the search box, above the shelf", async ({page, context}) => {
+  await page.addInitScript(() => localStorage.setItem("concert-scout-place", JSON.stringify({lat: 41.88, lon: -87.63})));
+  await page.goto(await spotifyCallback(context, "account-code"));
+  const shelf = page.getByRole("region", {name: "From your Artists"});
+  await expect(shelf).toBeVisible();
+  const bar = await page.locator(".search-bar").boundingBox();
+  const examples = await page.getByRole("region", {name: "Try one of these"}).boundingBox();
+  const below = await shelf.boundingBox();
+  expect(examples!.y).toBeGreaterThanOrEqual(bar!.y + bar!.height);
+  expect(examples!.y + examples!.height).toBeLessThanOrEqual(below!.y);
+  await search(page);
+  await expect(page.getByRole("region", {name: "Try one of these"})).toHaveCount(0);
+});
+
 test("every example fits the search box, even on a small phone", async ({page}) => {
   await page.setViewportSize({width: 320, height: 640});
   await page.emulateMedia({reducedMotion: "reduce"});

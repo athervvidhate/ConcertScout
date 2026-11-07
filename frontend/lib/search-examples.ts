@@ -5,7 +5,6 @@ export const SEARCH_EXAMPLES = [
   "Tame Impala in London next summer",
   "Jazz in New Orleans this weekend",
   "Dreamy bands in SoCal next month",
-  "Like Four Tet and Caribou in NYC",
 ];
 
 export function useSearchExample(active: boolean) {

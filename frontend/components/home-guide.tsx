@@ -1,7 +1,5 @@
 import { Button } from "@base-ui/react/button";
 
-import { SEARCH_EXAMPLES } from "@/lib/search-examples";
-
 const STEPS = [
   {
     title: "Say it your way",
@@ -18,9 +16,6 @@ const STEPS = [
 ];
 
 type Props = {
-  onExample: (text: string) => void;
-  // Every Search needs a bot check token, which arrives a moment after the page.
-  examplesReady: boolean;
   /** A connected visitor already has both of these from the shelf and the menu. */
   personal: boolean;
   locationLabel: string;
@@ -28,22 +23,9 @@ type Props = {
   onTaste: () => void;
 };
 
-export function HomeGuide({ onExample, examplesReady, personal, locationLabel, onLocation, onTaste }: Props) {
+export function HomeGuide({ personal, locationLabel, onLocation, onTaste }: Props) {
   return (
     <div className="home-guide">
-      <section aria-labelledby="home-try">
-        <h2 id="home-try">Try one of these</h2>
-        <ul className="home-examples">
-          {SEARCH_EXAMPLES.map((example) => (
-            <li key={example}>
-              <Button type="button" disabled={!examplesReady} onClick={() => onExample(example)}>
-                {example}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
       <section aria-labelledby="home-how">
         <h2 id="home-how">How it works</h2>
         <ol className="ticket-strip">
