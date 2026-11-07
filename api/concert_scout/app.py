@@ -28,6 +28,7 @@ from concert_scout.pipeline import (
 from concert_scout.security import Refused, SecurityHeaders
 from concert_scout.sources import (
     geocoder,
+    jev,
     lastfm,
     listenbrainz,
     musicbrainz,
@@ -91,6 +92,7 @@ def make_services(
         geocoder=geocoder.make_client(settings.geoapify_key.get_secret_value(), transport),
         musicbrainz=musicbrainz.make_client(transport),
         listenbrainz=listenbrainz.make_client(transport),
+        jev=jev.make_client(settings.typesafe_api_key.get_secret_value(), transport),
         lastfm=lastfm_client,
         spotify_catalog=_catalog_client(settings, transport),
         redis=redis or cache.make_client(settings.redis_url),
@@ -142,6 +144,7 @@ def create_app(
         await services.geocoder.aclose()
         await services.musicbrainz.aclose()
         await services.listenbrainz.aclose()
+        await services.jev.aclose()
         if services.lastfm:
             await services.lastfm.aclose()
         if services.spotify_catalog:

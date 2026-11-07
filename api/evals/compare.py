@@ -10,13 +10,9 @@ import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-from pydantic import ValidationError
-from pydantic_ai.messages import ModelMessagesTypeAdapter, ModelResponse, TextPart
-
 from concert_scout.assemble import MIN_LEVEL
 from concert_scout.models import Concert
-from concert_scout.ranker import Fit, Ranking, tally
-from concert_scout.sources import ticketmaster
+from concert_scout.sources import jev, ticketmaster
 from evals import snapshots
 from evals.snapshots import Snapshot
 
@@ -46,33 +42,24 @@ def _concerts(snapshot: Snapshot) -> dict[str, Concert]:
     return concerts
 
 
-def _fits(snapshot: Snapshot) -> list[Fit]:
-    """The ranker's votes, tallied as the pipeline tallies them. The interpreter's answer is the
-    other kind, and fails to validate.
-    """
-    votes: list[list[Fit]] = []
-    for answer in snapshot.answers.values():
-        for message in ModelMessagesTypeAdapter.validate_json(answer):
-            if not isinstance(message, ModelResponse):
-                continue
-            for part in message.parts:
-                if isinstance(part, TextPart):
-                    try:
-                        votes.append(Ranking.model_validate_json(part.content).fits)
-                    except ValidationError:
-                        continue
-    return tally(votes)
+def _levels(snapshot: Snapshot) -> dict[str, int]:
+    """Jev's recorded grades, by Concert ID. A Snapshot captured before Jev graded has none."""
+    levels: dict[str, int] = {}
+    for key, record in snapshot.records.items():
+        if snapshots.JEV_HOST in key and record.status == 200:
+            levels |= jev.Graded.model_validate_json(record.body).levels()
+    return levels
 
 
 def artists(snapshot: Snapshot) -> dict[str, int]:
-    """Each Artist the model would put on the Poster, with their level."""
+    """Each Artist graded onto the Poster, with their level."""
     concerts = _concerts(snapshot)
     scores: dict[str, int] = {}
-    for fit in _fits(snapshot):
-        concert = concerts.get(fit.id)
-        if concert and fit.level >= MIN_LEVEL:
+    for id_, level in _levels(snapshot).items():
+        concert = concerts.get(id_)
+        if concert and level >= MIN_LEVEL:
             name = concert.artists[0].name if concert.artists else concert.name
-            scores[name] = max(scores.get(name, 0), fit.level)
+            scores[name] = max(scores.get(name, 0), level)
     return scores
 
 

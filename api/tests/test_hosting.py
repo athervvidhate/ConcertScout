@@ -17,6 +17,7 @@ PUBLIC = {
     "tm_key": "unused-test-key",
     "anthropic_api_key": "unused-test-key",
     "geoapify_key": "unused-test-key",
+    "typesafe_api_key": "unused-test-key",
     "redis_url": "rediss://default:private-password@redis.example.com:6379",
     "cors_origins": ["https://concerts.example.com"],
     "turnstile_secret": "private-production-secret",

@@ -17,29 +17,31 @@ flowchart LR
     I --> R[Resolve place and seed Artists]
     R --> P[Pool: Ticketmaster]
     P --> M[Match and shortlist: code]
-    M --> K[Rank IDs and reasons: Haiku]
+    M --> K[Grade IDs: Jev]
     K --> S[Assemble facts from source records]
-    S --> B
+    S --> E[Explain the Poster: Haiku]
+    E --> B
 ```
 
 1. The interpreter, a Claude Haiku call with no tools, turns the Search into named Artists, style tags, a place and dates.
 2. Code geocodes the place and resolves each Artist through MusicBrainz.
 3. Code gathers every Concert for that place and window from Ticketmaster, cached and shared between Searches.
 4. Code scores those Concerts against the Taste, using similar Artists, tags and genres, and keeps up to 40.
-5. The ranker, a second Haiku call, returns IDs, scores and a short reason. It sees short fields, never a date, price or link.
-6. Code drops any ID it does not recognise and fills in every fact from the source record.
+5. Typesafe's Jev grades every shortlisted Artist from 0 to 3 in one request. It sees short fields, never a date, price or link.
+6. Code drops any ID it does not recognise, keeps the best grades and fills in every fact from the source record.
+7. Haiku writes one short reason for each Artist on the Poster.
 
-Each step streams to the browser as it happens, so the page shows real progress. A Search with only a place skips the ranker and lists Concerts by date. If the ranker fails, the Search falls back to the strongest matches from step 4 with a plain reason. Neither path pads a Poster with weak filler.
+Each step streams to the browser as it happens, so the page shows real progress. A Search with only a place skips the ranker and lists Concerts by date. If grading fails, the Search falls back to the strongest matches from step 4 with a plain reason. Neither path pads a Poster with weak filler.
 
 ## Design decisions
 
-The model never handles a fact. It returns IDs and reasons, so it cannot invent a date or change a Ticket link, and a missing time or price stays missing. [ADR 0002](docs/adr/0002-facts-never-pass-through-the-llm.md)
+The models never handle a fact. They return grades by ID and reasons, so it cannot invent a date or change a Ticket link, and a missing time or price stays missing. [ADR 0002](docs/adr/0002-facts-never-pass-through-the-llm.md)
 
 Python owns the agent. FastAPI holds the source calls, secrets, streaming and limits, and the browser talks to it directly. Next.js only draws the interface. [ADR 0001](docs/adr/0001-separate-python-agent-service.md)
 
 Spotify data never reaches a model. A connected account takes its own route, from an encrypted session to exact-name lookups to an attributed shelf, and shares no code path with the agents. [ADR 0003](docs/adr/0003-official-spotify-access-only.md)
 
-Candidate text is untrusted. A listing could contain anything, so neither agent has tools, and listings reach the ranker as quoted fields in a JSON object.
+Candidate text is untrusted. A listing could contain anything, so neither agent has tools, and listings reach Jev and Haiku as quoted fields in a JSON object.
 
 Dates follow the venue. A Concert's time reads on the venue's clock, and it is over when its date passes there. A visitor in another time zone also sees that zone's name.
 
@@ -56,7 +58,7 @@ The labels are not finished, so this project claims no quality score yet. The me
 | Layer | Tools |
 |---|---|
 | Agent service | Python 3.13, FastAPI, Pydantic AI, Pydantic Evals, OpenTelemetry |
-| Model | Claude Haiku 5.5 |
+| Models | Claude Haiku 5.5, Typesafe Jev |
 | Frontend | Next.js 16, React 19, Tailwind 4, coss ui, Motion |
 | Storage | Redis for the cache, limits, spend and encrypted Spotify sessions. The browser keeps Saved Concerts |
 | Hosting | Vercel, with Upstash Redis and Cloudflare Turnstile |

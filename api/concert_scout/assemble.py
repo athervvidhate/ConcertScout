@@ -2,17 +2,16 @@
 
 import logging
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from concert_scout.matching import NARROW_GENRE_WEIGHT, Candidate, Match
 from concert_scout.models import Concert, Recommendation
 from concert_scout.names import normalize
-from concert_scout.ranker import Fit
 
 logger = logging.getLogger(__name__)
 
 POSTER_SIZE = 8
-# A fair suggestion or better. See the levels in ranker.INSTRUCTIONS.
+# A fair suggestion or better. See jev.LEVELS.
 MIN_LEVEL = 2
 # The most a genre alone can score, so with no ranker to drop them, genre fillers never qualify.
 QUALIFYING_SCORE = NARROW_GENRE_WEIGHT
@@ -50,30 +49,31 @@ def _stacked(
     return list(stacked.values())
 
 
-def from_fits(fits: Sequence[Fit], shortlist: Sequence[Candidate]) -> list[Recommendation]:
-    """The best-graded Concerts in the shortlist, with only the reason kept from the model.
+def from_levels(levels: Mapping[str, int], shortlist: Sequence[Candidate]) -> list[Recommendation]:
+    """The best-graded Concerts in the shortlist, each with a neutral reason for now.
 
-    Ties go to the stronger match and then to shortlist order, so the model's level is the only
-    thing that can move a Concert. A seed Artist was asked for by name, so they lead the Poster
-    whatever the model did.
+    Ties go to the stronger match and then to shortlist order, so the grade is the only thing
+    that can move a Concert. A seed Artist was asked for by name, so they lead the Poster
+    whatever their grade.
     """
     position = {candidate.concert.id: n for n, candidate in enumerate(shortlist)}
     concerts = {candidate.concert.id: candidate for candidate in shortlist}
-    # The model sometimes pads its answer with an empty row, which is not a recommendation.
-    good = [
-        fit for fit in fits if fit.id in concerts and fit.level >= MIN_LEVEL and fit.reason.strip()
-    ]
-    unknown = sum(fit.id not in concerts for fit in fits)
+    unknown = sum(id_ not in concerts for id_ in levels)
     if unknown:
         logger.warning("Dropped %d grades with unknown IDs", unknown)
+    good = [id_ for id_, level in levels.items() if id_ in concerts and level >= MIN_LEVEL]
 
-    def order(fit: Fit) -> tuple[int, float, int]:
-        match = concerts[fit.id].match
-        return (-fit.level, -(match.score if match else 0), position[fit.id])
+    def order(id_: str) -> tuple[int, float, int]:
+        match = concerts[id_].match
+        return (-levels[id_], -(match.score if match else 0), position[id_])
 
     chosen = [
-        Recommendation(concert=concerts[f.id].concert, reason=f.reason, score=f.level)
-        for f in sorted(good, key=order)
+        Recommendation(
+            concert=concerts[id_].concert,
+            reason=_reason(concerts[id_]),
+            score=levels[id_],
+        )
+        for id_ in sorted(good, key=order)
     ]
     seeds = [
         Recommendation(concert=candidate.concert, reason=_neutral_reason(match))
@@ -81,7 +81,7 @@ def from_fits(fits: Sequence[Fit], shortlist: Sequence[Candidate]) -> list[Recom
         if (match := candidate.match) and match.signal == "seed"
     ]
     seed_artists = {_headliner(seed.concert) for seed in seeds}
-    # The sort is stable, so a seed the model graded keeps its reason over the neutral one.
+    # The sort is stable, so a graded seed keeps its level over the ungraded copy.
     ordered = sorted([*chosen, *seeds], key=lambda r: _headliner(r.concert) not in seed_artists)
     return _stacked(ordered, shortlist)[:POSTER_SIZE]
 
@@ -104,6 +104,10 @@ def from_notable(shortlist: Sequence[Candidate]) -> list[Recommendation]:
     """A Search with no Taste. The shortlist is already notable and soonest first."""
     chosen = [Recommendation(concert=c.concert, reason=NOTABLE_REASON) for c in shortlist]
     return _stacked(chosen, shortlist)[:POSTER_SIZE]
+
+
+def _reason(candidate: Candidate) -> str:
+    return _neutral_reason(candidate.match) if candidate.match else NOTABLE_REASON
 
 
 def _neutral_reason(match: Match) -> str:

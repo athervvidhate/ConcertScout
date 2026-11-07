@@ -10,7 +10,6 @@ from pydantic_ai import Agent
 from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.messages import (
     ModelMessage,
-    ModelMessagesTypeAdapter,
     ModelResponse,
     TextPart,
 )
@@ -18,7 +17,6 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.usage import RequestUsage
 
 from concert_scout.models import Artist, Concert, Recommendation
-from concert_scout.ranker import Fit, Ranking
 from evals import cases, compare, harness, judge, run, snapshots
 from evals.cases import Search
 from evals.harness import SearchRun
@@ -337,8 +335,9 @@ def compared_snapshot(picks: dict[str, int]) -> Snapshot:
         }
 
     body = {"_embedded": {"events": [event(id_) for id_ in ("a", "b", "c")]}}
-    ranking = Ranking(fits=[Fit(id=i, level=s, reason="Why") for i, s in picks.items()])
-    answer = ModelResponse(parts=[TextPart(ranking.model_dump_json())])
+    level = {str(n): 0.0 for n in range(4)}
+    answers = {i: {"probabilities": level | {str(s): 1.0}} for i, s in picks.items()}
+    grades = {"answers": answers, "usage": {"input_tokens": 1}}
     return Snapshot(
         id="case",
         text="x",
@@ -348,9 +347,12 @@ def compared_snapshot(picks: dict[str, int]) -> Snapshot:
         records={
             "GET https://app.ticketmaster.com/events.json x": Recorded(
                 status=200, content_type="application/json", body=json.dumps(body)
-            )
+            ),
+            "POST https://api.typesafe.ai/v1/systemone? x": Recorded(
+                status=200, content_type="application/json", body=json.dumps(grades)
+            ),
         },
-        answers={"ranker": ModelMessagesTypeAdapter.dump_json([answer]).decode()},
+        answers={},
     )
 
 
@@ -399,3 +401,22 @@ async def test_replay_answers_any_batch_of_recorded_artists() -> None:
     assert [item["artist_mbid"] for item in mixed.json()] == ["a", "c"]
     assert unknown.status_code == 404
     assert len(transport.misses) == 1
+
+
+async def test_a_live_replay_asks_jev_afresh_and_replays_the_rest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def live(_: object, request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"live": request.url.host})
+
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", live)
+    replayed = ReplayTransport(tags_snapshot(), live_grades=True)
+    recorded = ReplayTransport(tags_snapshot())
+    async with httpx.AsyncClient(transport=replayed) as client:
+        grades = await client.post("https://api.typesafe.ai/v1/systemone", json={})
+        other = await client.get("https://api.listenbrainz.org/1/metadata/artist/x")
+    async with httpx.AsyncClient(transport=recorded) as client:
+        offline = await client.post("https://api.typesafe.ai/v1/systemone", json={})
+    assert grades.json() == {"live": "api.typesafe.ai"}
+    assert other.status_code == 404
+    assert offline.status_code == 404

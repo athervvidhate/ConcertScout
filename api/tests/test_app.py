@@ -313,18 +313,30 @@ async def test_a_search_reads_today_in_the_visitors_own_zone(
     assert days == [day]
 
 
-async def test_a_repeated_search_reuses_both_answers_and_shows_the_same_poster() -> None:
+async def test_a_repeated_search_reuses_every_answer_and_shows_the_same_poster(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from pydantic_ai.messages import ModelMessage, ModelResponse
     from pydantic_ai.models.function import AgentInfo, FunctionModel
 
     from concert_scout import ranker
+    from concert_scout.sources import jev
+    from tests.contracts import contract_grades
 
     answer = contract_model().function
     assert answer is not None
     calls: list[str] = []
+    grades = 0
+
+    async def counted_grades(*args: Any) -> dict[str, int]:
+        nonlocal grades
+        grades += 1
+        return await contract_grades(*args)
+
+    monkeypatch.setattr(jev, "grade", counted_grades)
 
     def counted(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
-        calls.append("rank" if info.instructions == ranker.INSTRUCTIONS else "interpret")
+        calls.append("explain" if info.instructions == ranker.REASONS else "interpret")
         return answer(messages, info)  # pyright: ignore[reportReturnType]
 
     app = create_app(
@@ -340,5 +352,39 @@ async def test_a_repeated_search_reuses_both_answers_and_shows_the_same_poster()
 
     poster = [data for name, data in first if name == "poster"]
     assert poster == [data for name, data in second if name == "poster"]
-    assert calls.count("interpret") == 1
-    assert calls.count("rank") == ranker.VOTES
+    assert calls == ["interpret", "explain"]
+    assert grades == 1
+
+
+async def test_failed_reasons_keep_the_grades_and_neutral_reasons(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from concert_scout import ranker
+
+    async def down(*_: object) -> list[str]:
+        raise ranker.RankerError("down")
+
+    monkeypatch.setattr(ranker, "explain", down)
+    async with api_for() as api:
+        body = {"text": "UKG in SF", "token": TOKEN, "time_zone": "UTC"}
+        picks = dict(parse_sse((await api.post("/search", json=body)).text))["poster"]
+    reasons = [(p["concert"]["id"], p["reason"], p["score"]) for p in picks["recommendations"]]
+    assert reasons == [
+        ("contract-one", "Coming up nearby", 3),
+        ("contract-two", "Coming up nearby", 3),
+    ]
+
+
+async def test_failed_grades_show_the_top_matches(monkeypatch: pytest.MonkeyPatch) -> None:
+    from concert_scout.sources import jev
+
+    async def down(*_: object) -> dict[str, int]:
+        raise jev.JevError("HTTPStatusError")
+
+    monkeypatch.setattr(jev, "grade", down)
+    async with api_for() as api:
+        body = {"text": "UKG in SF", "token": TOKEN, "time_zone": "UTC"}
+        events = parse_sse((await api.post("/search", json=body)).text)
+    assert events[-1] == ("done", {})
+    picks = dict(events)["poster"]["recommendations"]
+    assert all("score" not in p for p in picks)

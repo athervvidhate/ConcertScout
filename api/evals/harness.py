@@ -65,6 +65,7 @@ async def run(
             services.geocoder,
             services.musicbrainz,
             services.listenbrainz,
+            services.jev,
             services.lastfm,
             services.spotify_catalog,
             services.turnstile,
@@ -103,6 +104,7 @@ async def capture(case_id: str, text: str, settings: Settings) -> tuple[Snapshot
         settings.tm_key,
         settings.anthropic_api_key,
         settings.geoapify_key,
+        settings.typesafe_api_key,
         settings.lastfm_key,
     ]
     transport = RecordingTransport(secrets=[s.get_secret_value() for s in secrets if s])
@@ -132,11 +134,12 @@ async def replay(
         tm_key=SecretStr("replay"),
         anthropic_api_key=SecretStr("replay"),
         geoapify_key=SecretStr("replay"),
+        typesafe_api_key=SecretStr("replay"),
     )
     settings = settings.model_copy(
         update={"lastfm_key": SecretStr("replay") if snapshot.lastfm_enabled else None}
     )
-    transport = ReplayTransport(snapshot)
+    transport = ReplayTransport(snapshot, live_grades=live != "none")
     model = ReplayModel(real_model(settings), snapshot, live)
     with (
         patch.object(limits, "SLOT_SECONDS", 0.001),
