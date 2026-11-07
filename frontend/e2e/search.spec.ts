@@ -453,7 +453,9 @@ test("every example fits the search box, even on a small phone", async ({page}) 
     const context = document.createElement("canvas").getContext("2d")!;
     context.font = `${placeholder.fontWeight} ${placeholder.fontSize} ${placeholder.fontFamily}`;
     // Canvas measures with a fallback until the web font is in, and fallbacks differ by machine.
-    await document.fonts.load(context.font);
+    // Only the first family: next/font's fallback face is local("Arial"), which Linux lacks.
+    const [webFont] = placeholder.fontFamily.split(",");
+    await document.fonts.load(`${placeholder.fontWeight} ${placeholder.fontSize} ${webFont}`);
     return examples.filter(example => context.measureText(example).width > room);
   }, SEARCH_EXAMPLES);
   expect(clipped).toEqual([]);
