@@ -5,6 +5,7 @@ import httpx
 from redis.asyncio import Redis
 
 from concert_scout import cache
+from concert_scout.aliases import place_name
 from concert_scout.models import Place, Places
 from concert_scout.sources import http
 
@@ -30,7 +31,8 @@ async def geocode(client: httpx.AsyncClient, redis: Redis, text: str) -> Place |
 async def find_places(
     client: httpx.AsyncClient, redis: Redis, text: str, limit: int = 5
 ) -> list[Place]:
-    key = f"geocode:{limit}:{' '.join(text.casefold().split())}"
+    text = place_name(text)
+    key = f"geocode:v2:{limit}:{' '.join(text.casefold().split())}"
     if cached := await cache.read(redis, key, Places):
         return cached.places
 
@@ -54,4 +56,17 @@ async def find_places(
 
 def parse_places(body: dict[str, Any]) -> list[Place]:
     results: list[dict[str, Any]] = body.get("results", [])
-    return [Place(name=r["formatted"], lat=r["lat"], lon=r["lon"]) for r in results]
+    places: list[Place] = []
+    for record in results:
+        state = record.get("result_type") == "state"
+        country = str(record.get("country_code", "")).upper()
+        places.append(
+            Place(
+                name=record["formatted"],
+                lat=record["lat"],
+                lon=record["lon"],
+                state_code=record.get("state_code") if state and country in {"US", "CA"} else None,
+                country_code=country if state and country in {"US", "CA"} else None,
+            )
+        )
+    return places

@@ -17,7 +17,7 @@ from redis.exceptions import RedisError
 
 from concert_scout import cache, interpreter, limits, security
 from concert_scout.config import Settings
-from concert_scout.models import ImportedTaste, Nearby, Places, SearchError
+from concert_scout.models import ImportedTaste, Nearby, SearchError
 from concert_scout.pipeline import ASK_FOR_A_SEARCH, Services, find_nearby, run_search
 from concert_scout.security import Refused, SecurityHeaders
 from concert_scout.sources import geocoder, lastfm, listenbrainz, musicbrainz, ticketmaster
@@ -145,7 +145,7 @@ def create_app(
         ip = security.client_ip(request, settings.client_ip_header)
         try:
             await limits.check_spend(services.redis)
-            await limits.visitor_call(services.redis, "search", ip, limits.SEARCHES_PER_HOUR)
+            await limits.visitor_call(services.redis, "search", ip, settings.searches_per_hour)
         except limits.SpendCapReached as exc:
             message = (
                 "Concert Scout has used its Search budget for now. Nearby Concerts still work."
@@ -180,20 +180,6 @@ def create_app(
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
-
-    @app.get("/places", response_model=Places)
-    async def places(
-        request: Request,
-        text: Annotated[str, Query(min_length=2, max_length=100)],
-    ) -> Places | JSONResponse:
-        await limit_visitor(request, "places", limits.PLACES_PER_HOUR)
-        try:
-            found = await geocoder.find_places(services.geocoder, services.redis, text)
-        except geocoder.GeocoderError as exc:
-            logger.warning("Geocoder failed: %s", exc)
-            message = "We could not look up places. Try again in a minute."
-            return _failure(503, SearchError(code="geocoder_unavailable", message=message))
-        return Places(places=found)
 
     @app.get("/nearby", response_model=Nearby, response_model_exclude_none=True)
     async def nearby(

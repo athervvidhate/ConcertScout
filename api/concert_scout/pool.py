@@ -51,37 +51,56 @@ async def find_concerts(
     Chunks and lookups stay whole in the cache, so any date window can share them.
     """
     first, last = date_window(start, end, today)
-    point = ticketmaster.rounded_point(place) if place else None
-    seeds = await asyncio.gather(*(_artist(client, redis, name, point) for name in artists))
+    state = (
+        (place.country_code, place.state_code)
+        if place and place.country_code and place.state_code
+        else None
+    )
+    point = ticketmaster.rounded_point(place) if place and not state else None
+    scope = ":".join(state) if state else point
+    seeds = await asyncio.gather(*(_artist(client, redis, name, point, state) for name in artists))
     chunks: list[list[Concert]] = []
-    if point:
+    if scope:
         months = month_chunks(first, last)
-        chunks = await asyncio.gather(*(_chunk(client, redis, point, m, today) for m in months))
+        chunks = await asyncio.gather(
+            *(_chunk(client, redis, point, m, today, state) for m in months)
+        )
     concerts = (concert for group in [*seeds, *chunks] for concert in group)
     unique = {c.id: c for c in concerts if c.date and first <= c.date <= last}
     return list(unique.values())
 
 
 async def _chunk(
-    client: httpx.AsyncClient, redis: Redis, point: str, month: dt.date, today: dt.date
+    client: httpx.AsyncClient,
+    redis: Redis,
+    point: str | None,
+    month: dt.date,
+    today: dt.date,
+    state: tuple[str, str] | None,
 ) -> list[Concert]:
-    key = f"pool:{point}:{month:%Y-%m}"
+    scope = ":".join(state) if state else point
+    key = f"pool:{scope}:{month:%Y-%m}"
     if cached := await cache.read(redis, key, CachedConcerts):
         return cached.concerts
     last_day = calendar.monthrange(month.year, month.month)[1]
     concerts = await ticketmaster.find_concerts(
-        client, redis, point, max(month, today), month.replace(day=last_day)
+        client, redis, point, max(month, today), month.replace(day=last_day), state=state
     )
     await cache.write(redis, key, CachedConcerts(concerts=concerts), CACHE_TTL)
     return concerts
 
 
 async def _artist(
-    client: httpx.AsyncClient, redis: Redis, name: str, point: str | None
+    client: httpx.AsyncClient,
+    redis: Redis,
+    name: str,
+    point: str | None,
+    state: tuple[str, str] | None,
 ) -> list[Concert]:
-    key = f"artist:{point or 'anywhere'}:{normalize(name)}"
+    scope = ":".join(state) if state else point
+    key = f"artist:{scope or 'anywhere'}:{normalize(name)}"
     if cached := await cache.read(redis, key, CachedConcerts):
         return cached.concerts
-    concerts = await ticketmaster.find_artist_concerts(client, redis, name, point)
+    concerts = await ticketmaster.find_artist_concerts(client, redis, name, point, state=state)
     await cache.write(redis, key, CachedConcerts(concerts=concerts), CACHE_TTL)
     return concerts

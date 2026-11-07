@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { API_URL, type Concert, type SearchError } from "@/lib/search";
 
-export type Place = { name: string; lat: number; lon: number };
+export type Place = { lat: number; lon: number };
 
 const PLACE_KEY = "concert-scout-place";
 
@@ -13,11 +13,6 @@ async function getJson<T>(path: string, signal: AbortSignal): Promise<T> {
     throw new Error(error.message);
   }
   return response.json();
-}
-
-export async function findPlaces(text: string, signal: AbortSignal): Promise<Place[]> {
-  const query = new URLSearchParams({ text });
-  return (await getJson<{ places: Place[] }>(`/places?${query}`, signal)).places;
 }
 
 export async function findNearby({ lat, lon }: Place, signal: AbortSignal): Promise<Concert[]> {
@@ -39,6 +34,14 @@ export function keepPlace(place: Place): void {
     localStorage.setItem(PLACE_KEY, JSON.stringify(place));
   } catch {
     // Without storage, the visitor only has to choose the place again next time.
+  }
+}
+
+export function forgetPlace(): void {
+  try {
+    localStorage.removeItem(PLACE_KEY);
+  } catch {
+    // Nothing was stored, so there is nothing to forget.
   }
 }
 

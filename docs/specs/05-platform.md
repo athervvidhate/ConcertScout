@@ -40,11 +40,11 @@ The old app forwarded no client IP, so its limit applied to everyone at once. A 
 |---|---|
 | Whole-app model spend | $10 a month. At the cap, Searches stop and home keeps working |
 | Daily model spend | $1 |
-| Per visitor | 10 Searches an hour |
+| Per visitor | 10 Searches an hour, set by `SEARCHES_PER_HOUR` |
 
 Measured cost is about $0.001 to $0.0013 per Search, from captured and live runs, so the $1 daily cap covers about 750 Searches. One visitor at the limit spends at most about $0.31 a day. Revisit this once the 20 judged Searches give a fuller measure.
 
-`SEARCH_ENABLED=false` turns off Search. The spend counter lives in Redis and uses each call's real token counts. Without Redis, spend cannot be counted, so Search refuses rather than risk an unseen overspend, and the home page keeps working. `/nearby` and `/places` have higher hourly limits, and they pass during a Redis outage because they cost no money.
+`SEARCH_ENABLED=false` turns off Search. The spend counter lives in Redis and uses each call's real token counts. Without Redis, spend cannot be counted, so Search refuses rather than risk an unseen overspend, and the home page keeps working. `/nearby` has a higher hourly limit, and it passes during a Redis outage because it costs no money.
 
 ## Observability
 

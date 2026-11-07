@@ -78,5 +78,10 @@ export function useSearch() {
     setState((state) => ({ ...state, phase: "finished", status: null, error, retryable }));
   }, []);
 
-  return { ...state, search };
+  const clear = useCallback(() => {
+    current.current?.abort();
+    setState(IDLE);
+  }, []);
+
+  return { ...state, search, clear };
 }

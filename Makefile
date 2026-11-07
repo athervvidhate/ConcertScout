@@ -1,4 +1,4 @@
-.PHONY: install dev start redis api frontend-dev frontend-start check
+.PHONY: install dev start redis api frontend-dev frontend-start check e2e check-live
 
 install:
 	cd api && uv sync --locked
@@ -28,3 +28,11 @@ frontend-start:
 check:
 	cd api && uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run pytest
 	cd frontend && npm run lint && npm run typecheck && npm test
+
+# Production browser journeys with isolated Redis and domain adapter fixtures.
+e2e:
+	cd frontend && npm run build:e2e && npm run test:e2e
+
+# Explicit network/cost check against the configured real providers.
+check-live:
+	cd api && uv run pytest -m live tests/live

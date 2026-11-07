@@ -15,3 +15,6 @@ make dev                       # or `make start` for the frontend's production b
 ```
 
 Open http://localhost:3000. `make check` runs lint, types and tests for both apps.
+
+
+Testing: `make check` runs fast contracts, `make e2e` runs the production browser journeys at desktop and mobile widths, and `make check-live` opts into real-provider integration checks. See [the testing guide](docs/development/testing.md) for boundaries, setup and failure artifacts.

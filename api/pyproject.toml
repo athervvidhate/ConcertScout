@@ -38,6 +38,8 @@ venv = ".venv"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+addopts = "-m 'not live'"
+markers = ["live: opt-in checks against real external providers, requiring local keys"]
 
 [dependency-groups]
 dev = [

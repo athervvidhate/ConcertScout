@@ -9,6 +9,7 @@ from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.usage import RunUsage
 
+from concert_scout.aliases import music_tag, place_name
 from concert_scout.telemetry import record_usage
 
 MODEL_NAME = "claude-haiku-5-5"
@@ -22,9 +23,17 @@ only as a comparison. "Artists like Tyler Childers", "similar to Four Tet" and "
 all name an Artist. Never add others.
 - descriptors: its own plain words for a sound, mood or style, such as "dreamy guitar".
 - tags: short lowercase music tags for the descriptors, including related styles, because exact \
-tags are sparse. "shoegaze" also gives "dream pop", "noise pop" and "alternative rock". With no \
+tags are sparse. Expand music shorthand: UKG means UK garage, DnB/D&B means drum and bass, \
+EDM means electronic dance music, RnB means R&B. These are styles, not Artists. Keep the \
+specific style in tags alongside related styles. "shoegaze" also gives "dream pop", \
+"noise pop" and "alternative rock". With no \
 descriptors, leave this empty.
-- place: the city, district or region, as written. With no place, use null. Never guess one from \
+- place: the city, district or region. Expand familiar local abbreviations and nicknames to \
+a full place name with its state/country when clear: SF is San Francisco, LA is Los Angeles, \
+PHL is Philadelphia, the Bay is the San Francisco Bay Area, DMV is Washington DC. Preserve \
+explicit qualifiers (LA, Louisiana means Louisiana). Keep a whole state as a state, not its \
+capital. Never invent an expansion of an unfamiliar or ambiguous abbreviation. \
+With no place, use null. Never guess one from \
 an Artist.
 - start and end: the first and last dates the visitor can go, inclusive, and never in the past \
 unless the Search asks for that. A single day has the same start and end. A weekend runs Friday \
@@ -78,4 +87,16 @@ async def interpret(text: str, today: dt.date, model: Model) -> Interpretation:
         raise InterpreterError(type(exc).__name__) from None
     finally:
         record_usage(usage)
-    return result.output
+    output = result.output
+    tags = list(dict.fromkeys(music_tag(tag) for tag in output.tags))
+    # A familiar abbreviation in the descriptors remains useful even if the model omitted tags.
+    for descriptor in output.descriptors:
+        expanded = music_tag(descriptor)
+        if expanded != descriptor.casefold() and expanded not in tags:
+            tags.append(expanded)
+    return output.model_copy(
+        update={
+            "place": place_name(output.place) if output.place else None,
+            "tags": tags,
+        }
+    )

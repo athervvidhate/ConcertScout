@@ -1,5 +1,4 @@
 import datetime as dt
-import json
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -25,7 +24,6 @@ from evals.snapshots import (
     ReplayTransport,
     Snapshot,
 )
-from tests.conftest import tm_body, tm_record
 
 
 def request(url: str, body: bytes = b"") -> httpx.Request:
@@ -94,30 +92,6 @@ async def test_a_recorded_model_answer_replays_with_its_usage_and_a_new_question
     assert len(replay.misses) == 1
 
 
-async def test_a_live_replay_asks_the_real_model() -> None:
-    def answer(_: list[ModelMessage], __: AgentInfo) -> ModelResponse:
-        return ModelResponse(parts=[TextPart("live")])
-
-    replay = ReplayModel(FunctionModel(answer), snapshot_with({}), live=True)
-
-    result = await Agent().run("Chicago", model=replay)
-
-    assert result.output == "live"
-    assert replay.misses == []
-
-
-def test_source_concerts_come_from_ticketmaster_answers_only() -> None:
-    answer = Recorded(
-        status=200, content_type="application/json", body=json.dumps(tm_body(tm_record()))
-    )
-    other = Recorded(status=200, content_type="application/json", body="{}")
-    snapshot = snapshot_with(
-        {"GET https://x/discovery/v2/events.json a": answer, "GET https://y/other b": other}
-    )
-
-    assert [c.id for c in snapshots.source_concerts(snapshot)] == ["vvG18Z_ueUZbii"]
-
-
 def test_label_artists_records_each_answer_and_adds_missed_must_artists() -> None:
     answers = iter(["m", "g", "b", "", "Altın Gün, Men I Trust"])
 
@@ -147,13 +121,6 @@ def test_cases_round_trip_and_only_labelled_searches_count_as_judged(tmp_path: P
     assert loaded[0] == labelled
     assert loaded[0].judged
     assert not loaded[1].judged
-
-
-def test_the_drafted_search_set_holds_twenty_unjudged_searches() -> None:
-    searches = cases.load()
-
-    assert len(searches) == 20
-    assert len({search.id for search in searches}) == 20
 
 
 def scored(measures: Measures, seconds: float | None = 2.0, cost: str = "0.001") -> run.Scored:
