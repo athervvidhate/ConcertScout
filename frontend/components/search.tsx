@@ -4,6 +4,7 @@ import { Button } from "@base-ui/react/button";
 import Link from "next/link";
 import { type SubmitEvent, useState } from "react";
 
+import { NearbyConcerts } from "@/components/nearby";
 import { Poster } from "@/components/poster";
 import { formatInterpreted, formatPosterHeading } from "@/lib/format";
 import { useSearch } from "@/lib/use-search";
@@ -52,6 +53,8 @@ export function Search() {
         <Link href="/saved">Saved Concerts</Link>
       </nav>
 
+      {phase === "idle" && <NearbyConcerts />}
+
       <div aria-live="polite" className="search-context">
         {interpreted && (
           <p title={formatInterpreted(interpreted)}>{formatPosterHeading(interpreted)}</p>
@@ -72,13 +75,13 @@ export function Search() {
         </div>
       )}
 
-      <Poster
+      {phase !== "idle" && <Poster
         candidates={candidates}
         recommendations={recommendations}
         searching={phase === "searching"}
         hasPoster={hasPoster}
         status={status}
-      />
+      />}
     </>
   );
 }

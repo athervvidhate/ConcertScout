@@ -16,6 +16,7 @@ from concert_scout.app import create_app
 from concert_scout.config import Settings
 from concert_scout.matching import SHORTLIST_SIZE
 from tests.conftest import (
+    CHICAGO,
     TYLER_MBID,
     UPCOMING,
     geoapify_result,
@@ -26,6 +27,7 @@ from tests.conftest import (
     mb_artist,
     model_returning,
     tm_body,
+    tm_record,
     upcoming_record,
 )
 
@@ -537,3 +539,66 @@ async def test_cors_allows_only_listed_origins(api: httpx.AsyncClient) -> None:
 
     assert allowed.headers["access-control-allow-origin"] == ALLOWED_ORIGIN
     assert "access-control-allow-origin" not in refused.headers
+
+
+NOTABLE = {"externalLinks": {"musicbrainz": [{"id": TYLER_MBID}]}, "name": "Khruangbin"}
+
+
+def nearby_record() -> dict[str, Any]:
+    return upcoming_record(
+        _embedded={**tm_record()["_embedded"], "attractions": [NOTABLE]},
+    )
+
+
+async def test_nearby_returns_notable_concerts_and_never_calls_a_model() -> None:
+    async def fail(_: list[ModelMessage], __: AgentInfo) -> ModelResponse:
+        raise AssertionError("the home page must not call a model")
+
+    handler = routed(ticketmaster=tm_body(nearby_record()))
+    async with api_for(handler, FunctionModel(fail)) as api:
+        response = await api.get("/nearby", params={"lat": 41.87, "lon": -87.62})
+
+    assert response.status_code == 200
+    concert = response.json()["concerts"][0]
+    assert concert["name"] == "Khruangbin: The Ether Tour"
+    assert "time" in concert
+    assert concert["artists"][0]["name"] == "Khruangbin"
+
+
+async def test_nearby_never_falls_back_on_the_client_ip(api: httpx.AsyncClient) -> None:
+    response = await api.get("/nearby", headers={"X-Forwarded-For": "8.8.8.8"})
+
+    assert response.status_code == 422
+    assert response.json() == {"code": "invalid_place", "message": "Choose a place."}
+
+
+@pytest.mark.parametrize("params", [{"lat": 91, "lon": 0}, {"lat": 0, "lon": 181}])
+async def test_nearby_refuses_impossible_coordinates(
+    api: httpx.AsyncClient, params: dict[str, int]
+) -> None:
+    assert (await api.get("/nearby", params=params)).status_code == 422
+
+
+async def test_a_ticketmaster_failure_on_nearby_gets_a_safe_error() -> None:
+    async with api_for(routed(tm_status=500)) as api:
+        response = await api.get("/nearby", params={"lat": 41.87, "lon": -87.62})
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "ticketmaster_unavailable"
+    assert "test-key" not in response.text
+
+
+async def test_places_lists_matches_and_keeps_the_key_on_the_server() -> None:
+    async with api_for(routed()) as api:
+        response = await api.get("/places", params={"text": "Chi"})
+
+    assert response.json()["places"][0]["lat"] == CHICAGO.lat
+    assert "test-key" not in response.text
+
+
+async def test_a_geocoder_failure_on_places_gets_a_safe_error() -> None:
+    async with api_for(routed(geo_status=500)) as api:
+        response = await api.get("/places", params={"text": "Chi"})
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "geocoder_unavailable"

@@ -100,6 +100,7 @@ Code rejects any ID not in the shortlist, sorts by score, cuts to 8 and fills in
 ```
 GET  /health
 GET  /nearby?lat=&lon=
+GET  /places?text=      place autocomplete, so the Geoapify key stays on the server
 POST /search            streams SSE
 GET  /auth/spotify/login
 GET  /auth/spotify/callback

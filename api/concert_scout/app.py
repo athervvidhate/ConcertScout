@@ -1,9 +1,11 @@
+import datetime as dt
+import logging
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -12,11 +14,17 @@ from pydantic import BaseModel, StringConstraints
 from pydantic_ai.models import Model
 from redis.asyncio import Redis
 
-from concert_scout import cache, interpreter
+from concert_scout import cache, interpreter, limits
 from concert_scout.config import Settings
-from concert_scout.models import SearchError
-from concert_scout.pipeline import ASK_FOR_A_SEARCH, Services, run_search
+from concert_scout.models import Nearby, Places, SearchError
+from concert_scout.pipeline import ASK_FOR_A_SEARCH, Services, find_nearby, run_search
 from concert_scout.sources import geocoder, lastfm, listenbrainz, musicbrainz, ticketmaster
+
+logger = logging.getLogger(__name__)
+
+
+def _failure(status: int, error: SearchError) -> JSONResponse:
+    return JSONResponse(error.model_dump(exclude_none=True), status_code=status)
 
 
 class SearchRequest(BaseModel):
@@ -72,13 +80,45 @@ def create_app(
     )
 
     @app.exception_handler(RequestValidationError)
-    async def invalid_search(_: Request, __: RequestValidationError) -> JSONResponse:
-        error = SearchError(code="invalid_search", message=ASK_FOR_A_SEARCH)
-        return JSONResponse(error.model_dump(exclude_none=True), status_code=422)
+    async def invalid_request(request: Request, _: RequestValidationError) -> JSONResponse:
+        if request.url.path == "/search":
+            return _failure(422, SearchError(code="invalid_search", message=ASK_FOR_A_SEARCH))
+        return _failure(422, SearchError(code="invalid_place", message="Choose a place."))
 
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/places", response_model=Places)
+    async def places(
+        text: Annotated[str, Query(min_length=2, max_length=100)],
+    ) -> Places | JSONResponse:
+        try:
+            found = await geocoder.find_places(services.geocoder, services.redis, text)
+        except geocoder.GeocoderError as exc:
+            logger.warning("Geocoder failed: %s", exc)
+            message = "We could not look up places. Try again in a minute."
+            return _failure(503, SearchError(code="geocoder_unavailable", message=message))
+        return Places(places=found)
+
+    @app.get("/nearby", response_model=Nearby, response_model_exclude_none=True)
+    async def nearby(
+        lat: Annotated[float, Query(ge=-90, le=90)],
+        lon: Annotated[float, Query(ge=-180, le=180)],
+    ) -> Nearby | JSONResponse:
+        try:
+            concerts = await find_nearby(lat, lon, services, dt.date.today())
+        except limits.DailyLimitReached as exc:
+            message = "We have used today's Ticketmaster allowance. Try again tomorrow."
+            error = SearchError(
+                code="ticketmaster_limit", message=message, retry_after=exc.retry_after
+            )
+            return _failure(429, error)
+        except ticketmaster.TicketmasterError as exc:
+            logger.warning("Ticketmaster failed: %s", exc)
+            message = "Ticketmaster is not responding. Try again in a minute."
+            return _failure(503, SearchError(code="ticketmaster_unavailable", message=message))
+        return Nearby(concerts=concerts)
 
     @app.post("/search", response_class=EventSourceResponse)
     async def search(search: SearchRequest) -> AsyncIterator[ServerSentEvent]:

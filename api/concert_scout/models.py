@@ -67,6 +67,14 @@ class SimilarArtist(BaseModel):
     score: float
 
 
+class Places(BaseModel):
+    places: list[Place]
+
+
+class Nearby(BaseModel):
+    concerts: list[Concert]
+
+
 class Status(BaseModel):
     step: str
     message: str
