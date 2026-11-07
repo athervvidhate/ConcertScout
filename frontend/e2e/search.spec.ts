@@ -69,6 +69,8 @@ test("Search preserves source facts and distinct Concerts; Save survives navigat
 });
 
 test("empty Searches never flash a candidate wall or invent a Ticket", async ({ page }) => {
+  // A failed cold-start wake-up must never prevent a later Search.
+  await page.route("**/health", route => route.abort("failed"));
   await page.goto("/");
   await observeNames(page);
   await search(page, "empty UKG in SF");

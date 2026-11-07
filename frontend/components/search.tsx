@@ -13,6 +13,7 @@ import { useSpotifyConnection } from "@/lib/spotify";
 import { TastePanel } from "@/components/taste-panel";
 import { formatInterpreted, formatPosterHeading } from "@/lib/format";
 import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/nearby";
+import { API_URL } from "@/lib/search";
 import { useSearchExample } from "@/lib/search-examples";
 import { useImportedTaste } from "@/lib/taste";
 import { useSearch } from "@/lib/use-search";
@@ -51,7 +52,15 @@ export function Search() {
 
   useEffect(() => {
     const timer = setTimeout(() => setPlace(readPlace()), 0);
-    return () => clearTimeout(timer);
+    // Wake the Python function while the visitor reads/types; never delay the Search box.
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), 5000);
+    void fetch(`${API_URL}/health`, {signal: controller.signal}).catch(() => {});
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(deadline);
+      controller.abort();
+    };
   }, []);
 
   // The browser asks the visitor first, and only after this button is pressed.
