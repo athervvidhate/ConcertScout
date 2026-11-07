@@ -44,7 +44,7 @@ Saved Concerts live in `localStorage`, so they need no account and stay on one d
 
 ## Spotify shelf
 
-An allowlisted visitor who connects Spotify sees a separate dark shelf beneath the Poster, listing Concerts by their own top Artists. Spec in [03-taste](03-taste.md).
+An allowlisted visitor who connects Spotify sees a separate dark shelf beneath the Poster, listing Concerts by their own Artists. Before a Search, the shelf shows those Artists near a shared location for the next two months. Spec in [03-taste](03-taste.md).
 
 ## Errors
 

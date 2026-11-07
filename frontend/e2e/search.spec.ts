@@ -199,7 +199,7 @@ test("Spotify has its own shelf, never enters Search Taste, and disconnect remov
   const sent = await request;
   expect(sent.postDataJSON().taste).toEqual([]);
   expect(sent.headers().cookie ?? "").not.toContain("concert_scout_spotify");
-  const shelf = page.getByRole("region", {name: "Concerts from your Spotify top Artists"});
+  const shelf = page.getByRole("region", {name: "Concerts from your Spotify Artists"});
   await expect(shelf.locator(".spotify-artist")).toHaveCount(2);
   await expect(shelf.getByRole("img", {name: "Spotify", exact: true})).toBeVisible();
   await expect(shelf.locator(".spotify-artist").first()).toHaveAttribute("href", "https://open.spotify.com/artist/contract");
@@ -221,6 +221,43 @@ test("Make it yours leads to Connect Spotify inside Your Taste", async ({ page }
   await expect(yours).toContainText("connecting Spotify");
   await yours.getByRole("button", {name: "Add your Taste"}).click();
   await expect(page.getByRole("dialog", {name: "Your Taste"}).getByRole("link", {name: "Connect Spotify"})).toBeVisible();
+});
+
+test("a connected home page shows the shelf near a shared location", async ({ page, context }) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({latitude: 37.77, longitude: -122.42});
+  await page.goto(await spotifyCallback(context, "account-code"));
+  const shelf = page.getByRole("region", {name: "Concerts from your Spotify Artists"});
+  await expect(shelf).toContainText("Share your location");
+  const request = page.waitForRequest(r => r.url().includes("/auth/spotify/shelf?"));
+  await shelf.getByRole("button", {name: "Use my location"}).click();
+  const sent = new URL((await request).url());
+  expect(sent.searchParams.get("lat")).toBe("37.77");
+  expect(sent.searchParams.get("end")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  await expect(shelf).toContainText("Near you in the next two months");
+  await expect(shelf.locator(".spotify-artist").first()).toBeVisible();
+  await noOverflow(page);
+});
+
+test("the shelf opens with 5 Concerts and shows more on request", async ({ page, context }) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({latitude: 37.77, longitude: -122.42});
+  await page.route("**/auth/spotify/shelf?*", async route => {
+    const response = await route.fetch();
+    const [first] = (await response.json()).concerts;
+    const concerts = Array.from({length: 12}, (_, n) => ({...first, concert: {...first.concert, id: `shelf-${n}`}}));
+    await route.fulfill({response, json: {concerts}});
+  });
+  await page.goto(await spotifyCallback(context, "account-code"));
+  const shelf = page.getByRole("region", {name: "Concerts from your Spotify Artists"});
+  await shelf.getByRole("button", {name: "Use my location"}).click();
+  await expect(shelf.locator(".spotify-artist")).toHaveCount(5);
+  await shelf.getByRole("button", {name: "Show 5 more"}).click();
+  await expect(shelf.locator(".spotify-artist")).toHaveCount(10);
+  await shelf.getByRole("button", {name: "Show 2 more"}).click();
+  await expect(shelf.locator(".spotify-artist")).toHaveCount(12);
+  await expect(shelf.getByRole("button", {name: /more/})).toHaveCount(0);
+  await noOverflow(page);
 });
 
 test("a visitor can report a Search with its results", async ({ page }) => {

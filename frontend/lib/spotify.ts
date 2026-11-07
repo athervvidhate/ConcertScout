@@ -4,7 +4,7 @@ import { API_URL } from "@/lib/search";
 
 const ROOT = `${API_URL}/auth/spotify`;
 const MESSAGES: Record<string, string> = {
-  connected: "Spotify connected. Your top Artists have their own shelf.",
+  connected: "Spotify connected. Your Artists have their own shelf.",
   not_allowed: "This Spotify account is not on the app's invite list. Use a history file or another Taste import instead.",
   unavailable: "Spotify could not connect. Try again soon.",
   cancelled: "Spotify connection cancelled.",

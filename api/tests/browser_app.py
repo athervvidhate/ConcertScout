@@ -70,11 +70,20 @@ async def exchange(code: str) -> Credentials:
 async def artists(token: Credentials) -> list[SpotifyArtist]:
     if token.access_token.get_secret_value() == "denied":
         raise not_allowed()
-    return [SpotifyArtist(name="Contract Artist", url="https://open.spotify.com/artist/contract")]
+    return [
+        SpotifyArtist(
+            name="Contract Artist", url="https://open.spotify.com/artist/contract", source="top"
+        )
+    ]
+
+
+async def check(token: Credentials) -> None:
+    await artists(token)
 
 
 patch.setattr(Client, "exchange", AsyncMock(side_effect=exchange))
 patch.setattr(Client, "artists", AsyncMock(side_effect=artists))
+patch.setattr(Client, "check", AsyncMock(side_effect=check))
 patch.setattr(resend, "send", AsyncMock())
 
 app = create_app(

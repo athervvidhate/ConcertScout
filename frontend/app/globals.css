@@ -191,6 +191,10 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid cur
 .spotify-shelf header img { width:110px; height:auto; flex-shrink:0; }
 .spotify-shelf h2 { font:700 clamp(22px,3vw,32px) var(--font-ui),sans-serif; margin:0; }
 .spotify-shelf p { margin:6px 0 12px; }
+.spotify-more { display:block; width:100%; min-height:48px; margin-top:20px; border:1px solid #FFD3E4; border-radius:8px; background:none; color:inherit; font:700 18px var(--font-ui),sans-serif; cursor:pointer; }
+.spotify-more:hover { background:#FFD3E41F; }
+.spotify-locate button { min-height:48px; padding:0 20px; border:0; border-radius:8px; background:#FFD3E4; color:#10291F; font:700 18px var(--font-ui),sans-serif; cursor:pointer; }
+.spotify-locate button:hover { background:#fff; }
 .spotify-shelf ul { list-style:none; padding:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:20px; }
 .spotify-shelf li { border-top:1px solid #FFD3E466; padding-top:12px; min-width:0; overflow-wrap:anywhere; }
 .spotify-shelf a { color:inherit; min-height:44px; display:inline-flex; align-items:center; text-decoration:underline; }
