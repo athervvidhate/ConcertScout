@@ -14,7 +14,7 @@ cp api/.env.example api/.env
 make dev
 ```
 
-Open **http://127.0.0.1:3000**. The API runs without reload on port 8000 and uses real Redis, source APIs, limits and spend counters. `make start` builds and serves the production frontend instead. `make phone` does the same and prints an address for a phone on your network. Over plain HTTP, phones block location and Spotify refuses the sign-in redirect, so test those on an HTTPS deployment. Keys stay on the API server and out of git.
+Open **http://127.0.0.1:3000**. The API runs without reload on port 8000 and uses real Redis, source APIs, limits and spend counters. `make start` builds and serves the production frontend instead. `make phone` does the same and prints an address for a phone on your network. Over plain HTTP, phones block location and Spotify refuses the sign-in redirect, so test those on an HTTPS deployment. For `make dev` through an HTTPS tunnel such as Tailscale Serve, set `DEV_ORIGINS` to the tunnel host, because Next blocks dev scripts requested from any other host. Keys stay on the API server and out of git.
 
 Try `Tame Impala in London next summer`, `Dreamy bands in SoCal next month`, or a city on its own. The empty input rotates through examples. The location button asks for browser location only when pressed, and later Searches with no place look near it. Open an Artist from a Ticket for their Spotify link, top songs and similar Artists. Import Last.fm/ListenBrainz Taste or a local history file/list through Your Taste.
 
