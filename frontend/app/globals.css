@@ -156,3 +156,26 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid cur
 .spotify-shelf span { display:block; font-size:14px; }
 .spotify-tickets { font-weight:700; }
 @media(max-width:560px) { .spotify-shelf { padding:20px; } .spotify-shelf header { align-items:flex-start; flex-direction:column; } }
+
+.site-footer { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:8px 24px; padding:12px 20px 20px; font:600 15px var(--font-ui),sans-serif; }
+.site-footer a { display:inline-flex; align-items:center; min-height:44px; color:inherit; text-underline-offset:3px; }
+.information { text-align:left; }
+.information::before { animation:none; opacity:.35; }
+.information > header,.information article { max-width:72ch; margin-inline:auto; }
+.information > header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:24px 0; }
+.information h1 { font:700 clamp(34px,6vw,60px) var(--font-ui),sans-serif; margin:0; }
+.information > header a { display:inline-flex; align-items:center; min-height:44px; flex-shrink:0; }
+.information article { font:500 18px/1.65 var(--font-body),sans-serif; padding-bottom:24px; }
+.information h2 { font:700 25px/1.3 var(--font-ui),sans-serif; margin:32px 0 10px; }
+.information p { margin:0 0 18px; }
+.information a { color:inherit; text-underline-offset:3px; }
+.information li { margin-bottom:10px; }
+.information-date { font-size:14px; margin-top:28px; }
+.source-credits { margin:28px 0; }
+.source-credits > div { border-top:1px solid #10291f55; padding:18px 0; }
+.source-credits dt { font:700 25px var(--font-ui),sans-serif; margin-bottom:8px; }
+.source-credits dd { margin:0; }
+.spotify-credit { padding:24px; background:#10291F; color:#FFD3E4; border-radius:10px; margin:28px 0; }
+.spotify-credit img { margin-bottom:20px; width:110px; height:auto; }
+.spotify-credit a { display:inline-flex; align-items:center; min-height:44px; }
+@media(max-width:560px) { .information > header { align-items:flex-start; flex-direction:column; gap:4px; } .information article { font-size:17px; } }

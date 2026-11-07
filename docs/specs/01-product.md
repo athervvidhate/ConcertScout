@@ -2,7 +2,7 @@
 
 ## Home
 
-The home page shows Concerts near the visitor without any LLM call, so it costs nothing and loads at once. The visitor picks a place with autocomplete or allows browser location. We never infer a place from an IP address.
+The home page shows Concerts near the visitor without any LLM call, so it costs nothing and loads at once. The visitor types a place in the main Search box or allows browser location. We never infer a place from an IP address.
 
 A single search box sits at the top. It takes plain text such as "Something like Khruangbin in Chicago, next two weekends".
 
