@@ -56,12 +56,13 @@ export type SearchEvent =
 export async function* streamSearch(
   text: string,
   token: string,
+  taste: string[],
   signal: AbortSignal,
 ): AsyncGenerator<SearchEvent> {
   const response = await fetch(`${API_URL}/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, token }),
+    body: JSON.stringify({ text, token, taste }),
     signal,
   });
   if (!response.ok || !response.body) {

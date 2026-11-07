@@ -42,7 +42,7 @@ export function useSearch() {
 
   useEffect(() => () => current.current?.abort(), []);
 
-  const search = useCallback(async (text: string, token: string) => {
+  const search = useCallback(async (text: string, token: string, taste: string[]) => {
     current.current?.abort();
     const controller = new AbortController();
     current.current = controller;
@@ -52,7 +52,7 @@ export function useSearch() {
     let error: string | null = null;
     let retryable = true;
     try {
-      for await (const { event, data } of streamSearch(text, token, controller.signal)) {
+      for await (const { event, data } of streamSearch(text, token, taste, controller.signal)) {
         if (event === "status") {
           setState((state) => ({ ...state, status: data.message }));
         } else if (event === "interpreted") {

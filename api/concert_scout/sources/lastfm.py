@@ -14,10 +14,20 @@ BASE_URL = "https://ws.audioscrobbler.com/2.0"
 CACHE_TTL = dt.timedelta(days=7)
 LIMIT = 50
 ARTIST_NOT_FOUND = 6
+USER_NOT_FOUND = 6
+PRIVATE_USER = 17
 
 
 class LastfmError(Exception):
     """Last.fm failed. The message never holds the request URL, which carries the API key."""
+
+
+class UserNotFound(Exception):
+    """No Last.fm account has that username."""
+
+
+class PrivateUser(Exception):
+    """The account hides its listening."""
 
 
 class CachedSimilar(BaseModel):
@@ -56,6 +66,26 @@ async def similar_artists(
 
     await cache.write(redis, key, CachedSimilar(artists=artists), CACHE_TTL)
     return artists
+
+
+async def top_artists(client: httpx.AsyncClient, username: str, limit: int) -> list[str]:
+    """A person's Artists, most played first. This stays uncached: a Taste is theirs alone."""
+    params = {"method": "user.getTopArtists", "user": username, "limit": limit}
+    try:
+        response = await client.get("/", params=params)
+        body = response.json()
+        if body.get("error") == USER_NOT_FOUND:
+            raise UserNotFound
+        if body.get("error") == PRIVATE_USER:
+            raise PrivateUser
+        response.raise_for_status()
+        return [artist["name"] for artist in body["topartists"]["artist"]]
+    except httpx.HTTPStatusError as exc:
+        raise LastfmError(f"status {exc.response.status_code}") from None
+    except httpx.HTTPError as exc:
+        raise LastfmError(type(exc).__name__) from None
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise LastfmError(f"unreadable response: {type(exc).__name__}") from None
 
 
 def parse_similar(body: dict[str, Any]) -> list[SimilarArtist]:

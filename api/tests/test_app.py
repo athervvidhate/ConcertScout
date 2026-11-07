@@ -832,3 +832,133 @@ async def test_every_response_carries_the_security_headers(api: httpx.AsyncClien
     assert "max-age" in response.headers["strict-transport-security"]
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["referrer-policy"] == "no-referrer"
+
+
+def steps_of(response: httpx.Response) -> list[str]:
+    return [data["step"] for name, data in parse_sse(response.text) if name == "status"]
+
+
+def lastfm_top(*names: str) -> dict[str, Any]:
+    return {"topartists": {"artist": [{"name": name, "playcount": "9"} for name in names]}}
+
+
+def lastfm_api(status: int, body: dict[str, Any]) -> Handler:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, json=body)
+
+    return handler
+
+
+async def test_a_lastfm_import_returns_top_artists_and_keeps_nothing() -> None:
+    redis = FakeAsyncRedis()
+    handler = lastfm_api(200, lastfm_top("Khruangbin", "Tyler Childers"))
+
+    async with api_for(handler, redis=redis, lastfm_key="key") as api:
+        response = await api.post("/taste/lastfm", json={"username": "someone"})
+
+    assert response.json() == {"artists": ["Khruangbin", "Tyler Childers"]}
+    assert await redis.dbsize() == 1  # pyright: ignore[reportUnknownMemberType]
+
+
+async def test_a_listenbrainz_import_returns_top_artists() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        body = {"payload": {"artists": [{"artist_name": "Röyksopp", "listen_count": 9}]}}
+        return httpx.Response(200, json=body)
+
+    async with api_for(handler) as api:
+        response = await api.post("/taste/listenbrainz", json={"username": "a/b"})
+
+    assert response.json() == {"artists": ["Röyksopp"]}
+    assert requests[0].url.raw_path.startswith(b"/1/stats/user/a%2Fb/artists")
+
+
+@pytest.mark.parametrize(
+    ("source", "status", "body", "expected_status", "code"),
+    [
+        ("lastfm", 404, {"error": 6, "message": "User not found"}, 404, "taste_user_not_found"),
+        ("lastfm", 403, {"error": 17, "message": "Login required"}, 403, "taste_private"),
+        ("lastfm", 500, {"error": 8, "message": "Backend"}, 503, "taste_unavailable"),
+        ("lastfm", 200, lastfm_top(), 404, "taste_empty"),
+        ("listenbrainz", 404, {}, 404, "taste_user_not_found"),
+        ("listenbrainz", 500, {}, 503, "taste_unavailable"),
+    ],
+)
+async def test_a_failed_import_says_why_and_never_echoes_the_username(
+    source: str, status: int, body: dict[str, Any], expected_status: int, code: str
+) -> None:
+    async with api_for(lastfm_api(status, body), lastfm_key="key") as api:
+        response = await api.post(f"/taste/{source}", json={"username": "private-person"})
+
+    assert response.status_code == expected_status
+    assert response.json()["code"] == code
+    assert "private-person" not in response.text
+
+
+async def test_a_listenbrainz_account_without_stats_yet_has_nothing_to_import() -> None:
+    async with api_for(lambda _: httpx.Response(204)) as api:
+        response = await api.post("/taste/listenbrainz", json={"username": "new"})
+
+    assert response.json()["code"] == "taste_empty"
+
+
+async def test_a_blank_username_is_refused(api: httpx.AsyncClient) -> None:
+    response = await api.post("/taste/listenbrainz", json={"username": "  "})
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "invalid_username"
+
+
+async def test_lastfm_import_without_a_key_is_unavailable(api: httpx.AsyncClient) -> None:
+    response = await api.post("/taste/lastfm", json={"username": "someone"})
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "taste_unavailable"
+
+
+async def test_an_import_changes_the_poster_for_a_search_with_only_a_place() -> None:
+    handler = routed(musicbrainz={"artists": []})
+    place_only = interpretation(place="Chicago")
+
+    async with api_for(handler, model_returning(place_only, place_only)) as api:
+        response_without = await api.post("/search", json=search_json())
+        response_with = await api.post("/search", json={**search_json(), "taste": ["Khruangbin"]})
+
+    assert "match" not in steps_of(response_without)
+    assert "match" in steps_of(response_with)
+    assert dict(parse_sse(response_with.text))["interpreted"]["artists"] == ["Khruangbin"]
+
+
+async def test_a_typed_taste_beats_the_import() -> None:
+    model = model_returning(interpretation(place="Chicago", tags=["jazz"]))
+
+    async with api_for(routed(tm_body()), model) as api:
+        response = await api.post("/search", json={**search_json(), "taste": ["Khruangbin"]})
+
+    assert dict(parse_sse(response.text))["interpreted"] == {"place": "Chicago", "artists": []}
+
+
+async def test_only_the_top_of_a_long_import_costs_lookups() -> None:
+    requests: list[httpx.Request] = []
+    respond = routed(tm_body(), musicbrainz={"artists": []})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return respond(request)
+
+    names = [f"Artist {n}" for n in range(50)]
+    async with api_for(handler) as api:
+        await api.post("/search", json={**search_json(), "taste": names})
+
+    hits = [r for r in requests if r.url.host == "musicbrainz.org"]
+    assert len(hits) == pipeline.IMPORTED_SEEDS
+
+
+async def test_a_taste_over_the_cap_is_refused(api: httpx.AsyncClient) -> None:
+    names = [f"Artist {n}" for n in range(101)]
+
+    response = await api.post("/search", json={**search_json(), "taste": names})
+
+    assert response.status_code == 422

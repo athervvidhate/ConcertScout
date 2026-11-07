@@ -4,6 +4,7 @@ import logging
 from collections.abc import Sequence
 from itertools import batched
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from pydantic import BaseModel
@@ -16,6 +17,8 @@ from concert_scout.sources import http
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.listenbrainz.org/1"
+NOT_FOUND = 404
+NO_CONTENT = 204
 # An unsupported Labs API with one live algorithm, so anything calling it needs a fallback.
 SIMILAR_URL = "https://labs.api.listenbrainz.org/similar-artists/json"
 ALGORITHM = "session_based_days_9000_session_300_contribution_5_threshold_15_limit_50_skip_30"
@@ -25,6 +28,10 @@ CACHE_TTL = dt.timedelta(days=7)
 
 class ListenBrainzError(Exception):
     """ListenBrainz failed."""
+
+
+class UserNotFound(Exception):
+    """No ListenBrainz account has that username."""
 
 
 class CachedSimilar(BaseModel):
@@ -102,6 +109,27 @@ def parse_tags(body: list[dict[str, Any]]) -> dict[str, list[str]]:
         record["artist_mbid"]: [tag["tag"] for tag in record.get("tag", {}).get("artist", [])]
         for record in body
     }
+
+
+async def top_artists(client: httpx.AsyncClient, username: str, limit: int) -> list[str]:
+    """A person's Artists, most played first. This stays uncached: a Taste is theirs alone."""
+    url = f"/stats/user/{quote(username, safe='')}/artists"
+    params = {"count": str(limit), "range": "all_time"}
+    try:
+        response = await client.get(url, params=params)
+        if response.status_code == NOT_FOUND:
+            raise UserNotFound
+        response.raise_for_status()
+        # ListenBrainz answers 204 until it has worked out a new account's stats.
+        if response.status_code == NO_CONTENT:
+            return []
+        return [artist["artist_name"] for artist in response.json()["payload"]["artists"]]
+    except httpx.HTTPStatusError as exc:
+        raise ListenBrainzError(f"status {exc.response.status_code}") from None
+    except httpx.HTTPError as exc:
+        raise ListenBrainzError(type(exc).__name__) from None
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ListenBrainzError(f"unreadable response: {type(exc).__name__}") from None
 
 
 async def _get(client: httpx.AsyncClient, url: str, params: dict[str, str]) -> Any:

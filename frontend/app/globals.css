@@ -61,6 +61,16 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid cur
 .decision-status { font:500 16px var(--font-body),sans-serif; margin-top:10px; }
 .ticket-drag { width:min(100%,940px); margin:0 auto; cursor:grab; } .ticket-drag:active { cursor:grabbing; } .ticket-drag .ticket { width:100%; }
 .ticket-hint { margin:10px 0 0; font:500 15px var(--font-body),sans-serif; }
+.taste-import { max-width:640px; margin:4px auto 0; font:500 16px/1.4 var(--font-body),sans-serif; }
+.taste-import summary { min-height:44px; display:flex; align-items:center; justify-content:center; font-weight:600; text-decoration:underline; cursor:pointer; list-style:none; }
+.taste-import form { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; justify-content:center; padding:4px 0 12px; }
+.taste-import label { display:grid; gap:2px; font-weight:600; }
+.taste-import select,.taste-import input { min-height:44px; padding:0 10px; border:2px solid #10291F; border-radius:8px; background:#FFD3E4; color:#10291F; font:inherit; }
+.taste-import form button { min-height:44px; padding:0 16px; border:0; border-radius:8px; background:#10291F; color:#FFD3E4; font-weight:700; }
+.taste-import form button:disabled { opacity:.55; }
+section.taste-import { display:flex; flex-wrap:wrap; gap:4px 12px; align-items:center; justify-content:center; text-align:center; }
+section.taste-import p { margin:0; }
+section.taste-import button { min-height:44px; padding:0 4px; border:0; background:none; color:inherit; font-weight:700; text-decoration:underline; }
 .bot-check { display:flex; justify-content:center; }
 .search-nav { display:flex; justify-content:flex-end; max-width:1100px; margin:4px auto 0; font:600 16px var(--font-body),sans-serif; }
 .search-nav a,.saved-header a { display:inline-flex; align-items:center; min-height:44px; padding:0 4px; text-decoration:underline; }

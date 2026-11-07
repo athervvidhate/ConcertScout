@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Search } from "@/components/search";
 import type { Concert } from "@/lib/search";
+import { keepTaste } from "@/lib/taste";
 
 const full: Concert = {
   id: "1",
@@ -131,7 +132,7 @@ describe("Search", () => {
     ).toBeTruthy();
     const [url, init] = fetchStub.mock.calls[0];
     expect(url).toBe("http://127.0.0.1:8000/search");
-    expect(init.body).toBe(JSON.stringify({ text, token: "test-token" }));
+    expect(init.body).toBe(JSON.stringify({ text, token: "test-token", taste: [] }));
   });
 
   it("leaves a missing time and price blank", async () => {
@@ -173,7 +174,7 @@ describe("Search", () => {
     await user.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByRole("link", { name: `Tickets for ${full.name}` })).toBeTruthy();
-    expect(fetchStub.mock.calls[0][1].body).toBe(JSON.stringify({ text: "Chicago", token: "test-token" }));
+    expect(fetchStub.mock.calls[0][1].body).toBe(JSON.stringify({ text: "Chicago", token: "test-token", taste: [] }));
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -218,7 +219,16 @@ describe("refused Searches", () => {
     await searchFor("Chicago");
 
     await screen.findByRole("button", { name: "Find concerts" });
-    expect(JSON.parse(fetchStub.mock.calls[0][1].body)).toEqual({ text: "Chicago", token: "test-token" });
+    expect(JSON.parse(fetchStub.mock.calls[0][1].body)).toEqual({ text: "Chicago", token: "test-token", taste: [] });
+  });
+
+  it("sends the imported Taste with the Search", async () => {
+    keepTaste({ source: "lastfm", username: "someone", artists: ["Khruangbin"] });
+    const fetchStub = stubStream(sse("done", {}));
+    await searchFor("Chicago");
+
+    await screen.findByRole("button", { name: "Find concerts" });
+    expect(JSON.parse(fetchStub.mock.calls[0][1].body).taste).toEqual(["Khruangbin"]);
   });
 
   it("says when to come back and offers no pointless retry at a limit", async () => {
