@@ -215,6 +215,18 @@ test("Spotify access denial explains the invite list and keeps no session", asyn
   await expect(page.getByRole("status")).toContainText("not on the app's invite list");
   expect((await context.cookies()).some(c => c.name === "concert_scout_spotify")).toBe(false);
 });
+test("a Ticket shows the source photo only when there is one", async ({page}) => {
+  await page.emulateMedia({reducedMotion: "reduce"});
+  await page.goto("/");
+  await search(page);
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await expect(page.locator(".ticket-photo img")).toHaveAttribute("src", "/spotify-logo-white.svg");
+  await noOverflow(page);
+  await page.getByRole("button", {name: "Skip", exact: true}).click();
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert Two"})).toBeVisible();
+  await expect(page.locator(".ticket-photo")).toHaveCount(0);
+});
+
 test("a Search with no place uses the shared location", async ({page, context}) => {
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({latitude: 32.7, longitude: -117.1});

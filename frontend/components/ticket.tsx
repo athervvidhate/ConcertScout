@@ -1,6 +1,7 @@
+import Image from "next/image";
 import { Fragment } from "react";
 
-import { formatDate, formatDayShort, formatMonthDay, formatPrice, formatTime } from "@/lib/format";
+import { formatDate, formatDayShort, formatMonthDay, formatPrice, formatTime, presaleLine } from "@/lib/format";
 import type { Recommendation } from "@/lib/search";
 
 export function nameOf({ concert }: Recommendation): string {
@@ -31,9 +32,16 @@ export function Ticket({ recommendation, rank }: { recommendation: Recommendatio
     concert.date && formatDayShort(concert.date),
     concert.time && formatTime(concert.time),
   ].filter(Boolean);
+  const presale = presaleLine(concert);
 
   return (
     <article className="ticket" data-color={rank % 5}>
+      {concert.image && (
+        <div className="ticket-photo">
+          {/* Ticketmaster already sizes these, so nothing is resized here. */}
+          <Image src={concert.image} alt="" fill unoptimized draggable={false} />
+        </div>
+      )}
       <div className="ticket-main">
         {concert.date && (
           <time className="date" dateTime={concert.date} aria-label={formatDate(concert.date)}>
@@ -43,6 +51,7 @@ export function Ticket({ recommendation, rank }: { recommendation: Recommendatio
         <h2>{nameOf(recommendation)}</h2>
         {reason && <p>{reason}</p>}
         <p className="venue">{details.join(", ")}</p>
+        {presale && <p className="presale">{presale}</p>}
       </div>
       <div className="ticket-stub">
         <span>Admit one</span>

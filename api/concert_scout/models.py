@@ -21,6 +21,12 @@ class Artist(BaseModel):
     subgenre: str | None = None
 
 
+class Presale(BaseModel):
+    name: str
+    start: dt.datetime
+    end: dt.datetime
+
+
 class Concert(BaseModel):
     """A Concert's facts, as reported by its source. A missing fact stays None."""
 
@@ -34,6 +40,9 @@ class Concert(BaseModel):
     city: str | None = None
     region: str | None = None
     price: Price | None = None
+    image: str | None = None
+    general_sale: dt.datetime | None = None
+    presales: list[Presale] = []
 
 
 class Recommendation(BaseModel):

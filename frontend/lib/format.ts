@@ -1,4 +1,4 @@
-import type { Interpreted, Price } from "@/lib/search";
+import type { Concert, Interpreted, Price } from "@/lib/search";
 
 // Concert dates and times are local to the venue, so format them in UTC to keep them unshifted.
 const dateFormat = new Intl.DateTimeFormat("en-US", {
@@ -47,11 +47,31 @@ export function formatTime(time: string): string {
   return timeFormat.format(new Date(`1970-01-01T${time}Z`));
 }
 
+// Unlike a Concert's times, a sale opens at one moment, so it reads in the visitor's own zone.
+const saleFormat = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+/** The next presale, for a Concert not yet on general sale. */
+export function presaleLine({ general_sale, presales = [] }: Concert, now = new Date()): string | null {
+  if (general_sale && new Date(general_sale) <= now) return null;
+  const [next] = presales
+    .filter(({ end }) => new Date(end) > now)
+    .sort((a, b) => a.start.localeCompare(b.start));
+  if (!next) return null;
+  const start = new Date(next.start);
+  return start <= now ? `${next.name} on now` : `${next.name} starts ${saleFormat.format(start)}`;
+}
+
 export function formatPrice({ min, max, currency }: Price, compact = false): string {
   const format = new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
-    ...(compact ? { minimumFractionDigits: 0 } : {}),
+    // Compact drops ".00", but a real price keeps its cents, so $38.30 never reads $38.3.
+    ...(compact && Number.isInteger(min) && Number.isInteger(max) ? { minimumFractionDigits: 0 } : {}),
   });
   return min === max ? format.format(min) : `${format.format(min)} to ${format.format(max)}`;
 }

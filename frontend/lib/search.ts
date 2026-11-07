@@ -8,6 +8,8 @@ export type Artist = { name: string };
 
 export type Coordinates = { lat: number; lon: number };
 
+export type Presale = { name: string; start: string; end: string };
+
 // A Concert's facts. Anything the source does not report is left out.
 export type Concert = {
   id: string;
@@ -20,6 +22,9 @@ export type Concert = {
   city?: string;
   region?: string;
   price?: Price;
+  image?: string;
+  general_sale?: string;
+  presales?: Presale[];
 };
 
 export type Recommendation = { concert: Concert; score?: number; reason?: string };

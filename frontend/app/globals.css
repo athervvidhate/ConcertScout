@@ -43,10 +43,15 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid cur
 .poster-name.skipped { text-decoration:line-through; opacity:.35; }
 .loader-status { min-height:26px; margin:0 0 38px; font:500 clamp(16px,2.25vw,28px)/1.3 var(--font-body),sans-serif; }
 .ticket { display:grid; grid-template-columns:minmax(0,1fr) 18.5%; text-align:left; color:#1A1A18; width:min(100%,940px); min-height:390px; margin:0 auto; border-radius:15px; animation:rise 420ms cubic-bezier(.22,.61,.36,1) both; }
-.ticket[data-color="0"] { background:#F7C5D5; } .ticket[data-color="1"] { background:#F6E27A; } .ticket[data-color="2"] { background:#A7DCE2; } .ticket[data-color="3"] { background:#F4C27A; } .ticket[data-color="4"] { background:#D9E7A1; }
+.ticket[data-color="0"] { --ticket:#F7C5D5; background:var(--ticket); } .ticket[data-color="1"] { --ticket:#F6E27A; background:var(--ticket); } .ticket[data-color="2"] { --ticket:#A7DCE2; background:var(--ticket); } .ticket[data-color="3"] { --ticket:#F4C27A; background:var(--ticket); } .ticket[data-color="4"] { --ticket:#D9E7A1; background:var(--ticket); }
+.ticket { grid-template-rows:auto 1fr; }
+.ticket-photo { position:relative; grid-column:1/-1; height:clamp(110px,24vw,200px); overflow:hidden; border-radius:inherit; border-bottom-left-radius:0; border-bottom-right-radius:0; }
+.ticket-photo img { object-fit:cover; object-position:center 25%; pointer-events:none; }
+.ticket-photo::after { content:""; position:absolute; inset:0; background:var(--ticket); mix-blend-mode:multiply; opacity:.45; }
 .ticket-main { display:flex; flex-direction:column; min-width:0; padding:28px; }
 .ticket h2 { font:800 clamp(32px,4.5vw,62px)/1 var(--font-display),sans-serif; letter-spacing:-.025em; margin:14px 0 10px; overflow-wrap:anywhere; }
 .ticket p { font:400 clamp(16px,2vw,27px)/1.4 var(--font-body),sans-serif; margin:0; }
+.ticket .presale { margin-top:6px; font-weight:700; font-size:clamp(14px,1.5vw,19px); }
 .ticket .venue { margin-top:auto; padding-top:30px; font-weight:700; font-size:clamp(15px,1.9vw,25px); }
 .ticket-stub { container-type:inline-size; border-left:5px dotted #1A1A1866; display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:28px 10px; font:700 clamp(11px,1.6vw,22px) var(--font-body),sans-serif; text-align:center; }
 .price-value { display:block; white-space:nowrap; }

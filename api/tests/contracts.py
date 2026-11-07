@@ -30,6 +30,7 @@ CONCERTS = [
         region="CA",
         price=Price(min=38, max=38, currency="USD"),
         url="https://tickets.example/one",
+        image="/spotify-logo-white.svg",
     ),
     Concert(
         id="contract-two",

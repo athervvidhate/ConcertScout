@@ -32,7 +32,7 @@ If nothing qualifies, the page says so and offers the nearest useful change, suc
 
 ## Ticket
 
-A Ticket shows the date, Artist, the reason for the pick, venue, day and time, price if the source has one, and a link to buy from Ticketmaster.
+A Ticket shows the date, Artist, the reason for the pick, venue, day and time, price if the source has one, and a link to buy from Ticketmaster. When the source has a real photo of the lead Artist or the Concert, a band across the top shows it, with a light tint of the Ticket's color. A Ticket with only Ticketmaster's generic placeholder has no band. While a Concert is not yet on general sale, a Ticket names its next presale that has not ended and when it starts. VIP packages do not count.
 
 The reason comes from the ranker. Every other fact comes from the source record, per [ADR 0002](../adr/0002-facts-never-pass-through-the-llm.md). A missing time or price is left out. The app never invents a value, which fixes the old fake "8:00 PM".
 
