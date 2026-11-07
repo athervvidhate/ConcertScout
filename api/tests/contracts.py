@@ -14,7 +14,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from concert_scout import pool, security, similarity
 from concert_scout.config import Settings
 from concert_scout.models import Artist, Concert, Place, Price, SeedArtist
-from concert_scout.sources import geocoder, listenbrainz, musicbrainz
+from concert_scout.sources import geocoder, listenbrainz, musicbrainz, spotify_catalog
 
 PLACE = Place(name="San Francisco, California", lat=37.77, lon=-122.42)
 DAY = dt.date.today() + dt.timedelta(days=14)
@@ -30,16 +30,27 @@ CONCERTS = [
         region="CA",
         price=Price(min=38, max=38, currency="USD"),
         url="https://tickets.example/one",
+        image="/spotify-logo-white.svg",
     ),
     Concert(
         id="contract-two",
         name="Contract Concert Two",
-        artists=[Artist(name="Contract Artist", mbid="contract-artist")],
+        artists=[Artist(name="Second Contract Artist", mbid="second-artist")],
         date=DAY + dt.timedelta(days=1),
         venue="Second Hall",
         city="San Francisco",
         region="CA",
         url="https://tickets.example/two",
+    ),
+    Concert(
+        id="contract-three",
+        name="Contract Concert Three",
+        artists=[Artist(name="Contract Artist", mbid="contract-artist")],
+        date=DAY + dt.timedelta(days=3),
+        venue="Third Hall",
+        city="Oakland",
+        region="CA",
+        url="https://tickets.example/three",
     ),
 ]
 
@@ -84,7 +95,7 @@ def contract_model() -> FunctionModel:
                 "artists": [],
                 "descriptors": ["empty"] if "empty" in text else ["UKG"],
                 "tags": ["ukg"],
-                "place": "SF",
+                "place": None if "near me" in text else "SF",
                 "start": None,
                 "end": None,
             }
@@ -100,8 +111,11 @@ def install_sources(patch: pytest.MonkeyPatch) -> None:
         musicbrainz, "resolve", AsyncMock(return_value=SeedArtist(name="Contract Artist"))
     )
     patch.setattr(similarity, "find_neighbours", AsyncMock(return_value=[]))
+    patch.setattr(spotify_catalog, "artist_page", AsyncMock(return_value=None))
     patch.setattr(
-        listenbrainz, "artist_tags", AsyncMock(return_value={"contract-artist": ["uk garage"]})
+        listenbrainz,
+        "artist_tags",
+        AsyncMock(return_value={"contract-artist": ["uk garage"], "second-artist": ["uk garage"]}),
     )
 
     async def verify(_: httpx.AsyncClient, __: SecretStr, token: str, ___: str) -> None:

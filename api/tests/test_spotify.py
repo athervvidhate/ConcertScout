@@ -1,5 +1,6 @@
 """OAuth/session/privacy contracts. Spotify is substituted only at its typed adapter boundary."""
 
+import datetime as dt
 import time
 from typing import Any
 from unittest.mock import AsyncMock
@@ -16,6 +17,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from concert_scout import pipeline
 from concert_scout.app import create_app
+from concert_scout.models import Concert
 from concert_scout.sources.spotify import Client, Credentials, SpotifyArtist, not_allowed
 from concert_scout.spotify import (
     PREFIX,
@@ -23,9 +25,12 @@ from concert_scout.spotify import (
     SESSION_TTL,
     STATE_COOKIE,
     Sessions,
+    artists_key,
     session_key,
 )
 from tests.contracts import CONCERTS, contract_model, forbidden_http, install_sources, settings_with
+
+BY_ARTIST = [c for c in CONCERTS if c.artists[0].name == "Contract Artist"]
 
 ORIGIN = "http://localhost:3000"
 TOKEN = Credentials(
@@ -33,7 +38,11 @@ TOKEN = Credentials(
     refresh_token=SecretStr("private-refresh-token"),
     expires_at=time.time() + 3600,
 )
-ARTISTS = [SpotifyArtist(name="Contract Artist", url="https://open.spotify.com/artist/contract")]
+ARTISTS = [
+    SpotifyArtist(
+        name="Contract Artist", url="https://open.spotify.com/artist/contract", source="top"
+    )
+]
 
 
 @pytest.fixture(autouse=True)
@@ -41,6 +50,7 @@ def typed_sources(monkeypatch: pytest.MonkeyPatch) -> None:
     install_sources(monkeypatch)
     monkeypatch.setattr(Client, "exchange", AsyncMock(return_value=TOKEN))
     monkeypatch.setattr(Client, "artists", AsyncMock(return_value=ARTISTS))
+    monkeypatch.setattr(Client, "check", AsyncMock())
 
 
 def api_for(
@@ -71,7 +81,7 @@ async def begin(api: httpx.AsyncClient) -> str:
     url = urlsplit(login.headers["location"])
     fields = parse_qs(url.query)
     assert (url.scheme, url.netloc) == ("https", "accounts.spotify.com")
-    assert fields["scope"] == ["user-top-read user-follow-read"]
+    assert fields["scope"] == ["user-top-read user-follow-read user-library-read"]
     assert fields["response_type"] == ["code"]
     assert fields["redirect_uri"] == [str(api.base_url).rstrip("/") + PREFIX + "/callback"]
     return fields["state"][0]
@@ -113,12 +123,13 @@ async def test_shelf_uses_exact_source_facts_without_any_model_and_disconnect_de
         assert "no-store" in response.headers["cache-control"]
         items = response.json()["concerts"]
         assert [i["concert"] for i in items] == [
-            c.model_dump(mode="json", exclude_none=True) for c in CONCERTS
+            c.model_dump(mode="json", exclude_none=True) for c in BY_ARTIST
         ]
         assert all(i["artist"]["name"] == "Contract Artist" for i in items)
         disconnected = await api.post(PREFIX + "/disconnect", headers={"Origin": ORIGIN})
         assert disconnected.status_code == 204
         assert await redis.get(session_key(session)) is None
+        assert await redis.get(artists_key(session)) is None
         assert api.cookies.get(SESSION_COOKIE) is None
         assert (await api.get(PREFIX + "/status")).json()["connected"] is False
     model.assert_not_awaited()
@@ -149,7 +160,7 @@ async def test_oauth_state_is_bound_to_the_browser_and_cannot_be_replayed(
 async def test_non_allowlisted_users_get_a_clear_message_and_no_stored_tokens(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(Client, "artists", AsyncMock(side_effect=not_allowed()))
+    monkeypatch.setattr(Client, "check", AsyncMock(side_effect=not_allowed()))
     redis = FakeAsyncRedis()
     async with api_for(redis, Fernet.generate_key().decode()) as api:
         state = await begin(api)
@@ -244,5 +255,160 @@ def test_exact_shelf_matching_does_not_turn_a_tribute_into_a_match() -> None:
         update={"id": "tribute", "artists": [Artist(name="A tribute to Contract Artist")]}
     )
     matched = exact_matches([tribute, *CONCERTS], ARTISTS)
-    assert [item.concert.id for item in matched] == [c.id for c in CONCERTS]
-    assert all(item.concert in CONCERTS for item in matched)
+    assert [item.concert.id for item in matched] == [c.id for c in BY_ARTIST]
+    assert all(item.concert in BY_ARTIST for item in matched)
+
+
+def test_the_shelf_gives_every_artist_a_turn_before_anyones_second_date() -> None:
+    from concert_scout.models import Artist
+    from concert_scout.spotify import exact_matches
+
+    def show(id: str, name: str, day: int) -> Concert:
+        return CONCERTS[0].model_copy(
+            update={"id": id, "artists": [Artist(name=name)], "date": dt.date(2027, 1, day)}
+        )
+
+    favourite = SpotifyArtist(name="Favourite", url="https://open.spotify.com/1", source="top")
+    liked = SpotifyArtist(name="Liked", url="https://open.spotify.com/2", source="liked")
+    many = [show(f"residency-{day}", "Favourite", day) for day in range(1, 26)]
+    matched = exact_matches([show("liked", "Liked", 28), *reversed(many)], [favourite, liked])
+    assert [item.concert.id for item in matched[:3]] == ["residency-1", "liked", "residency-2"]
+    assert len(matched) == 26
+
+
+async def test_the_artist_list_is_cached_encrypted_and_never_outlives_a_disconnect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artists = AsyncMock(return_value=ARTISTS)
+    monkeypatch.setattr(Client, "artists", artists)
+    redis, key = FakeAsyncRedis(), Fernet.generate_key().decode()
+    async with api_for(redis, key) as api:
+        session = await connect(api)
+        for _ in range(2):
+            assert (await api.get(PREFIX + "/shelf", params={"place": "SF"})).status_code == 200
+        assert artists.await_count == 1
+        stored = await redis.get(artists_key(session))
+        assert isinstance(stored, bytes) and b"Contract Artist" not in stored
+    store = Sessions(redis, key)
+    await redis.delete(session_key("gone"))
+    await store.save_artists("gone", ARTISTS)
+    assert await redis.exists(artists_key("gone")) == 0
+
+
+async def test_a_search_genre_overrides_favourites_in_other_genres() -> None:
+    from concert_scout.models import Artist
+    from concert_scout.spotify import exact_matches
+
+    summit = SpotifyArtist(name="John Summit", url="https://s/1", source="top")
+    rapper = SpotifyArtist(name="Contract Rapper", url="https://s/2", source="liked")
+    unknown = SpotifyArtist(name="No Genre", url="https://s/3", source="top")
+    base = CONCERTS[0]
+    house = base.model_copy(
+        update={"id": "house", "artists": [Artist(name="John Summit", genre="Dance/Electronic")]}
+    )
+    rap = base.model_copy(
+        update={"id": "rap", "artists": [Artist(name="Contract Rapper", genre="Hip-Hop/Rap")]}
+    )
+    blank = base.model_copy(update={"id": "blank", "artists": [Artist(name="No Genre")]})
+    festival = base.model_copy(
+        update={
+            "id": "both",
+            "artists": [
+                Artist(name="John Summit", genre="Dance/Electronic"),
+                Artist(name="Contract Rapper", genre="Hip-Hop/Rap"),
+            ],
+        }
+    )
+    concerts = [house, rap, blank, festival]
+    favourites = [summit, rapper, unknown]
+
+    assert {i.concert.id for i in exact_matches(concerts, favourites)} == {
+        "house",
+        "rap",
+        "blank",
+        "both",
+    }
+    filtered = exact_matches(concerts, favourites, ["Hip-Hop/Rap"])
+    assert {i.concert.id for i in filtered} == {"rap", "both"}
+    assert all(i.artist.name == "Contract Rapper" for i in filtered)
+
+
+async def test_the_shelf_route_applies_the_search_genres() -> None:
+    async with api_for(FakeAsyncRedis(), Fernet.generate_key().decode()) as api:
+        await connect(api)
+        response = await api.get(
+            PREFIX + "/shelf", params={"place": "SF", "genre": "Not A Listed Genre"}
+        )
+        assert response.status_code == 200
+        assert response.json()["concerts"] == []
+
+
+async def test_artists_reads_every_source_in_order_and_stops_paging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def artist(name: str, *, url: bool = True) -> dict[str, Any]:
+        links = {"spotify": f"https://open.spotify.com/artist/{name}"} if url else {}
+        return {"name": name, "external_urls": links}
+
+    def spotify(request: httpx.Request) -> httpx.Response:
+        path, params = request.url.path.removeprefix("/v1"), request.url.params
+        calls.append(f"{path} {params}")
+        if path == "/me/top/artists":
+            return httpx.Response(200, json={"items": [artist("Top")]})
+        if path == "/me/top/tracks":
+            return httpx.Response(
+                200, json={"items": [{"artists": [artist("Top"), artist("Song")]}]}
+            )
+        if path == "/me/following":
+            if "after" in params:
+                return httpx.Response(
+                    200, json={"artists": {"items": [artist("Second")], "cursors": {"after": None}}}
+                )
+            return httpx.Response(
+                200, json={"artists": {"items": [artist("First")], "cursors": {"after": "First"}}}
+            )
+        assert path == "/me/tracks"
+        offset = int(params["offset"])
+        items = [
+            {"track": {"artists": [artist("Liked"), artist("Local", url=False)]}},
+            {"track": None},
+        ]
+        return httpx.Response(200, json={"items": items, "next": "more" if offset == 0 else None})
+
+    def client_for(base_url: str, params: dict[str, str]) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            base_url=base_url, params=params, transport=httpx.MockTransport(spotify)
+        )
+
+    monkeypatch.undo()
+    monkeypatch.setattr("concert_scout.sources.http.make_client", client_for)
+    found = await Client("id", "secret", "http://127.0.0.1:8000/cb").artists(TOKEN)
+    assert [(a.name, a.source) for a in found] == [
+        ("Top", "top"),
+        ("Song", "track"),
+        ("First", "followed"),
+        ("Second", "followed"),
+        ("Liked", "liked"),
+    ]
+    assert sum(c.startswith("/me/top/artists") for c in calls) == 3
+    assert sum(c.startswith("/me/top/tracks") for c in calls) == 3
+    assert sum(c.startswith("/me/tracks") for c in calls) == 2
+
+
+async def test_liked_songs_stop_at_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    pages: list[str] = []
+
+    def spotify(request: httpx.Request) -> httpx.Response:
+        pages.append(request.url.params["offset"])
+        return httpx.Response(200, json={"items": [], "next": "always more"})
+
+    from concert_scout.sources.spotify import MAX_LIKED_PAGES, _liked  # pyright: ignore[reportPrivateUsage]
+
+    async with httpx.AsyncClient(
+        base_url="https://api.spotify.com/v1", transport=httpx.MockTransport(spotify)
+    ) as client:
+        assert await _liked(client, TOKEN) == []
+    assert len(pages) == MAX_LIKED_PAGES == 20
+    assert pages[-1] == "950"

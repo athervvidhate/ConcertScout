@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@base-ui/react/button";
+import { X } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
 import { Ticket } from "@/components/ticket";
@@ -22,8 +23,13 @@ export function SavedConcerts() {
       {concerts.map((recommendation, rank) => (
         <li key={recommendation.concert.id}>
           <Ticket recommendation={recommendation} rank={rank} />
-          <Button type="button" onClick={() => removeSaved(recommendation.concert.id)}>
-            Remove
+          <Button
+            type="button"
+            className="saved-remove"
+            onClick={() => removeSaved(recommendation.concert.id)}
+          >
+            <X aria-hidden size={22} />
+            <span>Remove</span>
           </Button>
         </li>
       ))}

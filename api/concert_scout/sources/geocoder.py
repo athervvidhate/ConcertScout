@@ -11,6 +11,9 @@ from concert_scout.sources import http
 
 BASE_URL = "https://api.geoapify.com/v1/geocode"
 CACHE_TTL = dt.timedelta(days=30)
+# Below this, Geoapify is guessing from part of the text: "Southern California" scores 0 as
+# "Southern Concord". Saying we could not find a place beats searching the wrong one.
+MIN_CONFIDENCE = 0.8
 
 
 class GeocoderError(Exception):
@@ -32,7 +35,7 @@ async def find_places(
     client: httpx.AsyncClient, redis: Redis, text: str, limit: int = 5
 ) -> list[Place]:
     text = place_name(text)
-    key = f"geocode:v2:{limit}:{' '.join(text.casefold().split())}"
+    key = f"geocode:v3:{limit}:{' '.join(text.casefold().split())}"
     if cached := await cache.read(redis, key, Places):
         return cached.places
 
@@ -58,6 +61,8 @@ def parse_places(body: dict[str, Any]) -> list[Place]:
     results: list[dict[str, Any]] = body.get("results", [])
     places: list[Place] = []
     for record in results:
+        if record.get("rank", {}).get("confidence", 1) < MIN_CONFIDENCE:
+            continue
         state = record.get("result_type") == "state"
         country = str(record.get("country_code", "")).upper()
         places.append(

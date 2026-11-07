@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     turnstile_secret: SecretStr = SecretStr("1x0000000000000000000000000000000AA")
     client_ip_header: str | None = None
 
+    resend_api_key: SecretStr | None = None
+    feedback_email: str | None = None
+
     spotify_client_id: str | None = None
     spotify_client_secret: SecretStr | None = None
     spotify_encryption_key: SecretStr | None = None
