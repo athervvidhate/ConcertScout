@@ -149,3 +149,25 @@ The match step waited for the whole pool, then sent every ListenBrainz tag reque
 | Tags while the pool arrives | 11.4s | 16.8s | 0.5s | 1.4s | 1.8s |
 
 Poster sizes held: 166 picks against 164. The pool step itself did not change, median 2.8 seconds, and is now the largest wait after the ranker.
+
+## Speed: daily cache warming
+
+`concert_scout.warm` runs the pool and tag lookups for 12 busy cities, once a day from Vercel's cron. Measured against local Redis, counting every command the way Upstash bills them, pipelined commands one by one:
+
+| Run | Ticketmaster | ListenBrainz | Geoapify | Redis commands | Time |
+|---|---:|---:|---:|---:|---:|
+| Empty cache | 125 | 118 | 12 | 3,567 | about 70s |
+| Everything cached | 0 | 0 | 0 | 215 | under 1s |
+
+A daily run in production sits between the two: pools have expired after 6 hours and most tags are still cached. At the empty-cache worst case, 30 runs a month are 107,000 commands, a fifth of Upstash's free 500,000, and 125 calls a day are 2.5% of the Ticketmaster allowance. The warmed keys take 11.2 MB, 9.7 MB of it pools, out of the free 250 MB. No model is called.
+
+Place names are written the way the interpreter writes them. "New York, NY" geocodes to a different 5-kilometre cell from "New York, New York, United States", and so to different cache keys. Every spelling the interpreter used in 28 captured Searches lands in the same cell as its city's entry.
+
+The same 18 Searches in warmed cities, run live once on an empty cache and once after warming:
+
+| | Search median | Search p95 | Pool median | Pool max | Match max |
+|---|---:|---:|---:|---:|---:|
+| Empty cache | 11.5s | 16.8s | 3.0s | 8.0s | 1.1s |
+| After warming | 7.5s | 13.1s | 0.2s | 0.4s | 0.1s |
+
+The pool now waits only for a seed Artist's own lookup. What remains for a Search that names an Artist is resolving that Artist and its neighbours (up to 8.5 seconds for `khruangbin-chicago` and `pop-new-york`) and the ranker. A city off the list, or a Search more than 6 hours after the run, is still cold.

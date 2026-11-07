@@ -37,6 +37,7 @@ Set secrets through the hosting dashboard or private CLI input. Never put values
 | API | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Optional official invite-only app credentials |
 | API | `SPOTIFY_ENCRYPTION_KEY` | Stable private Fernet key, separately generated for production |
 | API | `SPOTIFY_REDIRECT_URI` | Exact `https://api.concertscout.app/auth/spotify/callback`, also registered in Spotify |
+| API | `CRON_SECRET` | Random string of at least 32 characters. Vercel's daily cron sends it to `/warm`; unset, the route does not exist |
 
 The public entrypoint refuses to start with unencrypted or unauthenticated Redis, non-HTTPS or wildcard origins, published Turnstile test secrets, a missing trusted IP header, or a configured Spotify client using HTTP. Local `make dev` still uses the normal factory and local settings. Test environments can use Cloudflare's published test keys; public deployments must not.
 

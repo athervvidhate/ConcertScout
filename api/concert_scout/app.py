@@ -1,10 +1,12 @@
+import datetime as dt
+import hmac
 import logging
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Literal
 
 import httpx
-from fastapi import Depends, FastAPI, Query, Request
+from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -14,7 +16,7 @@ from pydantic_ai.models import Model
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from concert_scout import cache, feedback, interpreter, limits, security, spotify
+from concert_scout import cache, feedback, interpreter, limits, security, spotify, warm
 from concert_scout.config import Settings
 from concert_scout.models import ArtistProfiles, ImportedTaste, Place, SearchError
 from concert_scout.pipeline import (
@@ -233,6 +235,18 @@ def create_app(
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    if settings.cron_secret:
+        expected = f"Bearer {settings.cron_secret.get_secret_value()}"
+
+        # Vercel's scheduler calls this with the project's CRON_SECRET. It spends no model money.
+        @app.get("/warm", include_in_schema=False)
+        async def warm_cache(
+            authorization: Annotated[str, Header()] = "",
+        ) -> list[warm.Warmed]:
+            if not hmac.compare_digest(authorization.encode(), expected.encode()):
+                raise Refused(401, "not_scheduler", "Only the scheduler can warm the cache.")
+            return await warm.warm(services, dt.datetime.now(dt.UTC))
 
     @app.get("/artist", response_model=ArtistProfiles, response_model_exclude_none=True)
     async def artist(

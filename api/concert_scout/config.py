@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     turnstile_secret: SecretStr = SecretStr("1x0000000000000000000000000000000AA")
     client_ip_header: str | None = None
 
+    # Set, it opens the scheduler's cache warming route. Unset, that route does not exist.
+    cron_secret: SecretStr | None = None
+
     resend_api_key: SecretStr | None = None
     feedback_email: str | None = None
 

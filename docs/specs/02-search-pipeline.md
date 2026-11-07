@@ -44,6 +44,7 @@ A pool holds every Concert for a place and date window. A Geoapify state result 
 - Split the window into 30-day chunks to get past the 1,000-result cap.
 - With no dates, use the next 6 months. That covers 85-96% of listed Concerts and costs about 7-8 calls for Chicago.
 - Cache each chunk for 6 hours, keyed by rounded coordinates and month, so Searches share them.
+- Once a day, at 23:00 UTC so the pools stay fresh through the US evening, Vercel's cron calls `GET /warm`. It runs the pool and tag lookups for a fixed list of busy cities (`warm.PLACES`, written the way the interpreter writes places so they geocode to the same point), one city at a time. Tags last 7 days, so a daily run keeps them warm; a pool lasts 6 hours. It calls no model and stops at the Ticketmaster daily limit.
 - A Concert is over when its date has passed at its own venue, using the time zone Ticketmaster reports. The pool asks for one day earlier than the visitor's today, because a venue further west can still be on that day.
 - Always look up seed Artists directly, so a seed's Concert is never lost to paging.
 - A seed Artist's direct lookup covers every date Ticketmaster lists. Unless the Search sets an end date, all of them stay, so a tour past the 6-month pool still appears at no extra cost.
@@ -155,6 +156,7 @@ api/concert_scout/
   similarity.py     one and two hops, with the Last.fm fallback
   sources/          ticketmaster, musicbrainz, listenbrainz, lastfm, geocoder
   cache.py          Redis helpers
+  warm.py           daily cache warming for busy cities
   limits.py         rate limits and spend
 ```
 
