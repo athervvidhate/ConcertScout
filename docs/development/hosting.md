@@ -1,6 +1,6 @@
 # Hosting the two services
 
-Issue #31 is not deployed yet. This is the prepared configuration and acceptance procedure, not evidence of a working public Search. The frontend and API stay separate, and the browser sends SSE directly to FastAPI (ADR 0001).
+Both services are deployed, with public Search off until acceptance. This is the configuration and acceptance procedure, not evidence of a working public Search. The frontend and API stay separate, and the browser sends SSE directly to FastAPI (ADR 0001).
 
 ## Addresses and projects
 
@@ -35,6 +35,7 @@ Set secrets through the hosting dashboard or private CLI input. Never put values
 | API | `SEARCHES_PER_HOUR` | `10` starting limit |
 | Frontend | `NEXT_PUBLIC_API_URL` | `https://concertscout-api.atherv.com`, without a trailing slash; set before building |
 | Frontend | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Public production site key restricted to `concertscout.atherv.com` |
+| API | `RESEND_API_KEY`, `FEEDBACK_EMAIL` | Optional Search reports by email. The address must be the one on the Resend account |
 | API | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Optional official invite-only app credentials |
 | API | `SPOTIFY_ENCRYPTION_KEY` | Stable private Fernet key, separately generated for production |
 | API | `SPOTIFY_REDIRECT_URI` | Exact `https://concertscout-api.atherv.com/auth/spotify/callback`, also registered in Spotify |
@@ -53,6 +54,11 @@ Upstash holds the public cache, hashed limits, encrypted Spotify sessions and re
 6. If a true cold first status exceeds 3 seconds, record the measured result and implement the spec's Fly.io move. Do not label local timings or the earlier throwaway function as production acceptance.
 7. After the replacement full Search is accepted, remove old deployments/aliases and the unused `v0-concert-scout-frontend` project. Update `concert-scout-ai` rather than deleting the replacement. Verify each old URL is gone; deleting only a production alias leaves deployment URLs reachable. Remove `concert-scout-coldstart` if present in another scope. These destructive cleanup actions need an explicit reviewed inventory before execution.
 
+## Deploying
+
+- API: run `vercel deploy --prod --yes -p concert-scout-api` from `api/`. `api/.vercelignore` keeps `.env`, tests and Snapshots out of the upload, because the CLI does not read `.gitignore`.
+- Frontend: `concert-scout-ai` is connected to Git, and Vercel blocks CLI uploads from it on a commit-author check. Push the branch, then run `vercel redeploy <its Git preview URL> --environment production`. The redeploy rebuilds with production settings.
+
 ## Inventory and current evidence — November 6, 2026
 
 Read-only `vercel project ls` and `project inspect` under `atherv-vs-projects` found:
@@ -65,7 +71,7 @@ Read-only `vercel project ls` and `project inspect` under `atherv-vs-projects` f
 
 Three fresh local Python processes imported the full app and constructed its clients in 1798, 1130 and 1108 ms, using 146.6–147.9 MB maximum RSS on this Mac. No provider calls were made. These are local initialization measurements, not Vercel cold starts. The prior throwaway remote measurements remain in the platform spec.
 
-Pending: hostname assignment and redirect removal, production Redis/Turnstile/Spotify settings, actual deployment and public Search, cold timing, reviewed old-URL removal. Keep #31 incomplete until these are evidenced.
+Pending: public Search enablement and acceptance, production Spotify settings, cold timing, reviewed old-URL removal. Keep #31 incomplete until these are evidenced.
 
 ## Primary references
 

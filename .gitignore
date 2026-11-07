@@ -83,3 +83,6 @@ api/evals/snapshots/
 .next-e2e/
 test-results/
 playwright-report/
+
+# Vercel CLI link
+.vercel

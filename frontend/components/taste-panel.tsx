@@ -35,7 +35,7 @@ function explain(caught: unknown): string {
   return UNREADABLE;
 }
 
-function countOf(artists: string[]): string {
+export function countOf(artists: string[]): string {
   return artists.length === 1 ? "1 Artist" : `${artists.length} Artists`;
 }
 
@@ -157,14 +157,17 @@ function ImportForm() {
   );
 }
 
-export function TastePanel({spotify}: {spotify: SpotifyConnection}) {
+type TastePanelProps = {
+  spotify: SpotifyConnection;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
+export function TastePanel({spotify, open, onOpenChange}: TastePanelProps) {
   const taste = useImportedTaste();
 
   return (
-    <Dialog.Root>
-      <Dialog.Trigger className="top-bar-action">
-        {taste ? `Your Taste: ${countOf(taste.artists)}` : "Your Taste"}
-      </Dialog.Trigger>
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Backdrop className="taste-backdrop" />
         <Dialog.Popup className="taste-panel">

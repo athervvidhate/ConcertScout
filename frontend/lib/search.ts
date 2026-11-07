@@ -1,6 +1,13 @@
 import { EventSourceParserStream } from "eventsource-parser/stream";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+// Locally the API sits on the same machine as the page, so a phone on the network finds it too.
+function localApi(): string {
+  if (typeof window === "undefined") return "http://127.0.0.1:8000";
+  const { protocol, hostname } = window.location;
+  return protocol === "https:" ? `https://${hostname}:8443` : `http://${hostname}:8000`;
+}
+
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? localApi();
 
 export type Price = { min: number; max: number; currency: string };
 
