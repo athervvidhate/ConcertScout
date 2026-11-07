@@ -89,7 +89,7 @@ async def test_a_recorded_model_answer_replays_with_its_usage_and_a_new_question
     recording = RecordingModel(FunctionModel(answer))
     await agent.run("Chicago", model=recording)
     snapshot = snapshot_with({}).model_copy(update={"answers": recording.answers})
-    replay = ReplayModel(FunctionModel(answer), snapshot, live=False)
+    replay = ReplayModel(FunctionModel(answer), snapshot, live="none")
 
     result = await agent.run("Chicago", model=replay)
 
@@ -163,7 +163,7 @@ async def test_a_run_reports_a_snapshot_miss_instead_of_a_silent_score(
     monkeypatch.setattr(snapshots, "load", load_empty)
     search = Search(id="a", text="Chicago", snapshot="s", good=["One"], judged=True)
 
-    report = await run.evaluate([search], None, live_model=False)
+    report = await run.evaluate([search], None, live="none")
 
     assert report.cases == []
     assert "not in the Snapshot" in report.failures[0].error_message
@@ -185,7 +185,7 @@ async def test_a_replayed_search_scores_the_poster_against_source_facts(
     monkeypatch.setattr(run.harness, "replay", replay)
     search = Search(id="a", text="Chicago", snapshot="s", must=["One"], bad=["Two"], judged=True)
 
-    report = await run.evaluate([search], None, live_model=False)
+    report = await run.evaluate([search], None, live="none")
 
     case = report.cases[0]
     assert case.output.measures == Measures(0, 1, 1, 1, 1, 0)
@@ -320,7 +320,7 @@ async def test_a_pipeline_error_is_a_failed_case_not_a_successful_empty_poster(
     monkeypatch.setattr(snapshots, "load", load_empty)
     monkeypatch.setattr(run.harness, "replay", replay)
     report = await run.evaluate(
-        [Search(id="a", text="Chicago", snapshot="s", judged=True)], None, live_model=False
+        [Search(id="a", text="Chicago", snapshot="s", judged=True)], None, live="none"
     )
     assert not report.cases
     assert "no quality score" in report.failures[0].error_message

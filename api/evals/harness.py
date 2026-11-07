@@ -22,6 +22,7 @@ from concert_scout.config import Settings
 from concert_scout.models import Poster, Recommendation
 from concert_scout.pipeline import stream_search
 from evals.snapshots import (
+    Live,
     RecordingModel,
     RecordingTransport,
     ReplayModel,
@@ -120,9 +121,9 @@ async def capture(case_id: str, text: str, settings: Settings) -> tuple[Snapshot
 
 
 async def replay(
-    snapshot: Snapshot, settings: Settings | None, live_model: bool = False
+    snapshot: Snapshot, settings: Settings | None, live: Live = "none"
 ) -> tuple[SearchRun, list[str]]:
-    """Replays a Snapshot. Only `live_model` needs real settings, and only it spends money."""
+    """Replays a Snapshot. Only a `live` model needs real settings, and only it spends money."""
     # The pacing protects live services, and a replay calls none.
     settings = settings or Settings(
         _env_file=None,  # pyright: ignore[reportCallIssue]
@@ -134,7 +135,7 @@ async def replay(
         update={"lastfm_key": SecretStr("replay") if snapshot.lastfm_enabled else None}
     )
     transport = ReplayTransport(snapshot)
-    model = ReplayModel(_real_model(settings), snapshot, live_model)
+    model = ReplayModel(_real_model(settings), snapshot, live)
     with (
         patch.object(limits, "SLOT_SECONDS", 0.001),
         patch.object(limits, "MUSICBRAINZ_GAP", dt.timedelta(milliseconds=1)),

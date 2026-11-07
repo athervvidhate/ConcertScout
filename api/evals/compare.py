@@ -95,7 +95,7 @@ def report(changes: Iterable[Change]) -> str:
     return "\n".join(lines)
 
 
-def _batch(names: Sequence[str]) -> dict[str, str]:
+def batch_cases(names: Sequence[str]) -> dict[str, str]:
     """Case ID to Snapshot ID. A later report wins, so a rerun replaces its earlier capture."""
     cases: dict[str, str] = {}
     for name in names:
@@ -109,7 +109,7 @@ def main() -> None:
     parser.add_argument("--before", nargs="+", required=True, help="batch report names")
     parser.add_argument("--after", nargs="+", required=True, help="batch report names")
     args = parser.parse_args()
-    before, after = _batch(args.before), _batch(args.after)
+    before, after = batch_cases(args.before), batch_cases(args.after)
     shared = [case for case in before if case in after]
     print(
         report(

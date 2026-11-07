@@ -1,8 +1,9 @@
-"""Score the pipeline on judged Searches: `uv run python -m evals.run [--live-model]`.
+"""Score the pipeline on judged Searches: `uv run python -m evals.run [--live ranker|all]`.
 
-Without `--live-model` everything replays from Snapshots, offline and free, which proves the
-harness and repeats the captured answers. After changing a prompt, weight or the shortlist, the
-model sees new requests, so use `--live-model`: it calls the real model and costs money.
+By default everything replays from Snapshots, offline and free, which proves the harness and
+repeats the captured answers. After changing the ranker, use `--live ranker`, which keeps the
+recorded reading of the Search. After changing the interpreter, use `--live all`. Both call the
+real model and cost money.
 """
 
 import argparse
@@ -21,6 +22,7 @@ from evals import cases, harness, snapshots
 from evals.cases import Search
 from evals.harness import SearchRun
 from evals.metrics import Measures, measure
+from evals.snapshots import Live
 
 
 @dataclass
@@ -42,15 +44,15 @@ class JudgedPoster(Evaluator[Search, Scored, None]):
         return scores
 
 
-def scorer(settings: Settings | None, live_model: bool):
+def scorer(settings: Settings | None, live: Live):
     async def score(search: Search) -> Scored:
         assert search.snapshot
         snapshot = snapshots.load(search.snapshot)
-        result, misses = await harness.replay(snapshot, settings, live_model)
+        result, misses = await harness.replay(snapshot, settings, live)
         if misses:
             raise SnapshotMiss(
                 f"{len(misses)} requests are not in the Snapshot, such as {misses[0]}. "
-                "Use --live-model if only model requests changed, or judge the Search again."
+                "Use --live if only model requests changed, or judge the Search again."
             )
         if result.error:
             raise RuntimeError(f"Search ended with {result.error}; no quality score was assigned")
@@ -124,20 +126,23 @@ def print_report(report: EvaluationReport[Search, Scored, None], total: int) -> 
 
 
 async def evaluate(
-    searches: list[Search], settings: Settings | None, live_model: bool
+    searches: list[Search], settings: Settings | None, live: Live
 ) -> EvaluationReport[Search, Scored, None]:
     dataset = Dataset[Search, Scored, None](
         name="concert-scout",
         cases=[Case(name=search.id, inputs=search) for search in searches],
         evaluators=[JudgedPoster()],
     )
-    return await dataset.evaluate(scorer(settings, live_model), max_concurrency=1, progress=False)
+    return await dataset.evaluate(scorer(settings, live), max_concurrency=1, progress=False)
 
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--live-model", action="store_true", help="Call the real model. Costs money."
+        "--live",
+        choices=["none", "ranker", "all"],
+        default="none",
+        help="Call the real model for the ranker or for every request. Costs money.",
     )
     parser.add_argument("--searches", type=Path, default=cases.SEARCHES, help="Judged Search YAML.")
     arguments = parser.parse_args()
@@ -146,8 +151,8 @@ async def main() -> None:
     if not judged:
         print(f"No judged Searches yet, out of {len(searches)}. Run evals.judge first.")
         return
-    settings = Settings() if arguments.live_model else None  # pyright: ignore[reportCallIssue]
-    report = await evaluate(judged, settings, arguments.live_model)
+    settings = Settings() if arguments.live != "none" else None  # pyright: ignore[reportCallIssue]
+    report = await evaluate(judged, settings, arguments.live)
     print_report(report, len(searches))
     if report.failures:
         raise SystemExit(1)
