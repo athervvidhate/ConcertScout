@@ -251,6 +251,14 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid cur
 .home-personal div { display:flex; flex-wrap:wrap; gap:12px; }
 .home-personal button { min-height:48px; padding:0 20px; border:0; border-radius:8px; background:#FFD3E4; color:#10291F; font:700 18px var(--font-ui),sans-serif; cursor:pointer; }
 .home-personal button:hover { background:#fff; }
+.search-feedback { max-width:560px; margin:28px auto 0; text-align:center; color:#10291F; font:500 17px/1.4 var(--font-body),sans-serif; }
+.search-feedback p { margin:0; }
+.search-feedback button { min-height:44px; padding:0 4px; border:0; background:none; color:inherit; font:700 17px var(--font-ui),sans-serif; text-decoration:underline; cursor:pointer; }
+.search-feedback form { display:grid; gap:10px; margin-top:10px; text-align:left; }
+.search-feedback label { display:grid; gap:4px; font-weight:600; }
+.search-feedback textarea { box-sizing:border-box; width:100%; padding:8px 12px; border:0; border-radius:8px; background:#FFD3E4; color:#10291F; font:inherit; resize:vertical; }
+.search-feedback form button { justify-self:start; padding:0 20px; border-radius:8px; background:#10291F; color:#FFD3E4; text-decoration:none; }
+.search-feedback form button:disabled { opacity:.5; cursor:default; }
 @media(max-width:720px) {
   .ticket-strip { grid-template-columns:minmax(0,1fr); }
   .ticket-strip li:nth-child(1) { border-radius:15px 15px 0 0; }

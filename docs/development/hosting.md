@@ -35,6 +35,7 @@ Set secrets through the hosting dashboard or private CLI input. Never put values
 | API | `SEARCHES_PER_HOUR` | `10` starting limit |
 | Frontend | `NEXT_PUBLIC_API_URL` | `https://concertscout-api.atherv.com`, without a trailing slash; set before building |
 | Frontend | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Public production site key restricted to `concertscout.atherv.com` |
+| API | `RESEND_API_KEY`, `FEEDBACK_EMAIL` | Optional Search reports by email. The address must be the one on the Resend account |
 | API | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Optional official invite-only app credentials |
 | API | `SPOTIFY_ENCRYPTION_KEY` | Stable private Fernet key, separately generated for production |
 | API | `SPOTIFY_REDIRECT_URI` | Exact `https://concertscout-api.atherv.com/auth/spotify/callback`, also registered in Spotify |

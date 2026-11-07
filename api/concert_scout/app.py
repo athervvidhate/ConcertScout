@@ -15,7 +15,7 @@ from pydantic_ai.models import Model
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from concert_scout import cache, interpreter, limits, security, spotify
+from concert_scout import cache, feedback, interpreter, limits, security, spotify
 from concert_scout.config import Settings
 from concert_scout.models import ArtistProfiles, ImportedTaste, Nearby, Place, SearchError
 from concert_scout.pipeline import (
@@ -230,6 +230,7 @@ def create_app(
     app.include_router(
         spotify.router(settings, services.redis, services.ticketmaster, services.geocoder)
     )
+    app.include_router(feedback.router(settings, services.redis, transport))
 
     @app.get("/health")
     async def health() -> dict[str, str]:

@@ -8,6 +8,7 @@ import { type SubmitEvent, useEffect, useRef, useState } from "react";
 import { HomeGuide } from "@/components/home-guide";
 import { NearbyConcerts } from "@/components/nearby";
 import { Poster } from "@/components/poster";
+import { SearchFeedback } from "@/components/search-feedback";
 import { SiteHeader } from "@/components/site-header";
 import { SpotifyShelf } from "@/components/spotify-shelf";
 import { useSpotifyConnection } from "@/lib/spotify";
@@ -207,6 +208,15 @@ export function Search() {
           searching={phase === "searching"}
           hasPoster={hasPoster}
           status={status}
+        />
+      )}
+      {phase === "finished" && (
+        <SearchFeedback
+          key={searched}
+          search={searched}
+          interpreted={interpreted}
+          recommendations={recommendations}
+          error={error}
         />
       )}
       {spotify.connected && (

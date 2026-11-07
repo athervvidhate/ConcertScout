@@ -223,6 +223,21 @@ test("Make it yours leads to Connect Spotify inside Your Taste", async ({ page }
   await expect(page.getByRole("dialog", {name: "Your Taste"}).getByRole("link", {name: "Connect Spotify"})).toBeVisible();
 });
 
+test("a visitor can report a Search with its results", async ({ page }) => {
+  await page.goto("/");
+  await search(page);
+  const report = page.getByRole("region", {name: "Report this Search"});
+  await report.getByRole("button", {name: "Tell us"}).click();
+  await report.getByLabel(/What were you hoping for/).fill("Wrong city");
+  const request = page.waitForRequest(r => r.url().endsWith("/feedback"));
+  await report.getByRole("button", {name: "Send report"}).click();
+  const sent = (await request).postDataJSON();
+  expect(sent.note).toBe("Wrong city");
+  expect(sent.search).toBeTruthy();
+  expect(sent.results.length).toBeGreaterThan(0);
+  await expect(report.getByRole("status")).toContainText("We got your report");
+});
+
 test("Spotify access denial explains the invite list and keeps no session", async ({ page, context }) => {
   await page.goto(await spotifyCallback(context, "not-allowed"));
   await openMenuItem(page, /^Your Taste/);
