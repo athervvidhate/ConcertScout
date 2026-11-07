@@ -57,6 +57,9 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid cur
 .price-value { display:block; white-space:nowrap; }
 .price-to { display:block; font:500 14px var(--font-body),sans-serif; margin:6px 0; }
 .ticket-stub > span:first-child { white-space:nowrap; }
+.artist-name { all:unset; cursor:pointer; text-decoration:underline; text-decoration-thickness:3px; text-underline-offset:.12em; text-decoration-color:#1A1A1844; }
+.artist-name:hover { text-decoration-color:currentColor; }
+.artist-name:focus-visible { outline:3px solid #10291F; outline-offset:3px; }
 .ticket a { display:inline-flex; align-items:center; min-height:44px; text-decoration:underline; }
 .date,.price { font:800 clamp(30px,4.3vw,58px)/1 var(--font-date),monospace; font-variant-numeric:tabular-nums; }
 .price { font-size:clamp(20px,3.3vw,46px); overflow-wrap:anywhere; }
@@ -176,11 +179,18 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid cur
 .information a { color:inherit; text-underline-offset:3px; }
 .information li { margin-bottom:10px; }
 .information-date { font-size:14px; margin-top:28px; }
-.source-credits { margin:28px 0; }
-.source-credits > div { border-top:1px solid #10291f55; padding:18px 0; }
-.source-credits dt { font:700 25px var(--font-ui),sans-serif; margin-bottom:8px; }
-.source-credits dd { margin:0; }
-.spotify-credit { padding:24px; background:#10291F; color:#FFD3E4; border-radius:10px; margin:28px 0; }
-.spotify-credit img { margin-bottom:20px; width:110px; height:auto; }
-.spotify-credit a { display:inline-flex; align-items:center; min-height:44px; }
-@media(max-width:560px) { .information > header { align-items:flex-start; flex-direction:column; gap:4px; } .information article { font-size:17px; } }
+/* Artist panel: shares the Taste drawer, with its own contents. */
+.artist-panel { font:500 17px/1.45 var(--font-body),sans-serif; }
+.artist-profile { display:flex; flex-direction:column; gap:14px; }
+.artist-profile + .artist-profile { padding-top:18px; border-top:1px solid currentColor; }
+.artist-panel .artist-part { margin:0; font:400 30px/1.05 var(--font-poster),sans-serif; }
+.artist-panel h3 { margin:6px 0 4px; font:700 19px var(--font-ui),sans-serif; }
+.artist-panel ol { margin:0; padding-left:24px; list-style:decimal; }
+.artist-panel a { color:inherit; text-decoration:underline; text-underline-offset:3px; }
+.artist-panel li { min-height:30px; }
+.artist-panel .artist-spotify { justify-self:start; align-self:flex-start; display:inline-flex; align-items:center; min-height:48px; padding:0 18px; border-radius:8px; background:#FFD3E4; color:#10291F; font-weight:700; text-decoration:none; }
+.artist-missing { opacity:.8; }
+.artist-listeners { font:800 22px var(--font-date),monospace; }
+.artist-tags { display:flex; flex-wrap:wrap; gap:6px; margin:0; padding:0; list-style:none; }
+.artist-tags li { min-height:0; padding:3px 10px; border:1px solid #FFD3E488; border-radius:999px; font-size:15px; }
+.artist-credit { margin-top:auto !important; padding-top:12px; font-size:14px; }

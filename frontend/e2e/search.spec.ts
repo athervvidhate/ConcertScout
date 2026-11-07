@@ -239,3 +239,18 @@ test("a Search with no place uses the shared location", async ({page, context}) 
   await expect(page.getByText("Near you", {exact: true})).toBeVisible();
 });
 
+test("an Artist Last.fm does not know says so and keeps the Spotify link", async ({page}) => {
+  await page.route("**/artist?*", async route => {
+    const name = new URL(route.request().url()).searchParams.get("name");
+    const response = await route.fetch();
+    await route.fulfill({response, json: {profiles: [{name, tags: [], top_tracks: [], similar: []}]}});
+  });
+  await page.goto("/");
+  await search(page);
+  await page.locator(".ticket .artist-name").first().click();
+  const panel = page.getByRole("dialog");
+  await expect(panel).toContainText("couldn't find details");
+  await expect(panel).toContainText("on Last.fm");
+  await expect(panel.getByRole("link", {name: "Search on Spotify"})).toHaveAttribute("href", /open\.spotify\.com\/search/);
+});
+

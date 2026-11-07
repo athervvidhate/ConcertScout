@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Fragment } from "react";
 
+import { ArtistPanel } from "@/components/artist-panel";
 import { formatDate, formatDayShort, formatMonthDay, formatPrice, formatTime, presaleLine } from "@/lib/format";
 import type { Recommendation } from "@/lib/search";
 
@@ -48,7 +49,9 @@ export function Ticket({ recommendation, rank }: { recommendation: Recommendatio
             {formatMonthDay(concert.date)}
           </time>
         )}
-        <h2>{nameOf(recommendation)}</h2>
+        <h2>
+          <ArtistPanel name={nameOf(recommendation)} />
+        </h2>
         {reason && <p>{reason}</p>}
         <p className="venue">{details.join(", ")}</p>
         {presale && <p className="presale">{presale}</p>}

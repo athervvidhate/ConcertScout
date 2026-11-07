@@ -94,6 +94,30 @@ class Nearby(BaseModel):
     concerts: list[Concert]
 
 
+class Track(BaseModel):
+    name: str
+    url: str
+
+
+class ArtistProfile(BaseModel):
+    """What the Artist panel shows. Anything a source does not report stays empty."""
+
+    name: str
+    lastfm_url: str | None = None
+    spotify_url: str | None = None
+    listeners: int | None = None
+    bio: str | None = None
+    tags: list[str] = []
+    top_tracks: list[Track] = []
+    similar: list[str] = []
+
+
+class ArtistProfiles(BaseModel):
+    """One profile, or one for each Artist on a tour billed as a single name."""
+
+    profiles: list[ArtistProfile]
+
+
 class Status(BaseModel):
     step: str
     message: str

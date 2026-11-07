@@ -42,3 +42,5 @@ _Avoid_: Stub, card
 **Saved Concert**:
 A Concert a person chose to keep from a Poster.
 _Avoid_: Favorite, stub, wishlist item
+
+**Artist panel**: the side panel opened from an Artist's name on a Ticket, showing public facts from Last.fm and a link to Spotify. It never calls a model.

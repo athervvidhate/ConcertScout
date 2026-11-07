@@ -15,6 +15,7 @@ from redis.asyncio import Redis
 from concert_scout import assemble, limits, matching, pool, similarity, telemetry
 from concert_scout.interpreter import Interpretation, InterpreterError, interpret
 from concert_scout.models import (
+    ArtistProfile,
     Candidates,
     Concert,
     Interpreted,
@@ -26,8 +27,16 @@ from concert_scout.models import (
     SeedArtist,
     Status,
 )
+from concert_scout.names import collab_names
 from concert_scout.ranker import RankerError, rank
-from concert_scout.sources import geocoder, listenbrainz, musicbrainz, ticketmaster
+from concert_scout.sources import (
+    geocoder,
+    lastfm,
+    listenbrainz,
+    musicbrainz,
+    spotify_catalog,
+    ticketmaster,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +58,7 @@ class Services:
     musicbrainz: httpx.AsyncClient
     listenbrainz: httpx.AsyncClient
     lastfm: httpx.AsyncClient | None
+    spotify_catalog: httpx.AsyncClient | None
     redis: Redis
     model: Model
     turnstile: httpx.AsyncClient
@@ -61,6 +71,50 @@ async def find_nearby(lat: float, lon: float, services: Services, today: dt.date
         services.ticketmaster, services.redis, place, [], today, today + NEARBY_WINDOW, today
     )
     return [candidate.concert for candidate in matching.notable(concerts)[:NEARBY_SIZE]]
+
+
+async def find_artist_profile(name: str, services: Services) -> ArtistProfile:
+    """Public Artist facts for the panel. This path never calls a model, and a dead source only
+    leaves its part of the panel empty."""
+
+    async def profile() -> ArtistProfile:
+        if not services.lastfm:
+            return ArtistProfile(name=name)
+        try:
+            return await lastfm.artist_profile(services.lastfm, services.redis, name)
+        except lastfm.LastfmError as exc:
+            logger.warning("Artist profile failed: %s", exc)
+            return ArtistProfile(name=name)
+
+    async def page() -> str | None:
+        if not services.spotify_catalog:
+            return None
+        return await spotify_catalog.artist_page(services.spotify_catalog, services.redis, name)
+
+    facts, spotify_url = await asyncio.gather(profile(), page())
+    return facts.model_copy(update={"spotify_url": spotify_url})
+
+
+async def find_artist_profiles(name: str, services: Services) -> list[ArtistProfile]:
+    """A real duo keeps its own page. A tour billed as one name becomes each of its Artists."""
+    whole = await find_artist_profile(name, services)
+    parts = collab_names(name)
+    if whole.spotify_url or whole.bio or not parts:
+        return [whole]
+    return list(await asyncio.gather(*(_billed_profile(part, services) for part in parts)))
+
+
+async def _billed_profile(name: str, services: Services) -> ArtistProfile:
+    """A billing can use a name the Artist is not filed under, so an alias gets a second look."""
+    facts = await find_artist_profile(name, services)
+    if facts.spotify_url:
+        return facts
+    try:
+        filed = await musicbrainz.filed_name(services.musicbrainz, services.redis, name)
+    except musicbrainz.MusicBrainzError as exc:
+        logger.warning("MusicBrainz failed: %s", exc)
+        return facts
+    return await find_artist_profile(filed, services) if filed != name else facts
 
 
 def _event(name: str, payload: BaseModel | None = None) -> ServerSentEvent:
