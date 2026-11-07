@@ -12,6 +12,7 @@ from pydantic_ai import models
 from concert_scout.aliases import music_tag
 from concert_scout.config import Settings
 from concert_scout.interpreter import interpret, make_model
+from concert_scout.models import Artist, Concert
 from concert_scout.sources import geocoder, lastfm, listenbrainz, musicbrainz, ticketmaster
 
 pytestmark = pytest.mark.live
@@ -93,7 +94,12 @@ async def test_real_listenbrainz_metadata_is_read_by_the_adapter(
         seed = await musicbrainz.resolve(mb, provider_cache, "Khruangbin")
     assert seed.mbid
     async with listenbrainz.make_client() as client:
-        tags = await listenbrainz.artist_tags(client, provider_cache, [seed.mbid])
+        fetch = listenbrainz.TagFetch(client, provider_cache)
+        artist = Artist(name="Khruangbin", mbid=seed.mbid)
+        fetch.add(
+            [Concert(id="live", name="Khruangbin", url="https://example.com", artists=[artist])]
+        )
+        tags = await fetch.tags()
     assert seed.mbid in tags and tags[seed.mbid], "No live metadata was available to validate"
 
 

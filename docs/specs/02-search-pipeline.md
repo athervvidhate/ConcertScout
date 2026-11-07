@@ -72,7 +72,7 @@ Rules from the spike:
 - Weight a tag by its inverse frequency in the pool, so "shoegaze" counts far more than "pop".
 - Treat a Ticketmaster subgenre as narrow only if it holds under 30 Artists in the pool. "Pop" held 192 and was useless.
 - If ListenBrainz similar-artists fails, fall back to Last.fm `artist.getSimilar`, then to MusicBrainz tags. The ListenBrainz endpoint is an unsupported Labs API, so it needs a tested fallback.
-- Fetch tags in batches of 50 from the ListenBrainz metadata endpoint. Cache similarity and tags for 7 days.
+- Fetch tags in batches of 50 from the ListenBrainz metadata endpoint, starting each batch as soon as the pool has delivered 50 new Artists, so tagging overlaps the Ticketmaster pages. Matching waits only for the last batch. A Search with no Taste fetches no tags. Cache similarity and tags for 7 days.
 - Scale a hop by how close the neighbour is, as a share of the list's top score. Listening counts fall off fast, so one hop uses the square root.
 - Add up every two-hop path to an Artist, capped at 1. On the live Tyler Childers data a good neighbour had 5 or 6 paths and a miss such as Kim Petras had 1.
 - Take seed tags from the MusicBrainz lookup, so tag matching needs no working similarity source. Without ListenBrainz at all, pool Artists have no tags and the seed, Last.fm and Ticketmaster genre signals remain.

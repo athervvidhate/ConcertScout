@@ -119,8 +119,8 @@ def install_sources(patch: pytest.MonkeyPatch) -> None:
     patch.setattr(similarity, "find_neighbours", AsyncMock(return_value=[]))
     patch.setattr(spotify_catalog, "artist_page", AsyncMock(return_value=None))
     patch.setattr(
-        listenbrainz,
-        "artist_tags",
+        listenbrainz.TagFetch,
+        "tags",
         AsyncMock(return_value={"contract-artist": ["uk garage"], "second-artist": ["uk garage"]}),
     )
 

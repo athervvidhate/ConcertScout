@@ -1,8 +1,7 @@
 import asyncio
 import datetime as dt
 import logging
-from collections.abc import Sequence
-from itertools import batched
+from collections.abc import Iterable, Sequence
 from typing import Any
 from urllib.parse import quote
 
@@ -11,7 +10,7 @@ from pydantic import BaseModel
 from redis.asyncio import Redis
 
 from concert_scout import cache
-from concert_scout.models import SimilarArtist
+from concert_scout.models import Concert, SimilarArtist
 from concert_scout.sources import http
 
 logger = logging.getLogger(__name__)
@@ -71,18 +70,53 @@ def parse_similar(body: list[dict[str, Any]]) -> list[SimilarArtist]:
     return sorted(artists, key=lambda artist: artist.score, reverse=True)
 
 
-async def artist_tags(
-    client: httpx.AsyncClient, redis: Redis, mbids: Sequence[str]
-) -> dict[str, list[str]]:
-    """Tags by MusicBrainz ID. A failed batch only leaves its Artists untagged for this Search."""
-    keys = {mbid: f"tags:{mbid}" for mbid in mbids}
-    cached = await cache.read_many(redis, list(keys.values()), CachedTags)
-    tags = {mbid: cached[key].tags for mbid, key in keys.items() if key in cached}
+class TagFetch:
+    """Tags by MusicBrainz ID, fetched a batch at a time as Concerts arrive, to overlap the pool.
 
-    missing = [mbid for mbid in keys if mbid not in tags]
-    batches = batched(missing, TAG_BATCH_SIZE, strict=False)
-    fetched = await asyncio.gather(*(_tag_batch(client, redis, batch) for batch in batches))
-    return tags | {mbid: found for batch in fetched for mbid, found in batch.items()}
+    A failed batch only leaves its Artists untagged for this Search.
+    """
+
+    def __init__(self, client: httpx.AsyncClient, redis: Redis) -> None:
+        self._client = client
+        self._redis = redis
+        self._seen: set[str] = set()
+        self._waiting: list[str] = []
+        self._batches: list[asyncio.Task[dict[str, list[str]]]] = []
+
+    def add(self, concerts: Iterable[Concert]) -> None:
+        for concert in concerts:
+            for artist in concert.artists:
+                if artist.mbid and artist.mbid not in self._seen:
+                    self._seen.add(artist.mbid)
+                    self._waiting.append(artist.mbid)
+        while len(self._waiting) >= TAG_BATCH_SIZE:
+            self._start(self._waiting[:TAG_BATCH_SIZE])
+            del self._waiting[:TAG_BATCH_SIZE]
+
+    async def tags(self) -> dict[str, list[str]]:
+        """Every Artist added so far. Waits for the batches still out."""
+        if self._waiting:
+            self._start(self._waiting)
+            self._waiting = []
+        fetched = await asyncio.gather(*self._batches)
+        return {mbid: found for batch in fetched for mbid, found in batch.items()}
+
+    async def close(self) -> None:
+        for batch in self._batches:
+            batch.cancel()
+        await asyncio.gather(*self._batches, return_exceptions=True)
+
+    def _start(self, mbids: Sequence[str]) -> None:
+        self._batches.append(asyncio.create_task(self._batch(list(mbids))))
+
+    async def _batch(self, mbids: Sequence[str]) -> dict[str, list[str]]:
+        keys = {mbid: f"tags:{mbid}" for mbid in mbids}
+        cached = await cache.read_many(self._redis, list(keys.values()), CachedTags)
+        tags = {mbid: cached[key].tags for mbid, key in keys.items() if key in cached}
+        missing = [mbid for mbid in mbids if mbid not in tags]
+        if missing:
+            tags |= await _tag_batch(self._client, self._redis, missing)
+        return tags
 
 
 async def _tag_batch(

@@ -2,6 +2,7 @@ import asyncio
 import datetime as dt
 import logging
 import re
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -25,6 +26,8 @@ FIRST_REAL_SALE = dt.datetime(2000, 1, 1, tzinfo=dt.UTC)
 NOT_A_PRESALE = re.compile(r"vip|onsale", re.IGNORECASE)
 # About 5km, so Searches near each other share a pool without moving its 50-mile circle much.
 POINT_PRECISION = 5
+
+type OnPage = Callable[[list[Concert]], None]
 # Ticketmaster's words for having no classification.
 NO_GENRE = {"other", "undefined"}
 IMAGE_RATIO = "16_9"
@@ -54,8 +57,11 @@ async def find_concerts(
     *,
     state: tuple[str, str] | None = None,
     radius: int = RADIUS_MILES,
+    on_page: OnPage | None = None,
 ) -> list[Concert]:
-    return await _find(client, redis, _base_params(point, state, radius), start, end)
+    """`on_page` sees each page as it arrives, so later steps can start before the last one."""
+    params = _base_params(point, state, radius)
+    return await _find(client, redis, params, start, end, on_page)
 
 
 async def find_artist_concerts(
@@ -95,17 +101,18 @@ async def _find(
     params: dict[str, str | int],
     start: dt.date | None = None,
     end: dt.date | None = None,
+    on_page: OnPage | None = None,
 ) -> list[Concert]:
     # The venue's local time, because `startDateTime` is UTC and would shift a late Concert a day.
     if start and end:
         params = params | {"localStartDateTime": f"{start}T00:00:00,{end}T23:59:59"}
-    concerts, total = await _page(client, redis, params, 0)
+    concerts, total = await _page(client, redis, params, 0, on_page)
 
     if total > MAX_RESULTS and start and end and start < end:
         middle = start + dt.timedelta(days=(end - start).days // 2)
         before, after = await asyncio.gather(
-            _find(client, redis, params, start, middle),
-            _find(client, redis, params, middle + dt.timedelta(days=1), end),
+            _find(client, redis, params, start, middle, on_page),
+            _find(client, redis, params, middle + dt.timedelta(days=1), end, on_page),
         )
         return before + after
 
@@ -113,7 +120,7 @@ async def _find(
         logger.warning("Ticketmaster cut a query off at %d of %d", MAX_RESULTS, total)
     reachable = min(total, MAX_RESULTS)
     pages = range(1, (reachable + PAGE_SIZE - 1) // PAGE_SIZE)
-    rest = await asyncio.gather(*(_page(client, redis, params, page) for page in pages))
+    rest = await asyncio.gather(*(_page(client, redis, params, page, on_page) for page in pages))
     return concerts + [concert for page, _ in rest for concert in page]
 
 
@@ -133,20 +140,27 @@ async def find_keyword(
 
 
 async def _page(
-    client: httpx.AsyncClient, redis: Redis, params: dict[str, str | int], page: int
+    client: httpx.AsyncClient,
+    redis: Redis,
+    params: dict[str, str | int],
+    page: int,
+    on_page: OnPage | None = None,
 ) -> tuple[list[Concert], int]:
     await limits.ticketmaster_call(redis)
     try:
         response = await client.get("/events.json", params=params | {"page": page})
         response.raise_for_status()
         body = response.json()
-        return parse_concerts(body), body["page"]["totalElements"]
+        concerts, total = parse_concerts(body), body["page"]["totalElements"]
     except httpx.HTTPStatusError as exc:
         raise TicketmasterError(f"status {exc.response.status_code}") from None
     except httpx.HTTPError as exc:
         raise TicketmasterError(type(exc).__name__) from None
     except (KeyError, TypeError, ValueError) as exc:
         raise TicketmasterError(f"unreadable response: {type(exc).__name__}") from None
+    if on_page:
+        on_page(concerts)
+    return concerts, total
 
 
 def parse_concerts(body: dict[str, Any]) -> list[Concert]:

@@ -138,3 +138,14 @@ The grader ranks Bonobo a 3 for ambient and Katseye a 0, as a person would. It r
 - Grade the remaining pools, to tell missing candidates from missing Concerts for every Search.
 - Hold the interpreter steady. It changes the shortlist for six Searches out of twenty.
 - Label a sample, so the grader's agreement with the owner is known.
+
+## Speed: tags while the pool arrives
+
+The match step waited for the whole pool, then sent every ListenBrainz tag request at once. London needs 14 requests of 50 Artists. Replayed live, one request alone took 0.9 seconds and all 14 together took 4.0, returning in waves about a second apart, so ListenBrainz queues them. Tag batches now start as Ticketmaster pages arrive. Cold captures of the same 28 Searches (`batch-2026-11-07-192838-9bf3e016`, $0.060):
+
+| | Search median | Search p95 | Match median | Match p95 | Match max |
+|---|---:|---:|---:|---:|---:|
+| Tags after the pool | 12.6s | 19.0s | 1.5s | 5.0s | 6.0s |
+| Tags while the pool arrives | 11.4s | 16.8s | 0.5s | 1.4s | 1.8s |
+
+Poster sizes held: 166 picks against 164. The pool step itself did not change, median 2.8 seconds, and is now the largest wait after the ranker.

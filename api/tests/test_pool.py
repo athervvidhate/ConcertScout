@@ -9,7 +9,7 @@ import pytest
 from fakeredis import FakeAsyncRedis
 
 from concert_scout import pool
-from concert_scout.models import Place
+from concert_scout.models import Concert, Place
 from concert_scout.sources import ticketmaster
 from tests.contracts import CONCERTS, DAY, NOW, PLACE, forbidden_http
 
@@ -151,3 +151,35 @@ async def test_a_concert_is_over_by_the_calendar_at_its_own_venue(
     assert bool(found) is kept
     assert tonight.date is not None
     assert min(call.args[3] for call in fetch.await_args_list) <= tonight.date
+
+
+async def test_each_page_and_cached_chunk_is_reported_as_it_arrives() -> None:
+    def event(id_: str) -> dict[str, object]:
+        return {
+            "id": id_,
+            "name": f"Show {id_}",
+            "url": "https://tickets.example",
+            "dates": {"start": {"localDate": f"{DAY}"}},
+            "_embedded": {"attractions": [{"name": f"Artist {id_}"}]},
+        }
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        page = int(request.url.params["page"])
+        body = {
+            "page": {"totalElements": ticketmaster.PAGE_SIZE + 1},
+            "_embedded": {"events": [event(f"{page}")]},
+        }
+        return httpx.Response(200, json=body)
+
+    redis = FakeAsyncRedis()
+    seen: list[list[str]] = []
+
+    def found(concerts: list[Concert]) -> None:
+        seen.append([c.id for c in concerts])
+
+    async with ticketmaster.make_client("unused", httpx.MockTransport(respond)) as client:
+        first = await pool.find_concerts(client, redis, PLACE, [], DAY, DAY, NOW, found)
+        assert sorted(seen) == [["0"], ["1"]]
+        seen.clear()
+        await pool.find_concerts(client, redis, PLACE, [], DAY, DAY, NOW, found)
+    assert seen == [[c.id for c in first]]
