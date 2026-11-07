@@ -14,8 +14,6 @@
 - id: techno-detroit
   text: Techno in Detroit
   snapshot: techno-detroit-2026-11-07-ac6ca223
-  must:
-  - Zeds Dead
   good:
   - Taiki Nulight
   - Moody Good
@@ -65,13 +63,13 @@
   snapshot: melodic-rap-houston-2026-11-07-babf31c3
   must:
   - Trippie Redd
-  - Doja Cat
   good:
   - Lil Tracy
   - TopOppGen
   - K Suave
   - BalloutDaDon
   - Lil Peep
+  - Doja Cat
   bad:
   - Key Glock
   judged: true
