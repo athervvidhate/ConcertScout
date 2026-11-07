@@ -55,6 +55,16 @@ const saleFormat = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 });
 
+/** An Artist's dates gathered by venue, so a run of shows reads as one place. */
+export function byVenue(concerts: Concert[]): Concert[][] {
+  const venues = new Map<string, Concert[]>();
+  for (const concert of concerts) {
+    const key = [concert.venue, concert.city, concert.region].join("|");
+    venues.set(key, [...(venues.get(key) ?? []), concert]);
+  }
+  return [...venues.values()];
+}
+
 /** The next presale, for a Concert not yet on general sale. */
 export function presaleLine({ general_sale, presales = [] }: Concert, now = new Date()): string | null {
   if (general_sale && new Date(general_sale) <= now) return null;

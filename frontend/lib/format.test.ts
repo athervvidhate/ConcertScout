@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatDate, formatPosterHeading, formatPrice, formatTime, presaleLine } from "@/lib/format";
+import { byVenue, formatDate, formatPosterHeading, formatPrice, formatTime, presaleLine } from "@/lib/format";
 
 describe("formatDate", () => {
   it("keeps the venue's calendar day", () => {
@@ -33,6 +33,17 @@ describe("presaleLine", () => {
     expect(presaleLine(sale, new Date(2027, 0, 16))).toBeNull();
     expect(presaleLine({ ...sale, general_sale: undefined }, new Date(2027, 0, 14, 11))).toBeNull();
     expect(presaleLine(concert, new Date(2027, 0, 1))).toBeNull();
+  });
+});
+
+describe("byVenue", () => {
+  const show = (id: string, venue: string, date: string) => ({
+    id, name: id, url: "https://tickets.example", artists: [], venue, city: "San Diego", region: "CA", date,
+  });
+
+  it("gathers a venue's dates and keeps the order they came in", () => {
+    const groups = byVenue([show("a", "Viejas", "2027-05-21"), show("b", "Forum", "2027-05-22"), show("c", "Viejas", "2027-05-23")]);
+    expect(groups.map((group) => group.map(({ id }) => id))).toEqual([["a", "c"], ["b"]]);
   });
 });
 

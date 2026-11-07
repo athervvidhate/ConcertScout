@@ -215,6 +215,58 @@ test("Spotify access denial explains the invite list and keeps no session", asyn
   await expect(page.getByRole("status")).toContainText("not on the app's invite list");
   expect((await context.cookies()).some(c => c.name === "concert_scout_spotify")).toBe(false);
 });
+test("an Artist with several dates is one Ticket, and arrow keys decide nothing", async ({page}) => {
+  await page.goto("/");
+  await search(page);
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await expect(page.locator(".poster-name")).toHaveCount(2);
+  await expect(page.locator(".poster-name small")).toHaveCount(0);
+  await page.getByText("1 more date").click();
+  await expect(page.locator(".other-dates a")).toHaveAttribute("href", "https://tickets.example/three");
+  await page.locator(".ticket-hint").click();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator(".poster-name.saved")).toHaveCount(0);
+  await expect(page.locator(".poster-name.skipped")).toHaveCount(0);
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+});
+
+test("a Poster name's pink layer sits exactly on its dark layer", async ({page}) => {
+  await page.emulateMedia({reducedMotion: "reduce"});
+  await page.goto("/");
+  await search(page);
+  await expect(page.locator(".ticket")).toBeVisible();
+  await page.getByRole("button", {name: "Save", exact: true}).click();
+  const offsets = await page.locator(".poster-name").evaluateAll(names => names.map(name => {
+    const [dark, pink] = [...name.querySelectorAll("span")].map(layer => layer.getBoundingClientRect());
+    return Math.max(Math.abs(dark.top - pink.top), Math.abs(dark.left - pink.left));
+  }));
+  expect(offsets.length).toBeGreaterThan(0);
+  for (const offset of offsets) expect(offset).toBeLessThan(0.5);
+});
+
+test("saved and skipped marks wait until the lineup has landed", async ({page}) => {
+  await page.emulateMedia({reducedMotion: "reduce"});
+  await page.goto("/");
+  await search(page);
+  await expect(page.locator(".ticket")).toBeVisible();
+  await page.getByRole("button", {name: "Save", exact: true}).click();
+  await expect(page.locator(".poster-name.saved small")).toBeVisible();
+  await page.getByRole("button", {name: "Skip", exact: true}).click();
+  await page.reload();
+  await page.emulateMedia({reducedMotion: "no-preference"});
+  await search(page);
+  const flying = page.locator(".poster:not(.poster-settled)");
+  await expect(flying).toBeVisible();
+  const landing = await flying.locator(".poster-name").evaluateAll(names => names.map(name => {
+    const style = getComputedStyle(name);
+    return [style.opacity, style.textDecorationColor, getComputedStyle(name.querySelector("small") ?? name).opacity];
+  }));
+  expect(landing).toEqual(landing.map(() => ["1", "rgba(0, 0, 0, 0)", "1"]).map((row, index) => index === 0 ? ["1", "rgba(0, 0, 0, 0)", "0"] : row));
+  await expect(page.locator(".poster-settled .poster-name.skipped")).toHaveCSS("opacity", "0.35");
+  await expect(page.locator(".poster-settled .poster-name.saved small")).toHaveCSS("opacity", "1");
+});
+
 test("a Ticket shows the source photo only when there is one", async ({page}) => {
   await page.emulateMedia({reducedMotion: "reduce"});
   await page.goto("/");
@@ -225,6 +277,37 @@ test("a Ticket shows the source photo only when there is one", async ({page}) =>
   await page.getByRole("button", {name: "Skip", exact: true}).click();
   await expect(page.getByRole("link", {name: "Tickets for Contract Concert Two"})).toBeVisible();
   await expect(page.locator(".ticket-photo")).toHaveCount(0);
+});
+
+test("the last Ticket ends the Poster, with or without a saved Concert", async ({page}) => {
+  await page.emulateMedia({reducedMotion: "reduce"});
+  await page.goto("/");
+  await search(page);
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await page.getByRole("button", {name: "Skip", exact: true}).click();
+  await page.getByRole("button", {name: "Skip", exact: true}).click();
+  await expect(page.getByRole("heading", {name: "Nothing saved this time"})).toBeVisible();
+  await expect(page.locator(".ticket")).toHaveCount(0);
+  await page.locator(".poster-name").first().click();
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await page.getByRole("button", {name: "Save", exact: true}).click();
+  await expect(page.getByRole("heading", {name: "You saved 1 Concert"})).toBeVisible();
+  await page.getByRole("link", {name: "See your Saved Concerts"}).click();
+  await expect(page).toHaveURL(/\/saved$/);
+});
+
+test("the Artist hint shows once and stays gone", async ({page}) => {
+  await page.emulateMedia({reducedMotion: "reduce"});
+  await page.goto("/");
+  await search(page);
+  const hint = page.locator(".artist-hint");
+  await expect(hint).toBeVisible();
+  await page.getByRole("button", {name: "Save", exact: true}).click();
+  await expect(hint).toHaveCount(0);
+  await page.reload();
+  await search(page);
+  await expect(page.locator(".ticket")).toBeVisible();
+  await expect(hint).toHaveCount(0);
 });
 
 test("a Search with no place uses the shared location", async ({page, context}) => {

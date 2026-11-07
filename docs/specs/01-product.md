@@ -36,7 +36,7 @@ A Ticket shows the date, Artist, the reason for the pick, venue, day and time, p
 
 The reason comes from the ranker. Every other fact comes from the source record, per [ADR 0002](../adr/0002-facts-never-pass-through-the-llm.md). A missing time or price is left out. The app never invents a value, which fixes the old fake "8:00 PM".
 
-The visitor can Save or Skip with buttons, or by dragging the Ticket right or left. After either action, the next undecided Ticket opens. All actions work from the keyboard.
+The visitor can Save or Skip with buttons, or by dragging the Ticket right or left. After either action, the next undecided Ticket opens. After the last one, an end panel lists what was saved from this Poster and links to the Saved page, or says nothing was saved. Every action is a button, so all of them work from the keyboard.
 
 ## Saved Concerts
 

@@ -27,7 +27,8 @@ export type Concert = {
   presales?: Presale[];
 };
 
-export type Recommendation = { concert: Concert; score?: number; reason?: string };
+// `also` holds the same Artist's other dates.
+export type Recommendation = { concert: Concert; score?: number; reason?: string; also?: Concert[] };
 
 // What the interpreter read from a Search. Anything it did not find is left out.
 export type Interpreted = {
