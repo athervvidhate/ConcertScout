@@ -2,13 +2,14 @@ import datetime as dt
 from typing import Any
 
 import httpx
-from httpx_retries import Retry, RetryTransport
+from pygeohash import encode
 
-from concert_scout.models import Concert, Price
+from concert_scout.models import Concert, Place, Price
+from concert_scout.sources import http
 
 BASE_URL = "https://app.ticketmaster.com/discovery/v2"
-USER_AGENT = "ConcertScout (+https://github.com/athervvidhate/ConcertScoutAI)"
 PAGE_SIZE = 50
+RADIUS_MILES = 50
 
 
 class TicketmasterError(Exception):
@@ -18,17 +19,28 @@ class TicketmasterError(Exception):
 def make_client(
     api_key: str, transport: httpx.AsyncBaseTransport | None = None
 ) -> httpx.AsyncClient:
-    return httpx.AsyncClient(
-        base_url=BASE_URL,
-        params={"apikey": api_key},
-        headers={"User-Agent": USER_AGENT},
-        timeout=10.0,
-        transport=RetryTransport(transport, retry=Retry(total=2, backoff_factor=0.5)),
-    )
+    return http.make_client(BASE_URL, {"apikey": api_key}, transport)
 
 
-async def find_concerts(client: httpx.AsyncClient, city: str) -> list[Concert]:
-    params = {"city": city, "segmentName": "Music", "size": PAGE_SIZE, "sort": "date,asc"}
+async def find_concerts(
+    client: httpx.AsyncClient,
+    place: Place,
+    start: dt.date | None = None,
+    end: dt.date | None = None,
+) -> list[Concert]:
+    params: dict[str, str | int] = {
+        "geoPoint": encode(place.lat, place.lon, precision=9),
+        "radius": RADIUS_MILES,
+        "unit": "miles",
+        "segmentName": "Music",
+        "size": PAGE_SIZE,
+        "sort": "date,asc",
+    }
+    # The venue's local time, because `startDateTime` is UTC and would shift a late Concert a day.
+    if start or end:
+        first = f"{start}T00:00:00" if start else "*"
+        last = f"{end}T23:59:59" if end else "*"
+        params["localStartDateTime"] = f"{first},{last}"
     try:
         response = await client.get("/events.json", params=params)
         response.raise_for_status()

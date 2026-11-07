@@ -37,10 +37,10 @@ function stubStream(...chunks: string[]) {
   return fetchStub;
 }
 
-async function searchFor(city: string) {
+async function searchFor(text: string) {
   const user = userEvent.setup();
   render(<Search />);
-  await user.type(screen.getByLabelText("City"), city);
+  await user.type(screen.getByRole("textbox", { name: "Search" }), text);
   await user.click(screen.getByRole("button", { name: "Search" }));
   return user;
 }
@@ -49,23 +49,34 @@ const poster = (...concerts: Concert[]) =>
   sse("poster", { recommendations: concerts.map((concert) => ({ concert })) });
 
 describe("Search", () => {
-  it("posts the city and lists streamed Concerts with their facts", async () => {
+  it("posts the text and lists streamed Concerts with their facts", async () => {
+    const text = "Something like Khruangbin in Chicago, next two weekends";
     const fetchStub = stubStream(
-      sse("status", { step: "pool", message: "Looking for Concerts in Chicago" }),
+      sse("status", { step: "interpret", message: "Reading your Search" }),
+      sse("interpreted", {
+        place: "Chicago",
+        start: "2026-11-06",
+        end: "2026-11-15",
+        artists: ["Khruangbin"],
+      }),
+      sse("status", { step: "pool", message: "Looking for Concerts near Chicago" }),
       poster(full),
       sse("done", {}),
     );
 
-    await searchFor("Chicago");
+    await searchFor(text);
 
     const link = await screen.findByRole("link", { name: full.name });
     expect(link.getAttribute("href")).toBe(full.url);
     expect(screen.getByText("Fri, Nov 20, 2026 at 7:30 PM")).toBeTruthy();
     expect(screen.getByText("The Salt Shed, Chicago, IL")).toBeTruthy();
     expect(screen.getByText("$45.50 to $120.00")).toBeTruthy();
+    expect(
+      screen.getByText("Chicago · Fri, Nov 6, 2026 to Sun, Nov 15, 2026 · Khruangbin"),
+    ).toBeTruthy();
     const [url, init] = fetchStub.mock.calls[0];
     expect(url).toBe("http://127.0.0.1:8000/search");
-    expect(init.body).toBe(JSON.stringify({ city: "Chicago" }));
+    expect(init.body).toBe(JSON.stringify({ text }));
   });
 
   it("leaves a missing time and price blank", async () => {
@@ -78,15 +89,25 @@ describe("Search", () => {
     expect(screen.queryByText(/\$/)).toBeNull();
   });
 
-  it("says so when a city has no Concerts", async () => {
+  it("says so when a Search has no Concerts", async () => {
     stubStream(poster(), sse("done", {}));
 
     await searchFor("Nowhere");
 
-    expect(await screen.findByText(/No Concerts found in Nowhere/)).toBeTruthy();
+    expect(await screen.findByText(/No Concerts found for this Search/)).toBeTruthy();
   });
 
-  it("shows a streamed error and retries the same city", async () => {
+  it("asks for a new Search instead of a retry when the Search cannot work", async () => {
+    const message = "Tell us an Artist, a style or a place.";
+    stubStream(sse("error", { code: "needs_taste_or_place", message }), sse("done", {}));
+
+    await searchFor("hello there");
+
+    expect((await screen.findByRole("alert")).textContent).toContain(message);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("shows a streamed error and retries the same text", async () => {
     const message = "Ticketmaster is not responding. Try again in a minute.";
     stubStream(sse("error", { code: "ticketmaster_unavailable", message }), sse("done", {}));
 
@@ -97,7 +118,7 @@ describe("Search", () => {
     await user.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByRole("link", { name: full.name })).toBeTruthy();
-    expect(fetchStub.mock.calls[0][1].body).toBe(JSON.stringify({ city: "Chicago" }));
+    expect(fetchStub.mock.calls[0][1].body).toBe(JSON.stringify({ text: "Chicago" }));
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -118,11 +139,11 @@ describe("Search", () => {
   });
 
   it("shows the API's message when it refuses a Search", async () => {
-    const refusal = { code: "invalid_search", message: "Enter a city." };
+    const refusal = { code: "invalid_search", message: "Tell us an Artist, a style or a place." };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(refusal, { status: 422 })));
 
     await searchFor("Chicago");
 
-    expect((await screen.findByRole("alert")).textContent).toContain("Enter a city.");
+    expect((await screen.findByRole("alert")).textContent).toContain(refusal.message);
   });
 });

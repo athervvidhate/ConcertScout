@@ -9,27 +9,40 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel, StringConstraints
+from pydantic_ai.models import Model
+from redis.asyncio import Redis
 
+from concert_scout import cache, interpreter
 from concert_scout.config import Settings
 from concert_scout.models import SearchError
-from concert_scout.pipeline import run_search
-from concert_scout.sources import ticketmaster
+from concert_scout.pipeline import ASK_FOR_A_SEARCH, Services, run_search
+from concert_scout.sources import geocoder, ticketmaster
 
 
 class SearchRequest(BaseModel):
-    city: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
 
 
 def create_app(
-    settings: Settings | None = None, transport: httpx.AsyncBaseTransport | None = None
+    settings: Settings | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
+    redis: Redis | None = None,
+    model: Model | None = None,
 ) -> FastAPI:
     settings = settings or Settings()  # pyright: ignore[reportCallIssue]
-    client = ticketmaster.make_client(settings.tm_key.get_secret_value(), transport)
+    services = Services(
+        ticketmaster=ticketmaster.make_client(settings.tm_key.get_secret_value(), transport),
+        geocoder=geocoder.make_client(settings.geoapify_key.get_secret_value(), transport),
+        redis=redis or cache.make_client(settings.redis_url),
+        model=model or interpreter.make_model(settings.anthropic_api_key.get_secret_value()),
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         yield
-        await client.aclose()
+        await services.ticketmaster.aclose()
+        await services.geocoder.aclose()
+        await services.redis.aclose()
 
     app = FastAPI(title="Concert Scout", lifespan=lifespan)
     app.add_middleware(
@@ -41,7 +54,7 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def invalid_search(_: Request, __: RequestValidationError) -> JSONResponse:
-        error = SearchError(code="invalid_search", message="Enter a city.")
+        error = SearchError(code="invalid_search", message=ASK_FOR_A_SEARCH)
         return JSONResponse(error.model_dump(exclude_none=True), status_code=422)
 
     @app.get("/health")
@@ -50,7 +63,7 @@ def create_app(
 
     @app.post("/search", response_class=EventSourceResponse)
     async def search(search: SearchRequest) -> AsyncIterator[ServerSentEvent]:
-        async for event in run_search(search.city, client):
+        async for event in run_search(search.text, services):
             yield event
 
     return app
