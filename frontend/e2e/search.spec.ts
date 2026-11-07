@@ -446,12 +446,14 @@ test("every example fits the search box, even on a small phone", async ({page}) 
   await page.emulateMedia({reducedMotion: "reduce"});
   await page.goto("/");
   await expect(page.getByRole("button", {name: "Find concerts"})).toBeVisible();
-  const clipped = await page.locator(".search-bar input").evaluate((input, examples) => {
+  const clipped = await page.locator(".search-bar input").evaluate(async (input, examples) => {
     const style = getComputedStyle(input);
     const placeholder = getComputedStyle(input, "::placeholder");
     const room = input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
     const context = document.createElement("canvas").getContext("2d")!;
     context.font = `${placeholder.fontWeight} ${placeholder.fontSize} ${placeholder.fontFamily}`;
+    // Canvas measures with a fallback until the web font is in, and fallbacks differ by machine.
+    await document.fonts.load(context.font);
     return examples.filter(example => context.measureText(example).width > room);
   }, SEARCH_EXAMPLES);
   expect(clipped).toEqual([]);
