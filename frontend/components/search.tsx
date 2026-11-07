@@ -8,7 +8,7 @@ import { useSearch } from "@/lib/use-search";
 
 export function Search() {
   const [text, setText] = useState("");
-  const { phase, searched, status, interpreted, recommendations, error, retryable, search } =
+  const { phase, searched, status, interpreted, total, recommendations, error, retryable, search } =
     useSearch();
 
   function submit(event: SubmitEvent<HTMLFormElement>) {
@@ -44,6 +44,11 @@ export function Search() {
       <div aria-live="polite" className="mt-6 text-sm text-stone-600">
         {interpreted && <p>{formatInterpreted(interpreted)}</p>}
         {status && <p>{status}</p>}
+        {total !== null && total > recommendations.length && recommendations.length > 0 && (
+          <p>
+            Showing {recommendations.length} of {total.toLocaleString("en-US")} Concerts
+          </p>
+        )}
         {phase === "finished" && !error && recommendations.length === 0 && (
           <p>No Concerts found for this Search. Try wider dates or a nearby city.</p>
         )}

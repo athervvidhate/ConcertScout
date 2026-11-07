@@ -49,6 +49,32 @@ const poster = (...concerts: Concert[]) =>
   sse("poster", { recommendations: concerts.map((concert) => ({ concert })) });
 
 describe("Search", () => {
+  it("says how much of a big pool the list shows and keeps reading after the total", async () => {
+    stubStream(sse("pool", { total: 1189 }), poster(full), sse("done", {}));
+
+    await searchFor("Chicago");
+
+    await screen.findByRole("link", { name: full.name });
+    expect(screen.getByText("Showing 1 of 1,189 Concerts")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("hides Try again when the error says when to come back", async () => {
+    stubStream(
+      sse("error", {
+        code: "ticketmaster_limit",
+        message: "Try again tomorrow.",
+        retry_after: 3600,
+      }),
+      sse("done", {}),
+    );
+
+    await searchFor("Chicago");
+
+    await screen.findByText("Try again tomorrow.");
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
   it("posts the text and lists streamed Concerts with their facts", async () => {
     const text = "Something like Khruangbin in Chicago, next two weekends";
     const fetchStub = stubStream(

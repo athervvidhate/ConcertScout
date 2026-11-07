@@ -23,7 +23,7 @@ export type Recommendation = { concert: Concert };
 // What the interpreter read from a Search. Anything it did not find is left out.
 export type Interpreted = { place?: string; start?: string; end?: string; artists: string[] };
 
-export type SearchError = { code: string; message: string };
+export type SearchError = { code: string; message: string; retry_after?: number };
 
 // The visitor has to change these Searches, so running one again cannot help.
 export const NEEDS_A_NEW_SEARCH = ["needs_taste_or_place", "needs_place", "place_not_found"];
@@ -31,6 +31,7 @@ export const NEEDS_A_NEW_SEARCH = ["needs_taste_or_place", "needs_place", "place
 export type SearchEvent =
   | { event: "status"; data: { step: string; message: string } }
   | { event: "interpreted"; data: Interpreted }
+  | { event: "pool"; data: { total: number } }
   | { event: "poster"; data: { recommendations: Recommendation[] } }
   | { event: "error"; data: SearchError }
   | { event: "done"; data: Record<string, never> };
