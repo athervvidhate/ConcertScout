@@ -27,12 +27,13 @@ export function formatDate(date: string): string {
   return dateFormat.format(new Date(`${date}T00:00:00Z`));
 }
 
-/** Today on this device, in the same form as a Concert's date. */
-export function localToday(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
+export function viewerZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/** The calendar day in a zone, in the same form as a Concert's date. */
+export function dateIn(zone: string, now: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(now);
 }
 
 export function formatMonthDay(date: string): string {
@@ -45,6 +46,22 @@ export function formatDayShort(date: string): string {
 
 export function formatTime(time: string): string {
   return timeFormat.format(new Date(`1970-01-01T${time}Z`));
+}
+
+function zoneName(zone: string, style: "short" | "longOffset", at: Date): string | undefined {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: style }).formatToParts(at);
+  return parts.find(({ type }) => type === "timeZoneName")?.value;
+}
+
+/** The venue's own clock. A visitor elsewhere also sees which zone that clock is in. */
+export function formatConcertTime({ date, time, time_zone }: Concert, viewer = viewerZone()): string | undefined {
+  if (!time) return undefined;
+  const clock = formatTime(time);
+  if (!date || !time_zone) return clock;
+  // Treating the venue's clock as UTC lands within a day of the real moment, near enough to read a zone.
+  const at = new Date(`${date}T${time}Z`);
+  if (zoneName(viewer, "longOffset", at) === zoneName(time_zone, "longOffset", at)) return clock;
+  return `${clock} ${zoneName(time_zone, "short", at)}`;
 }
 
 // Unlike a Concert's times, a sale opens at one moment, so it reads in the visitor's own zone.

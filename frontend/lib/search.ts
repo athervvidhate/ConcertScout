@@ -1,5 +1,7 @@
 import { EventSourceParserStream } from "eventsource-parser/stream";
 
+import { viewerZone } from "@/lib/format";
+
 // Locally the API sits on the same machine as the page, so a phone on the network finds it too.
 function localApi(): string {
   if (typeof window === "undefined") return "http://127.0.0.1:8000";
@@ -25,6 +27,8 @@ export type Concert = {
   artists: Artist[];
   date?: string;
   time?: string;
+  // The venue's IANA zone. `date` and `time` already read in it.
+  time_zone?: string;
   venue?: string;
   city?: string;
   region?: string;
@@ -102,7 +106,7 @@ export async function* streamSearch(
   const response = await fetch(`${API_URL}/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, token, taste, near }),
+    body: JSON.stringify({ text, token, taste, near, time_zone: viewerZone() }),
     signal,
   });
   if (!response.ok || !response.body) {

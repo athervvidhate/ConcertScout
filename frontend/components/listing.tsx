@@ -1,4 +1,4 @@
-import { formatMonthDay, formatTime, presaleLine } from "@/lib/format";
+import { formatConcertTime, formatMonthDay, presaleLine } from "@/lib/format";
 import type { Concert } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
 
@@ -37,7 +37,7 @@ export function Listing({ concert, artist, href, note, anywhere = false }: Props
       </div>
       <div className="listing-where">
         {concert.venue && <p>{concert.venue}</p>}
-        <p>{[city, concert.time && formatTime(concert.time)].filter(Boolean).join(" at ")}</p>
+        <p>{[city, formatConcertTime(concert)].filter(Boolean).join(" at ")}</p>
         {presale && <p className="listing-note">{presale}</p>}
       </div>
       <a

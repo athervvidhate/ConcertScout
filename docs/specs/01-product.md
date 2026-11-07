@@ -34,6 +34,8 @@ If nothing qualifies, the page says so and offers the nearest useful change, suc
 
 A Ticket shows the date, Artist, the reason for the pick, venue, day and time, price if the source has one, and a link to buy from Ticketmaster. When the source has a real photo of the lead Artist or the Concert, a band across the top shows it, with a light tint of the Ticket's color. A Ticket with only Ticketmaster's generic placeholder has no band. While a Concert is not yet on general sale, a Ticket names its next presale that has not ended and when it starts. VIP packages do not count.
 
+Dates and times read on the venue's clock. A visitor in the same time zone sees "7:30 PM". A visitor anywhere else sees the venue's zone too, as in "7:30 PM CST". Presales open at one moment, so they stay in the visitor's zone.
+
 The reason comes from the ranker. Every other fact comes from the source record, per [ADR 0002](../adr/0002-facts-never-pass-through-the-llm.md). A missing time or price is left out. The app never invents a value, which fixes the old fake "8:00 PM".
 
 The visitor can Save or Skip with buttons, or by dragging the Ticket right or left. After either action, the next undecided Ticket opens. After the last one, an end panel lists what was saved from this Poster and links to the Saved page, or says nothing was saved. Every action is a button, so all of them work from the keyboard.

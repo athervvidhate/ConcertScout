@@ -28,7 +28,7 @@ class Interpretation(BaseModel):
 
 Common genre aliases (UKG, DnB/D&B, RnB, EDM) are normalized in code, including source tags. The existing interpreter call expands other familiar genre and place shorthand without an extra model call. A small explicit place alias map resolves common local shorthand before geocoding; unfamiliar names and explicit qualifiers are preserved.
 
-The prompt receives today's date in code, which removes the old hardcoded 2025. `tags` must include related styles, because exact tags are sparse: the spike found 4 Artists tagged "shoegaze" in Chicago and none tagged "techno".
+The prompt receives today's date in the visitor's own time zone, which the browser sends with the Search, so "this weekend" means their weekend. An unreadable zone falls back to UTC. `tags` must include related styles, because exact tags are sparse: the spike found 4 Artists tagged "shoegaze" in Chicago and none tagged "techno".
 
 ## 2. Resolve
 
@@ -44,6 +44,7 @@ A pool holds every Concert for a place and date window. A Geoapify state result 
 - Split the window into 30-day chunks to get past the 1,000-result cap.
 - With no dates, use the next 6 months. That covers 85-96% of listed Concerts and costs about 7-8 calls for Chicago.
 - Cache each chunk for 6 hours, keyed by rounded coordinates and month, so Searches share them.
+- A Concert is over when its date has passed at its own venue, using the time zone Ticketmaster reports. The pool asks for one day earlier than the visitor's today, because a venue further west can still be on that day.
 - Always look up seed Artists directly, so a seed's Concert is never lost to paging.
 - A seed Artist's direct lookup covers every date Ticketmaster lists. Unless the Search sets an end date, all of them stay, so a tour past the 6-month pool still appears at no extra cost.
 

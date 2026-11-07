@@ -18,7 +18,7 @@ async def test_search_spans_never_include_taste_or_spotify_data(
     telemetry.provider.add_span_processor(SimpleSpanProcessor(exporter))
     secret = "private taste and Spotify listening history"
     async with api_for() as api:
-        await api.post("/search", json={"text": secret, "token": "token"})
+        await api.post("/search", json={"text": secret, "token": "token", "time_zone": "UTC"})
     spans = exporter.get_finished_spans()
     assert {span.name for span in spans} >= {"search", "interpret", "resolve_place", "pool"}
     assert secret not in repr([(s.name, s.attributes, s.events, s.status) for s in spans])

@@ -36,6 +36,8 @@ class Concert(BaseModel):
     artists: list[Artist]
     date: dt.date | None = None
     time: dt.time | None = None
+    # The venue's IANA zone. `date` and `time` already read in it.
+    time_zone: str | None = None
     venue: str | None = None
     city: str | None = None
     region: str | None = None

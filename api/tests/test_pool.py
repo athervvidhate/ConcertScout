@@ -2,6 +2,7 @@
 
 import datetime as dt
 from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -10,7 +11,7 @@ from fakeredis import FakeAsyncRedis
 from concert_scout import pool
 from concert_scout.models import Place
 from concert_scout.sources import ticketmaster
-from tests.contracts import CONCERTS, DAY, PLACE, forbidden_http
+from tests.contracts import CONCERTS, DAY, NOW, PLACE, forbidden_http
 
 
 async def test_cached_chunks_are_shared_but_filtered_to_each_search(
@@ -20,9 +21,9 @@ async def test_cached_chunks_are_shared_but_filtered_to_each_search(
     monkeypatch.setattr(ticketmaster, "find_concerts", fetch)
     redis = FakeAsyncRedis()
     async with ticketmaster.make_client("unused", httpx.MockTransport(forbidden_http)) as client:
-        first = await pool.find_concerts(client, redis, PLACE, [], DAY, DAY, DAY)
+        first = await pool.find_concerts(client, redis, PLACE, [], DAY, DAY, NOW)
         second = await pool.find_concerts(
-            client, redis, PLACE, [], DAY + dt.timedelta(days=1), DAY + dt.timedelta(days=1), DAY
+            client, redis, PLACE, [], DAY + dt.timedelta(days=1), DAY + dt.timedelta(days=1), NOW
         )
     assert [c.id for c in first] == [CONCERTS[0].id]
     assert [c.id for c in second] == [CONCERTS[1].id]
@@ -47,7 +48,7 @@ async def test_seed_records_survive_pool_paging_and_ids_are_unique(
             ["Contract Artist"],
             DAY,
             DAY + dt.timedelta(days=1),
-            DAY,
+            NOW,
         )
     assert {c.id for c in found} == {c.id for c in CONCERTS[:2]}
     assert len(found) == 2
@@ -63,7 +64,7 @@ async def test_seed_artists_keep_far_off_concerts_unless_the_search_sets_an_end(
     monkeypatch.setattr(ticketmaster, "find_artist_concerts", AsyncMock(return_value=[seed_tour]))
     async with ticketmaster.make_client("unused", httpx.MockTransport(forbidden_http)) as client:
         no_dates = await pool.find_concerts(
-            client, FakeAsyncRedis(), PLACE, ["Contract Artist"], None, None, DAY
+            client, FakeAsyncRedis(), PLACE, ["Contract Artist"], None, None, NOW
         )
         with_end = await pool.find_concerts(
             client,
@@ -72,7 +73,7 @@ async def test_seed_artists_keep_far_off_concerts_unless_the_search_sets_an_end(
             ["Contract Artist"],
             None,
             far_off - dt.timedelta(days=1),
-            DAY,
+            NOW,
         )
     assert [c.id for c in no_dates] == ["seed-tour"]
     assert with_end == []
@@ -87,12 +88,12 @@ async def test_states_and_city_circles_never_share_cache_or_filters(
     texas = Place(name="Texas", lat=31.1, lon=-99.1, state_code="TX", country_code="US")
     redis = FakeAsyncRedis()
     async with ticketmaster.make_client("unused", httpx.MockTransport(forbidden_http)) as client:
-        await pool.find_concerts(client, redis, texas, ["Contract Artist"], DAY, DAY, DAY)
+        await pool.find_concerts(client, redis, texas, ["Contract Artist"], DAY, DAY, NOW)
         assert chunks.call_args.kwargs["state"] == seeds.call_args.kwargs["state"] == ("US", "TX")
         assert chunks.call_args.args[2] is None
-        await pool.find_concerts(client, redis, texas, ["Contract Artist"], DAY, DAY, DAY)
+        await pool.find_concerts(client, redis, texas, ["Contract Artist"], DAY, DAY, NOW)
         assert chunks.await_count == 1 and seeds.await_count == 1
-        await pool.find_concerts(client, redis, PLACE, [], DAY, DAY, DAY)
+        await pool.find_concerts(client, redis, PLACE, [], DAY, DAY, NOW)
         assert chunks.await_count == 2
         assert chunks.call_args.kwargs["state"] is None
         assert chunks.call_args.args[2] == ticketmaster.rounded_point(PLACE)
@@ -119,9 +120,34 @@ async def test_elsewhere_makes_one_call_and_caches_it() -> None:
         transport=httpx.MockTransport(respond), base_url="https://source.test"
     )
     redis = FakeAsyncRedis()
-    today = dt.date(2026, 11, 6)
     for _ in range(2):
-        assert await pool.find_elsewhere(client, redis, "hyperpop", None, None, today) == []
+        assert await pool.find_elsewhere(client, redis, "hyperpop", None, None, NOW) == []
     assert len(calls) == 1
     assert calls[0].url.params["keyword"] == "hyperpop"
     assert calls[0].url.params["size"] == str(pool.ELSEWHERE_SIZE)
+
+
+@pytest.mark.parametrize(
+    ("visitor", "venue", "kept"),
+    [
+        pytest.param(
+            "America/Los_Angeles", "America/New_York", False, id="already-over-in-the-east"
+        ),
+        pytest.param("Europe/London", "America/Los_Angeles", True, id="still-tonight-in-the-west"),
+        pytest.param("America/Los_Angeles", "America/Los_Angeles", True, id="same-zone"),
+    ],
+)
+async def test_a_concert_is_over_by_the_calendar_at_its_own_venue(
+    monkeypatch: pytest.MonkeyPatch, visitor: str, venue: str, kept: bool
+) -> None:
+    moment = dt.datetime(2026, 11, 7, 7, 30, tzinfo=dt.UTC)  # 11:30 PM Nov 6 in Los Angeles
+    tonight = CONCERTS[0].model_copy(update={"date": dt.date(2026, 11, 6), "time_zone": venue})
+    fetch = AsyncMock(return_value=[tonight])
+    monkeypatch.setattr(ticketmaster, "find_concerts", fetch)
+    async with ticketmaster.make_client("unused", httpx.MockTransport(forbidden_http)) as client:
+        found = await pool.find_concerts(
+            client, FakeAsyncRedis(), PLACE, [], None, None, moment.astimezone(ZoneInfo(visitor))
+        )
+    assert bool(found) is kept
+    assert tonight.date is not None
+    assert min(call.args[3] for call in fetch.await_args_list) <= tonight.date

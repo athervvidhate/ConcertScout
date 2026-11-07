@@ -2,6 +2,8 @@
 
 from typing import Any
 
+import pytest
+
 from concert_scout.sources.ticketmaster import parse_concert
 
 
@@ -37,3 +39,10 @@ def test_a_placeholder_gives_way_to_the_concert_image() -> None:
 
 def test_only_placeholders_leave_the_image_out() -> None:
     assert parse_concert(event([photo("generic", fallback=True)], [])).image is None
+
+
+@pytest.mark.parametrize(("reported", "kept"), [("America/Chicago", True), ("Not/A_Zone", False)])
+def test_a_concert_keeps_only_a_real_venue_zone(reported: str, kept: bool) -> None:
+    record = event([], [])
+    record["_embedded"]["venues"] = [{"name": "Venue", "timezone": reported}]
+    assert parse_concert(record).time_zone == (reported if kept else None)

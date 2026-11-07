@@ -118,7 +118,7 @@ async def test_shelf_uses_exact_source_facts_without_any_model_and_disconnect_de
             and b"private-refresh-token" not in encrypted
         )
         assert 0 < await redis.ttl(session_key(session)) <= SESSION_TTL
-        response = await api.get(PREFIX + "/shelf", params={"place": "SF"})
+        response = await api.get(PREFIX + "/shelf", params={"place": "SF", "time_zone": "UTC"})
         assert response.status_code == 200
         assert "no-store" in response.headers["cache-control"]
         items = response.json()["concerts"]
@@ -194,7 +194,7 @@ async def test_refresh_cannot_resurrect_a_concurrently_disconnected_session(
             return TOKEN
 
         monkeypatch.setattr(Client, "refresh", AsyncMock(side_effect=refresh))
-        response = await api.get(PREFIX + "/shelf", params={"place": "SF"})
+        response = await api.get(PREFIX + "/shelf", params={"place": "SF", "time_zone": "UTC"})
         assert response.status_code == 401
         assert await redis.get(session_key(session)) is None
 
@@ -285,7 +285,9 @@ async def test_the_artist_list_is_cached_encrypted_and_never_outlives_a_disconne
     async with api_for(redis, key) as api:
         session = await connect(api)
         for _ in range(2):
-            assert (await api.get(PREFIX + "/shelf", params={"place": "SF"})).status_code == 200
+            assert (
+                await api.get(PREFIX + "/shelf", params={"place": "SF", "time_zone": "UTC"})
+            ).status_code == 200
         assert artists.await_count == 1
         stored = await redis.get(artists_key(session))
         assert isinstance(stored, bytes) and b"Contract Artist" not in stored
@@ -337,7 +339,8 @@ async def test_the_shelf_route_applies_the_search_genres() -> None:
     async with api_for(FakeAsyncRedis(), Fernet.generate_key().decode()) as api:
         await connect(api)
         response = await api.get(
-            PREFIX + "/shelf", params={"place": "SF", "genre": "Not A Listed Genre"}
+            PREFIX + "/shelf",
+            params={"place": "SF", "genre": "Not A Listed Genre", "time_zone": "UTC"},
         )
         assert response.status_code == 200
         assert response.json()["concerts"] == []

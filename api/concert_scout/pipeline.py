@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from pydantic_ai.models import Model
 from redis.asyncio import Redis
 
-from concert_scout import assemble, limits, matching, pool, similarity, telemetry
+from concert_scout import assemble, clock, limits, matching, pool, similarity, telemetry
 from concert_scout.interpreter import Interpretation, InterpreterError, interpret
 from concert_scout.models import (
     ArtistProfile,
@@ -153,7 +153,7 @@ async def _recommend(
 
 
 async def _find_elsewhere(
-    interpretation: Interpretation, place: Place, services: Services, today: dt.date
+    interpretation: Interpretation, place: Place, services: Services, now: dt.datetime
 ) -> Elsewhere | None:
     """The Poster has already answered this Search, so a failure here only means no extra list."""
     words = [*interpretation.artists, *interpretation.tags, *interpretation.descriptors]
@@ -167,7 +167,7 @@ async def _find_elsewhere(
                 words[0],
                 interpretation.start,
                 interpretation.end,
-                today,
+                now,
             )
     except (ticketmaster.TicketmasterError, limits.DailyLimitReached) as exc:
         logger.warning("Elsewhere lookup failed: %s", type(exc).__name__)
@@ -178,11 +178,11 @@ async def _find_elsewhere(
 
 
 async def _steps(
-    text: str, imported: Sequence[str], near: Place | None, services: Services, today: dt.date
+    text: str, imported: Sequence[str], near: Place | None, services: Services, now: dt.datetime
 ) -> AsyncIterator[ServerSentEvent]:
     yield _event("status", Status(step="interpret", message="Reading your Search"))
     with telemetry.step("interpret"):
-        interpretation = await interpret(text, today, services.model)
+        interpretation = await interpret(text, now.date(), services.model)
     names_only: Sequence[str] = ()
     # A Taste typed into this Search says what the person wants now, so it beats an import.
     if not (interpretation.artists or interpretation.tags or interpretation.descriptors):
@@ -230,7 +230,7 @@ async def _steps(
                 lookups,
                 interpretation.start,
                 interpretation.end,
-                today,
+                now,
             )
 
     # With a place, the pool needs nothing from the Taste, so the slowest steps overlap.
@@ -301,17 +301,18 @@ async def _steps(
             recommendations = await _recommend(interpretation, shortlist, artist_tags, services)
     yield _event("poster", Poster(recommendations=recommendations))
     if place and taste and not recommendations:
-        elsewhere = await _find_elsewhere(interpretation, place, services, today)
+        elsewhere = await _find_elsewhere(interpretation, place, services, now)
         if elsewhere:
             yield _event("elsewhere", elsewhere)
 
 
 async def run_search(
-    text: str, imported: Sequence[str], near: Place | None, services: Services
+    text: str, imported: Sequence[str], near: Place | None, time_zone: str, services: Services
 ) -> AsyncIterator[ServerSentEvent]:
     with telemetry.search() as usage:
         try:
-            async for event in stream_search(text, imported, near, services, dt.date.today()):
+            now = clock.now_in(time_zone)
+            async for event in stream_search(text, imported, near, services, now):
                 yield event
         finally:
             # A visitor who leaves early has still cost money, so a cancel must not skip this.
@@ -322,10 +323,10 @@ async def run_search(
 
 
 async def stream_search(
-    text: str, imported: Sequence[str], near: Place | None, services: Services, today: dt.date
+    text: str, imported: Sequence[str], near: Place | None, services: Services, now: dt.datetime
 ) -> AsyncIterator[ServerSentEvent]:
     try:
-        async for event in _steps(text, imported, near, services, today):
+        async for event in _steps(text, imported, near, services, now):
             yield event
     except InterpreterError as exc:
         logger.warning("Interpreter failed: %s", exc)

@@ -1,5 +1,6 @@
 import { useMemo, useSyncExternalStore } from "react";
 
+import { dateIn, viewerZone } from "@/lib/format";
 import type { Recommendation } from "@/lib/search";
 
 const SAVED_KEY = "concert-scout-saved";
@@ -81,6 +82,6 @@ export function useDecisions(): Record<string, Decision> {
 }
 
 /** A Concert with no known date stays, because it may still be ahead. */
-export function upcoming(saved: Recommendation[], today: string): Recommendation[] {
-  return saved.filter(({ concert }) => !concert.date || concert.date >= today);
+export function upcoming(saved: Recommendation[], now: Date): Recommendation[] {
+  return saved.filter(({ concert }) => !concert.date || concert.date >= dateIn(concert.time_zone ?? viewerZone(), now));
 }
