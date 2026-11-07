@@ -1,4 +1,4 @@
-.PHONY: install dev start phone redis api frontend-dev frontend-start check e2e check-live
+.PHONY: install dev start phone redis api frontend-dev frontend-start check e2e check-live check-context
 
 API_HOST ?= 127.0.0.1
 LAN_IP = $(shell ipconfig getifaddr en0)
@@ -46,3 +46,7 @@ e2e:
 # Explicit network/cost check against the configured real providers.
 check-live:
 	cd api && uv run pytest -m live tests/live
+
+# Local transcript adapters, without a model request. Claude mod runtime checks are optional.
+check-context:
+	python3 -m unittest discover -s tests -p 'test_agent_context.py'
