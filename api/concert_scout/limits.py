@@ -1,7 +1,10 @@
 import asyncio
 import datetime as dt
+import hashlib
 import logging
+import math
 import time
+from decimal import Decimal
 
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
@@ -14,6 +17,27 @@ SLOT_SECONDS = 1 / 3
 DAILY_CALLS = 5000
 # MusicBrainz blocks clients that average over 1 request a second.
 MUSICBRAINZ_GAP = dt.timedelta(seconds=1)
+
+
+SEARCHES_PER_HOUR = 10
+NEARBY_PER_HOUR = 60
+PLACES_PER_HOUR = 300
+HOUR_SECONDS = 3600
+DAILY_SPEND = Decimal(1)
+MONTHLY_SPEND = Decimal(10)
+MICRODOLLARS = 1_000_000
+
+
+class VisitorLimitReached(Exception):
+    def __init__(self, retry_after: int) -> None:
+        super().__init__(f"retry after {retry_after}s")
+        self.retry_after = retry_after
+
+
+class SpendCapReached(Exception):
+    def __init__(self, retry_after: int) -> None:
+        super().__init__(f"retry after {retry_after}s")
+        self.retry_after = retry_after
 
 
 class DailyLimitReached(Exception):
@@ -45,6 +69,58 @@ async def musicbrainz_call(redis: Redis) -> None:
     except RedisError as exc:
         logger.warning("Limiter failed: %s", type(exc).__name__)
         await asyncio.sleep(MUSICBRAINZ_GAP.total_seconds())
+
+
+async def visitor_call(redis: Redis, bucket: str, ip: str, limit: int) -> None:
+    """Count one call for this visitor this hour. Redis failures are the caller's to handle."""
+    now = time.time()
+    hour = int(now // HOUR_SECONDS)
+    # Redis only needs to tell visitors apart, so it never holds an address.
+    visitor = hashlib.sha256(ip.encode()).hexdigest()[:32]
+    key = f"visitor:{bucket}:{visitor}:{hour}"
+    calls = await redis.incr(key)
+    if calls == 1:
+        await redis.expire(key, HOUR_SECONDS)
+    if calls > limit:
+        raise VisitorLimitReached(HOUR_SECONDS - int(now % HOUR_SECONDS))
+
+
+def _spend_keys(now: dt.datetime) -> tuple[str, str]:
+    return f"spend:day:{now.date()}", f"spend:month:{now:%Y-%m}"
+
+
+def _seconds_until(moment: dt.datetime, now: dt.datetime) -> int:
+    return int((moment - now).total_seconds()) + 1
+
+
+async def check_spend(redis: Redis) -> None:
+    """Raises at either cap. Redis failures are the caller's to handle."""
+    now = dt.datetime.now(dt.UTC)
+    day_key, month_key = _spend_keys(now)
+    day, month = await redis.mget([day_key, month_key])
+    if Decimal(int(month or 0)) / MICRODOLLARS >= MONTHLY_SPEND:
+        next_month = (now.replace(day=1) + dt.timedelta(days=32)).replace(day=1)
+        start = next_month.replace(hour=0, minute=0, second=0, microsecond=0)
+        raise SpendCapReached(_seconds_until(start, now))
+    if Decimal(int(day or 0)) / MICRODOLLARS >= DAILY_SPEND:
+        tomorrow = dt.datetime.combine(now.date() + dt.timedelta(days=1), dt.time(), dt.UTC)
+        raise SpendCapReached(_seconds_until(tomorrow, now))
+
+
+async def record_spend(redis: Redis, cost: Decimal) -> None:
+    amount = math.ceil(cost * MICRODOLLARS)
+    if not amount:
+        return
+    day_key, month_key = _spend_keys(dt.datetime.now(dt.UTC))
+    try:
+        async with redis.pipeline(transaction=False) as pipeline:
+            pipeline.incrby(day_key, amount)
+            pipeline.expire(day_key, dt.timedelta(days=2))
+            pipeline.incrby(month_key, amount)
+            pipeline.expire(month_key, dt.timedelta(days=40))
+            await pipeline.execute()
+    except RedisError as exc:
+        logger.warning("Spend not recorded: %s", type(exc).__name__)
 
 
 async def _count_today(redis: Redis) -> None:

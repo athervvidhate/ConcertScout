@@ -17,7 +17,7 @@ redis:
 	@redis-cli ping >/dev/null 2>&1 || exec redis-server --save "" --appendonly no
 
 api:
-	cd api && uv run uvicorn --factory concert_scout.app:create_app --host 127.0.0.1 --port 8000
+	cd api && uv run uvicorn --factory concert_scout.app:create_app --host 127.0.0.1 --port 8000 --no-proxy-headers
 
 frontend-dev:
 	cd frontend && npm run dev

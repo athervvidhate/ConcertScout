@@ -4,6 +4,7 @@ import logging
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 
+import anyio
 import httpx
 from fastapi.sse import ServerSentEvent
 from pydantic import BaseModel
@@ -46,6 +47,7 @@ class Services:
     lastfm: httpx.AsyncClient | None
     redis: Redis
     model: Model
+    turnstile: httpx.AsyncClient
 
 
 async def find_nearby(lat: float, lon: float, services: Services, today: dt.date) -> list[Concert]:
@@ -182,9 +184,16 @@ async def _steps(text: str, services: Services, today: dt.date) -> AsyncIterator
 
 
 async def run_search(text: str, services: Services) -> AsyncIterator[ServerSentEvent]:
-    with telemetry.search():
-        async for event in stream_search(text, services, dt.date.today()):
-            yield event
+    with telemetry.search() as usage:
+        try:
+            async for event in stream_search(text, services, dt.date.today()):
+                yield event
+        finally:
+            # A visitor who leaves early has still cost money, so a cancel must not skip this.
+            if not usage.complete:
+                logger.warning("Search cost is incomplete")
+            with anyio.CancelScope(shield=True):
+                await limits.record_spend(services.redis, usage.cost)
 
 
 async def stream_search(

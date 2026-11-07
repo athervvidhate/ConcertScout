@@ -1,6 +1,7 @@
 import datetime as dt
 import json
 from collections.abc import AsyncIterator, Callable
+from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -10,11 +11,15 @@ from pydantic import SecretStr
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
 from pydantic_ai.models import Model
 from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.usage import RunUsage
+from redis.exceptions import ConnectionError as RedisConnectionError
 
-from concert_scout import limits
+from concert_scout import limits, pipeline
 from concert_scout.app import create_app
 from concert_scout.config import Settings
+from concert_scout.interpreter import InterpreterError
 from concert_scout.matching import SHORTLIST_SIZE
+from concert_scout.telemetry import record_usage
 from tests.conftest import (
     CHICAGO,
     TYLER_MBID,
@@ -31,6 +36,7 @@ from tests.conftest import (
     upcoming_record,
 )
 
+TOKEN = "turnstile-token"
 ALLOWED_ORIGIN = "http://localhost:3000"
 
 Handler = Callable[[httpx.Request], httpx.Response]
@@ -60,21 +66,36 @@ def routed(
     return handler
 
 
+def settings_with(**overrides: Any) -> Settings:
+    return Settings(
+        tm_key=SecretStr("test-key"),
+        anthropic_api_key=SecretStr("test-key"),
+        geoapify_key=SecretStr("test-key"),
+        cors_origins=[ALLOWED_ORIGIN],
+        **overrides,
+    )
+
+
+def bot_check_passes(_: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json={"success": True})
+
+
 def api_for(
     handler: Handler,
     model: Model | None = None,
     redis: FakeAsyncRedis | None = None,
     lastfm_key: str | None = None,
+    settings: Settings | None = None,
+    bot_check: Handler = bot_check_passes,
 ) -> httpx.AsyncClient:
-    settings = Settings(
-        tm_key=SecretStr("test-key"),
-        anthropic_api_key=SecretStr("test-key"),
-        geoapify_key=SecretStr("test-key"),
-        lastfm_key=SecretStr(lastfm_key) if lastfm_key else None,
-        cors_origins=[ALLOWED_ORIGIN],
-    )
+    def route(request: httpx.Request) -> httpx.Response:
+        return (bot_check if request.url.host == "challenges.cloudflare.com" else handler)(request)
+
+    if lastfm_key:
+        settings = settings_with(lastfm_key=SecretStr(lastfm_key))
+    settings = settings or settings_with()
     model = model or model_returning(interpretation(place="Chicago"))
-    app = create_app(settings, httpx.MockTransport(handler), redis or FakeAsyncRedis(), model)
+    app = create_app(settings, httpx.MockTransport(route), redis or FakeAsyncRedis(), model)
     return httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test")
 
 
@@ -112,7 +133,11 @@ async def test_search_streams_each_step_then_the_poster() -> None:
 
     async with api_for(handler, model_returning(fields)) as api:
         response = await api.post(
-            "/search", json={"text": "  Something like Khruangbin in Chicago, next two weekends "}
+            "/search",
+            json={
+                "text": "  Something like Khruangbin in Chicago, next two weekends ",
+                "token": TOKEN,
+            },
         )
 
     assert response.status_code == 200
@@ -181,9 +206,9 @@ async def test_a_repeat_search_makes_no_ticketmaster_calls() -> None:
         return respond(request)
 
     async with api_for(handler, model_returning(fields, fields)) as api:
-        first = await api.post("/search", json={"text": "Khruangbin in Chicago"})
+        first = await api.post("/search", json={"text": "Khruangbin in Chicago", "token": TOKEN})
         calls_after_first = ticketmaster_calls
-        second = await api.post("/search", json={"text": "Khruangbin in Chicago"})
+        second = await api.post("/search", json={"text": "Khruangbin in Chicago", "token": TOKEN})
 
     assert calls_after_first == 8  # seven months of the default window and one Artist
     assert ticketmaster_calls == calls_after_first
@@ -194,7 +219,7 @@ async def test_the_shortlist_cuts_the_pool_while_the_pool_event_counts_everythin
     records = [concert_of(str(n), attraction(f"Artist {n}", f"mbid-{n}")) for n in range(120)]
 
     async with api_for(routed(tm_body(*records))) as api:
-        response = await api.post("/search", json={"text": "Chicago"})
+        response = await api.post("/search", json={"text": "Chicago", "token": TOKEN})
 
     events = dict(parse_sse(response.text))
     assert events["pool"] == {"total": 120}
@@ -211,7 +236,7 @@ async def test_a_search_with_no_taste_calls_no_similarity_source() -> None:
         return respond(request)
 
     async with api_for(handler) as api:
-        response = await api.post("/search", json={"text": "Chicago"})
+        response = await api.post("/search", json={"text": "Chicago", "token": TOKEN})
 
     assert hosts == {"api.geoapify.com", "app.ticketmaster.com"}
     steps = [data["step"] for name, data in parse_sse(response.text) if name == "status"]
@@ -266,7 +291,9 @@ async def test_a_taste_orders_the_shortlist_and_fills_candidates() -> None:
     )
 
     async with api_for(respond, model_returning(TYLER_SEARCH)) as api:
-        response = await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+        response = await api.post(
+            "/search", json={"text": "Tyler Childers in Chicago", "token": TOKEN}
+        )
 
     events = parse_sse(response.text)
     ids = poster_ids(events)
@@ -288,7 +315,9 @@ async def test_with_listenbrainz_down_a_search_still_shortlists() -> None:
     )
 
     async with api_for(respond, model_returning(TYLER_SEARCH)) as api:
-        response = await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+        response = await api.post(
+            "/search", json={"text": "Tyler Childers in Chicago", "token": TOKEN}
+        )
 
     events = parse_sse(response.text)
     assert "error" not in dict(events)
@@ -305,7 +334,9 @@ async def test_with_listenbrainz_down_last_fm_supplies_the_neighbours() -> None:
 
     model = model_returning(TYLER_SEARCH)
     async with api_for(handler, model, lastfm_key="lastfm-key") as api:
-        response = await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+        response = await api.post(
+            "/search", json={"text": "Tyler Childers in Chicago", "token": TOKEN}
+        )
 
     assert poster_ids(parse_sse(response.text))[0] == "by-name"
     assert "lastfm-key" not in response.text
@@ -320,7 +351,9 @@ async def test_with_musicbrainz_down_the_seed_still_joins_by_name() -> None:
         return respond(request)
 
     async with api_for(handler, model_returning(TYLER_SEARCH)) as api:
-        response = await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+        response = await api.post(
+            "/search", json={"text": "Tyler Childers in Chicago", "token": TOKEN}
+        )
 
     events = parse_sse(response.text)
     assert "error" not in dict(events)
@@ -342,9 +375,9 @@ async def test_a_repeat_search_asks_no_similarity_source_again() -> None:
 
     model = model_returning(TYLER_SEARCH, TYLER_SEARCH)
     async with api_for(handler, model) as api:
-        await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+        await api.post("/search", json={"text": "Tyler Childers in Chicago", "token": TOKEN})
         first = len(calls)
-        await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+        await api.post("/search", json={"text": "Tyler Childers in Chicago", "token": TOKEN})
 
     assert len(calls) == first
 
@@ -360,7 +393,7 @@ async def test_a_taste_with_no_place_looks_up_the_top_fifteen_similar_artists() 
 
     model = model_returning(interpretation(artists=["Tyler Childers"]))
     async with api_for(handler, model) as api:
-        response = await api.post("/search", json={"text": "Tyler Childers"})
+        response = await api.post("/search", json={"text": "Tyler Childers", "token": TOKEN})
 
     keywords = [r.url.params["keyword"] for r in requests if r.url.host == "app.ticketmaster.com"]
     assert sorted(keywords) == sorted(["Tyler Childers", *(f"Artist {n}" for n in range(15))])
@@ -372,7 +405,9 @@ async def test_the_app_starts_and_serves_with_no_last_fm_key() -> None:
     respond = routed(TYLER_POOL, musicbrainz={"artists": [mb_artist(id=TYLER_MBID)]})
 
     async with api_for(respond, model_returning(TYLER_SEARCH)) as api:
-        response = await api.post("/search", json={"text": "Tyler Childers in Chicago"})
+        response = await api.post(
+            "/search", json={"text": "Tyler Childers in Chicago", "token": TOKEN}
+        )
 
     assert "error" not in dict(parse_sse(response.text))
 
@@ -390,7 +425,7 @@ async def test_an_artist_with_no_place_is_looked_up_directly_anywhere() -> None:
 
     model = model_returning(interpretation(artists=["Khruangbin"]))
     async with api_for(handler, model) as api:
-        response = await api.post("/search", json={"text": "Khruangbin"})
+        response = await api.post("/search", json={"text": "Khruangbin", "token": TOKEN})
 
     events = parse_sse(response.text)
     assert [name for name, _ in events][-3:] == ["status", "poster", "done"]
@@ -412,7 +447,7 @@ async def test_the_daily_limit_says_when_to_come_back_and_calls_ticketmaster_no_
         return respond(request)
 
     async with api_for(handler, redis=redis) as api:
-        response = await api.post("/search", json={"text": "Chicago"})
+        response = await api.post("/search", json={"text": "Chicago", "token": TOKEN})
 
     error = dict(parse_sse(response.text))["error"]
     assert error["code"] == "ticketmaster_limit"
@@ -427,7 +462,7 @@ async def test_missing_facts_are_left_out_of_the_stream() -> None:
     record["dates"]["start"]["timeTBA"] = True
 
     async with api_for(routed(tm_body(record))) as api:
-        response = await api.post("/search", json={"text": "Chicago"})
+        response = await api.post("/search", json={"text": "Chicago", "token": TOKEN})
 
     concert = dict(parse_sse(response.text))["poster"]["recommendations"][0]["concert"]
     assert "time" not in concert
@@ -437,14 +472,14 @@ async def test_missing_facts_are_left_out_of_the_stream() -> None:
 async def test_a_missing_place_or_date_is_left_out_of_the_interpreted_event() -> None:
     model = model_returning(interpretation(artists=["Khruangbin"]))
     async with api_for(routed(), model) as api:
-        response = await api.post("/search", json={"text": "Khruangbin"})
+        response = await api.post("/search", json={"text": "Khruangbin", "token": TOKEN})
 
     assert dict(parse_sse(response.text))["interpreted"] == {"artists": ["Khruangbin"]}
 
 
 async def test_a_place_with_no_listings_streams_an_empty_poster() -> None:
     async with api_for(routed(tm_body())) as api:
-        response = await api.post("/search", json={"text": "Nowhere"})
+        response = await api.post("/search", json={"text": "Nowhere", "token": TOKEN})
 
     assert dict(parse_sse(response.text))["poster"] == {"recommendations": []}
 
@@ -454,7 +489,7 @@ async def test_a_search_with_no_taste_and_no_place_asks_for_one_and_calls_no_sou
         raise AssertionError("no source should be called")
 
     async with api_for(handler, model_returning(interpretation())) as api:
-        response = await api.post("/search", json={"text": "hello there"})
+        response = await api.post("/search", json={"text": "hello there", "token": TOKEN})
 
     events = parse_sse(response.text)
     assert [name for name, _ in events] == ["status", "interpreted", "error", "done"]
@@ -467,7 +502,7 @@ async def test_a_search_with_no_taste_and_no_place_asks_for_one_and_calls_no_sou
 async def test_a_style_with_no_artist_and_no_place_asks_for_one() -> None:
     model = model_returning(interpretation(descriptors=["dreamy guitar"]))
     async with api_for(routed(), model) as api:
-        response = await api.post("/search", json={"text": "dreamy guitar"})
+        response = await api.post("/search", json={"text": "dreamy guitar", "token": TOKEN})
 
     assert dict(parse_sse(response.text))["error"]["code"] == "needs_place"
 
@@ -475,7 +510,7 @@ async def test_a_style_with_no_artist_and_no_place_asks_for_one() -> None:
 async def test_a_place_the_geocoder_cannot_find_says_so() -> None:
     model = model_returning(interpretation(place="Atlantis"))
     async with api_for(routed(geoapify={"results": []}), model) as api:
-        response = await api.post("/search", json={"text": "Atlantis"})
+        response = await api.post("/search", json={"text": "Atlantis", "token": TOKEN})
 
     events = parse_sse(response.text)
     assert [name for name, _ in events][-2:] == ["error", "done"]
@@ -490,7 +525,7 @@ async def test_an_interpreter_failure_streams_a_safe_error() -> None:
         return ModelResponse(parts=[TextPart("not json")])
 
     async with api_for(routed(), FunctionModel(fail)) as api:
-        response = await api.post("/search", json={"text": "my secret Search"})
+        response = await api.post("/search", json={"text": "my secret Search", "token": TOKEN})
 
     events = parse_sse(response.text)
     assert [name for name, _ in events] == ["status", "error", "done"]
@@ -500,7 +535,7 @@ async def test_an_interpreter_failure_streams_a_safe_error() -> None:
 
 async def test_a_geocoder_failure_streams_a_safe_error() -> None:
     async with api_for(routed(geo_status=500)) as api:
-        response = await api.post("/search", json={"text": "Chicago"})
+        response = await api.post("/search", json={"text": "Chicago", "token": TOKEN})
 
     events = parse_sse(response.text)
     assert dict(events)["error"]["code"] == "geocoder_unavailable"
@@ -509,7 +544,7 @@ async def test_a_geocoder_failure_streams_a_safe_error() -> None:
 
 async def test_a_ticketmaster_failure_streams_a_safe_error() -> None:
     async with api_for(routed(tm_status=500)) as api:
-        response = await api.post("/search", json={"text": "Chicago"})
+        response = await api.post("/search", json={"text": "Chicago", "token": TOKEN})
 
     events = parse_sse(response.text)
     assert [name for name, _ in events][-2:] == ["error", "done"]
@@ -602,3 +637,198 @@ async def test_a_geocoder_failure_on_places_gets_a_safe_error() -> None:
 
     assert response.status_code == 503
     assert response.json()["code"] == "geocoder_unavailable"
+
+
+class BrokenRedis(FakeAsyncRedis):
+    async def execute_command(self, *_: object, **__: object) -> None:
+        raise RedisConnectionError("down")
+
+
+def many_searches() -> Model:
+    return model_returning(*[interpretation(place="Chicago")] * (limits.SEARCHES_PER_HOUR + 1))
+
+
+def search_json(text: str = "Chicago") -> dict[str, str]:
+    return {"text": text, "token": TOKEN}
+
+
+async def test_each_client_gets_its_own_search_limit() -> None:
+    settings = settings_with(client_ip_header="x-real-ip")
+    async with api_for(routed(), many_searches(), settings=settings) as api:
+        for _ in range(limits.SEARCHES_PER_HOUR):
+            allowed = await api.post(
+                "/search", json=search_json(), headers={"x-real-ip": "1.1.1.1"}
+            )
+            assert allowed.status_code == 200
+
+        over = await api.post("/search", json=search_json(), headers={"x-real-ip": "1.1.1.1"})
+        other = await api.post("/search", json=search_json(), headers={"x-real-ip": "2.2.2.2"})
+
+    assert over.status_code == 429
+    assert over.json()["code"] == "visitor_limit"
+    assert over.json()["retry_after"] > 0
+    assert other.status_code == 200
+
+
+async def test_an_untrusted_forwarding_header_cannot_dodge_the_limit() -> None:
+    async with api_for(routed(), many_searches()) as api:
+        for n in range(limits.SEARCHES_PER_HOUR):
+            headers = {"X-Forwarded-For": f"10.0.0.{n}"}
+            await api.post("/search", json=search_json(), headers=headers)
+
+        over = await api.post(
+            "/search", json=search_json(), headers={"X-Forwarded-For": "10.0.1.1"}
+        )
+
+    assert over.status_code == 429
+
+
+async def test_the_last_address_counts_because_a_visitor_can_write_the_earlier_ones() -> None:
+    settings = settings_with(client_ip_header="x-forwarded-for")
+    async with api_for(routed(), many_searches(), settings=settings) as api:
+        for n in range(limits.SEARCHES_PER_HOUR):
+            headers = {"X-Forwarded-For": f"10.0.0.{n}, 1.1.1.1"}
+            await api.post("/search", json=search_json(), headers=headers)
+
+        over = await api.post(
+            "/search", json=search_json(), headers={"X-Forwarded-For": "10.0.1.1, 1.1.1.1"}
+        )
+
+    assert over.status_code == 429
+
+
+async def test_at_the_spend_cap_searches_stop_and_the_home_page_keeps_working() -> None:
+    redis = FakeAsyncRedis()
+    await limits.record_spend(redis, limits.DAILY_SPEND)
+    handler = routed(ticketmaster=tm_body(nearby_record()))
+
+    async with api_for(handler, redis=redis) as api:
+        search = await api.post("/search", json=search_json())
+        nearby = await api.get("/nearby", params={"lat": 41.87, "lon": -87.62})
+
+    assert search.status_code == 503
+    assert search.json()["code"] == "budget_reached"
+    assert nearby.status_code == 200
+    assert nearby.json()["concerts"]
+
+
+async def test_a_finished_search_adds_its_real_cost_to_the_spend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def costly(*_: Any) -> Any:
+        record_usage(RunUsage(input_tokens=100, output_tokens=20, cost=Decimal("0.25")))
+        raise InterpreterError("failed after spending")
+
+    monkeypatch.setattr(pipeline, "interpret", costly)
+    redis = FakeAsyncRedis()
+
+    async with api_for(routed(), redis=redis) as api:
+        await api.post("/search", json=search_json())
+
+    assert await redis.get(f"spend:day:{dt.datetime.now(dt.UTC).date()}") == b"250000"
+
+
+async def test_the_kill_switch_stops_searches_and_not_the_home_page() -> None:
+    handler = routed(ticketmaster=tm_body(nearby_record()))
+    async with api_for(handler, settings=settings_with(search_enabled=False)) as api:
+        search = await api.post("/search", json=search_json())
+        nearby = await api.get("/nearby", params={"lat": 41.87, "lon": -87.62})
+
+    assert search.status_code == 503
+    assert search.json()["code"] == "search_off"
+    assert nearby.status_code == 200
+
+
+async def test_a_disallowed_origin_is_refused_on_the_server() -> None:
+    async with api_for(routed()) as api:
+        refused = await api.post(
+            "/search", json=search_json(), headers={"Origin": "https://evil.example"}
+        )
+        preflight = await api.options(
+            "/search",
+            headers={
+                "Origin": "https://evil.example",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "origin_refused"
+    assert preflight.status_code == 400
+
+
+async def test_a_failed_bot_check_stops_the_search_before_any_model_call() -> None:
+    async def fail(_: list[ModelMessage], __: AgentInfo) -> ModelResponse:
+        raise AssertionError("a failed bot check must not reach a model")
+
+    def bot_check(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"success": False})
+
+    async with api_for(routed(), FunctionModel(fail), bot_check=bot_check) as api:
+        response = await api.post("/search", json=search_json())
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "bot_check_failed"
+
+
+async def test_a_search_without_a_token_is_refused(api: httpx.AsyncClient) -> None:
+    response = await api.post("/search", json={"text": "Chicago"})
+
+    assert response.status_code == 422
+
+
+async def test_turnstile_gets_the_secret_and_token_and_an_outage_stays_safe() -> None:
+    forms: list[bytes] = []
+
+    def outage(request: httpx.Request) -> httpx.Response:
+        forms.append(request.content)
+        return httpx.Response(500)
+
+    async with api_for(routed(), bot_check=outage) as api:
+        response = await api.post("/search", json=search_json())
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "bot_check_unavailable"
+    assert b"response=turnstile-token" in forms[0]
+    assert b"secret=" in forms[0]
+    assert "secret" not in response.text
+
+
+async def test_without_redis_search_refuses_and_the_home_page_keeps_working() -> None:
+    redis = BrokenRedis()
+    handler = routed(ticketmaster=tm_body(nearby_record()))
+
+    async with api_for(handler, redis=redis) as api:
+        search = await api.post("/search", json=search_json())
+        nearby = await api.get("/nearby", params={"lat": 41.87, "lon": -87.62})
+
+    assert search.status_code == 503
+    assert search.json()["code"] == "limits_unavailable"
+    assert nearby.status_code == 200
+
+
+async def test_nearby_and_places_have_their_own_limits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(limits, "NEARBY_PER_HOUR", 1)
+    monkeypatch.setattr(limits, "PLACES_PER_HOUR", 1)
+    handler = routed(ticketmaster=tm_body(nearby_record()))
+
+    async with api_for(handler) as api:
+        params = {"lat": 41.87, "lon": -87.62}
+        await api.get("/nearby", params=params)
+        nearby = await api.get("/nearby", params=params)
+        await api.get("/places", params={"text": "Chi"})
+        places = await api.get("/places", params={"text": "Chi"})
+
+    assert (nearby.status_code, places.status_code) == (429, 429)
+    assert nearby.json()["code"] == "visitor_limit"
+
+
+async def test_every_response_carries_the_security_headers(api: httpx.AsyncClient) -> None:
+    response = await api.get("/health")
+
+    assert "default-src 'none'" in response.headers["content-security-policy"]
+    assert "max-age" in response.headers["strict-transport-security"]
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["referrer-policy"] == "no-referrer"

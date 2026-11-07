@@ -22,8 +22,8 @@ The browser calls FastAPI directly ([ADR 0001](../adr/0001-separate-python-agent
 
 | Control | Rule |
 |---|---|
-| CORS | An allowlist of exact origins, no wildcard |
-| Rate limit | Per client IP in Redis, read from the host's trusted header |
+| CORS | An allowlist of exact origins, no wildcard. `/search` also refuses other origins on the server |
+| Rate limit | Per client IP in Redis, hashed, read from the header named by `CLIENT_IP_HEADER`. Uvicorn runs with `--no-proxy-headers`, because otherwise it trusts a forged `X-Forwarded-For` from a local peer before the app sees it |
 | Bot check | Cloudflare Turnstile token on `/search`, with test keys locally |
 | Input | Search text capped at 500 characters, Taste lists at 100 names |
 | Secrets | Server only. The frontend receives none |
@@ -40,9 +40,11 @@ The old app forwarded no client IP, so its limit applied to everyone at once. A 
 |---|---|
 | Whole-app model spend | $10 a month. At the cap, Searches stop and home keeps working |
 | Daily model spend | $1 |
-| Per visitor | 10 Searches an hour, until the evals give measured cost |
+| Per visitor | 10 Searches an hour |
 
-The estimated Haiku cost is about $0.001 per Search, before any eval measurement. A kill switch environment variable turns off Search at once. The spend counter lives in Redis and uses each call's real token counts.
+Measured cost is about $0.001 to $0.0013 per Search, from captured and live runs, so the $1 daily cap covers about 750 Searches. One visitor at the limit spends at most about $0.31 a day. Revisit this once the 20 judged Searches give a fuller measure.
+
+`SEARCH_ENABLED=false` turns off Search. The spend counter lives in Redis and uses each call's real token counts. Without Redis, spend cannot be counted, so Search refuses rather than risk an unseen overspend, and the home page keeps working. `/nearby` and `/places` have higher hourly limits, and they pass during a Redis outage because they cost no money.
 
 ## Observability
 

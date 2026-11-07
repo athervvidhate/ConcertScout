@@ -33,6 +33,17 @@ export type SearchError = { code: string; message: string; retry_after?: number 
 // The visitor has to change these Searches, so running one again cannot help.
 export const NEEDS_A_NEW_SEARCH = ["needs_taste_or_place", "needs_place", "place_not_found"];
 
+// The API refused this Search before it started. Waiting or changing nothing will not help
+// when it says when to come back, or when Search is off.
+export class SearchRefused extends Error {
+  readonly retryable: boolean;
+
+  constructor({ code, message, retry_after }: SearchError) {
+    super(message);
+    this.retryable = retry_after === undefined && code !== "search_off";
+  }
+}
+
 export type SearchEvent =
   | { event: "status"; data: { step: string; message: string } }
   | { event: "interpreted"; data: Interpreted }
@@ -44,17 +55,17 @@ export type SearchEvent =
 
 export async function* streamSearch(
   text: string,
+  token: string,
   signal: AbortSignal,
 ): AsyncGenerator<SearchEvent> {
   const response = await fetch(`${API_URL}/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, token }),
     signal,
   });
   if (!response.ok || !response.body) {
-    const error: SearchError = await response.json();
-    throw new Error(error.message);
+    throw new SearchRefused(await response.json());
   }
 
   const reader = response.body
