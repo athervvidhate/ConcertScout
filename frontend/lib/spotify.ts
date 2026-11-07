@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { API_URL } from "@/lib/search";
 
@@ -21,11 +21,15 @@ export type SpotifyConnection = {
 // Spotify account data has no route into imported Taste or /search.
 export function useSpotifyConnection(): SpotifyConnection {
   const [state, setState] = useState({available: false, connected: false, message: null as string | null, connectHref: null as string | null});
+  // Focus can start a status check at any time, so only the newest question may answer.
+  const asked = useRef(0);
   const refresh = useCallback(async () => {
+    const question = ++asked.current;
     try {
       const response = await fetch(`${ROOT}/status`, {credentials: "include", cache: "no-store"});
       if (!response.ok) return;
       const status: {available: boolean; connected: boolean} = await response.json();
+      if (question !== asked.current) return;
       setState(old => ({...old, ...status, connectHref: `${ROOT}/login?return_to=${encodeURIComponent(window.location.origin)}`}));
     } catch {
       // Optional connection status must never stop the ordinary Search or local imports.
@@ -48,6 +52,7 @@ export function useSpotifyConnection(): SpotifyConnection {
   }, [refresh]);
 
   const disconnect = useCallback(async () => {
+    asked.current += 1;
     try {
       const response = await fetch(`${ROOT}/disconnect`, {method: "POST", credentials: "include"});
       if (!response.ok) {

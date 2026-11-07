@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { API_URL, type Concert, type SearchError } from "@/lib/search";
+import { API_URL, type Concert, refusal, UNREACHABLE } from "@/lib/search";
 
 export type Place = { lat: number; lon: number };
 
@@ -9,10 +9,7 @@ const HIDDEN_KEY = "concert-scout-nearby-hidden";
 
 async function getJson<T>(path: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { signal });
-  if (!response.ok) {
-    const error: SearchError = await response.json();
-    throw new Error(error.message);
-  }
+  if (!response.ok) throw await refusal(response);
   return response.json();
 }
 
@@ -79,7 +76,7 @@ export function useNearby(place: Place | null): NearbyState {
       .catch((caught: Error) => {
         if (signal.aborted) return;
         const unreachable = caught instanceof TypeError;
-        const error = unreachable ? "Concert Scout's API is not responding." : caught.message;
+        const error = unreachable ? UNREACHABLE : caught.message;
         setResult({ place, concerts: [], error });
       });
     return () => controller.abort();

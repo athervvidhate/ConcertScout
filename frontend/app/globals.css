@@ -248,7 +248,8 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid cur
 .home-guide h2 { margin:0 0 14px; font:400 clamp(30px,4.4vw,48px)/1.05 var(--font-poster),sans-serif; }
 .home-examples { display:flex; flex-wrap:wrap; gap:10px; margin:0; padding:0; list-style:none; }
 .home-examples button { min-height:44px; padding:6px 16px; border:2px solid #10291F; border-radius:999px; background:#FFD3E4; color:#10291F; font:600 17px var(--font-body),sans-serif; cursor:pointer; }
-.home-examples button:hover { background:#10291F; color:#FFD3E4; }
+.home-examples button:hover:enabled { background:#10291F; color:#FFD3E4; }
+.home-examples button:disabled { background:transparent; color:#10291F; opacity:.6; cursor:progress; }
 .ticket-strip { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin:0; padding:0; list-style:none; counter-reset:stub; color:#1A1A18; }
 .ticket-strip li { counter-increment:stub; display:grid; grid-template-rows:auto auto 1fr; align-content:start; padding:22px 26px 26px; }
 .ticket-strip li::before { content:counter(stub); font:800 clamp(34px,4vw,50px)/1 var(--font-date),monospace; }

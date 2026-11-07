@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-import { API_URL, SearchRefused } from "@/lib/search";
+import { API_URL, refusal } from "@/lib/search";
 
 const TASTE_KEY = "concert-scout-taste";
 
@@ -23,7 +23,7 @@ export async function fetchTaste(source: UsernameSource, username: string): Prom
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username }),
   });
-  if (!response.ok) throw new SearchRefused(await response.json());
+  if (!response.ok) throw await refusal(response);
   const { artists }: { artists: string[] } = await response.json();
   return artists;
 }

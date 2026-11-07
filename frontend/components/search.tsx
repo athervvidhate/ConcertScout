@@ -30,6 +30,7 @@ export function Search() {
   const [token, setToken] = useState<string | null>(null);
   const [botCheckFailed, setBotCheckFailed] = useState(false);
   const botCheck = useRef<TurnstileInstance>(null);
+  const searchesStarted = useRef(0);
   const taste = useImportedTaste();
   const spotify = useSpotifyConnection();
   const [place, setPlace] = useState<Place | null>(null);
@@ -37,6 +38,7 @@ export function Search() {
   const [nearbyRequests, setNearbyRequests] = useState(0);
   const {
     phase,
+    run: searchRun,
     searched,
     status,
     interpreted,
@@ -71,10 +73,13 @@ export function Search() {
   // The browser asks the visitor first, and only after this button is pressed.
   function showNearby(scrollToNearby = false) {
     setLocationError(null);
+    const started = searchesStarted.current;
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         const here = { lat: coords.latitude, lon: coords.longitude };
         keepPlace(here);
+        // The prompt can outlast the visitor's patience. A Search started meanwhile keeps going.
+        if (searchesStarted.current !== started) return;
         setPlace(here);
         clear();
         if (scrollToNearby) {
@@ -96,6 +101,7 @@ export function Search() {
     // Each token works once, so the next Search needs a fresh one.
     setToken(null);
     botCheck.current?.reset();
+    searchesStarted.current += 1;
     // A typed place wins on the server, so a shared location only fills the gap.
     search(query, token, taste?.artists ?? [], place);
   }
@@ -203,6 +209,7 @@ export function Search() {
 
       {showPoster && (
         <Poster
+          key={searchRun}
           candidates={candidates}
           recommendations={recommendations}
           searching={phase === "searching"}
@@ -223,7 +230,7 @@ export function Search() {
         <SpotifyShelf
           connectHref={spotify.connectHref}
           onLocate={() => showNearby()}
-          upcoming={home}
+          upcoming={!interpreted}
           key={JSON.stringify([interpreted, place])}
           place={interpreted?.place}
           lat={interpreted?.place ? undefined : place?.lat}
@@ -237,6 +244,7 @@ export function Search() {
       {home && (
         <HomeGuide
           onExample={tryExample}
+          examplesReady={token !== null}
           onLocate={() => showNearby(true)}
           onTaste={() => setTasteOpen(true)}
         />

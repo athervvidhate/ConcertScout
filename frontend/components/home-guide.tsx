@@ -19,11 +19,13 @@ const STEPS = [
 
 type Props = {
   onExample: (text: string) => void;
+  // Every Search needs a bot check token, which arrives a moment after the page.
+  examplesReady: boolean;
   onLocate: () => void;
   onTaste: () => void;
 };
 
-export function HomeGuide({ onExample, onLocate, onTaste }: Props) {
+export function HomeGuide({ onExample, examplesReady, onLocate, onTaste }: Props) {
   return (
     <div className="home-guide">
       <section aria-labelledby="home-try">
@@ -31,7 +33,7 @@ export function HomeGuide({ onExample, onLocate, onTaste }: Props) {
         <ul className="home-examples">
           {SEARCH_EXAMPLES.slice(0, 6).map((example) => (
             <li key={example}>
-              <Button type="button" onClick={() => onExample(example)}>
+              <Button type="button" disabled={!examplesReady} onClick={() => onExample(example)}>
                 {example}
               </Button>
             </li>
