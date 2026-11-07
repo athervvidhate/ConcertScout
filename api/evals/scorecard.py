@@ -29,11 +29,11 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from itertools import combinations
 
-from concert_scout import cache, limits, ranker, telemetry
+from concert_scout import cache, limits, pipeline, ranker, telemetry
 from concert_scout.config import Settings
 from concert_scout.models import Recommendation
 from concert_scout.names import normalize
-from evals import cases, harness, snapshots
+from evals import cases, harness, rankers, snapshots
 from evals.compare import batch_cases
 from evals.grade import GOOD, Grader, Row, agreement
 from evals.silver import Silver, recall
@@ -59,6 +59,10 @@ class Card:
     seconds: list[float] = field(default_factory=list[float])
     # How often the grader sided with the owner's labels, when there are any.
     agreement: float | None = None
+    # The owner's labels, by normalized name.
+    must: frozenset[str] = frozenset()
+    good: frozenset[str] = frozenset()
+    bad: frozenset[str] = frozenset()
     cost: Decimal = Decimal(0)
 
     @property
@@ -100,6 +104,27 @@ class Card:
     def graded_recall(self) -> float | None:
         strong = {n for n, level in self.levels.items() if level >= STRONG} - self.seeds
         return _mean([recall(set(p), strong, len(self.seeds)) for p in self.posters])
+
+    def must_found(self) -> float | None:
+        """The owner's must Artists each Poster shows, missed ones they added included."""
+        if not self.must:
+            return None
+        return _mean([len(self.must & p) / len(self.must) for p in self.posters])
+
+    def liked(self) -> float | None:
+        """Of the Poster Artists the owner labelled, the share they called good or must."""
+
+        def share(poster: frozenset[str]) -> float | None:
+            rated = poster & (self.must | self.good | self.bad)
+            return len(rated - self.bad) / len(rated) if rated else None
+
+        return _mean([share(p) for p in self.posters])
+
+    def bad_shown(self) -> float | None:
+        """The share of each Poster the owner called bad."""
+        if not self.bad:
+            return None
+        return _mean([len(self.bad & p) / len(p) if p else None for p in self.posters])
 
 
 def jaccard(a: frozenset[str], b: frozenset[str]) -> float:
@@ -202,6 +227,11 @@ def lines(card: Card) -> list[str]:
         f"graded recall {_percent(card.graded_recall())}, "
         f"grader agrees with labels {_percent(card.agreement)}"
     )
+    if card.must or card.good or card.bad:
+        head += (
+            f"; owner: must found {_percent(card.must_found())}, "
+            f"liked {_percent(card.liked())}, bad shown {_percent(card.bad_shown())}"
+        )
     candidates = (
         f"  shortlist: silver {_percent(card.shortlist_silver())}, "
         f"graded fair or better {_percent(card.shortlist_graded())}, "
@@ -238,6 +268,9 @@ def summary(cards: Sequence[Card]) -> str:
         f"shortlist graded {mean([c.shortlist_graded() for c in cards])}, "
         f"pool strong kept {mean([c.shortlist_strong() for c in cards])}; "
         f"grader agrees {mean([c.agreement for c in cards])}; "
+        f"owner labels: must found {mean([c.must_found() for c in cards])}, "
+        f"liked {mean([c.liked() for c in cards])}, "
+        f"bad shown {mean([c.bad_shown() for c in cards])}; "
         f"ranker seconds median {statistics.median(seconds or [0]):.1f} p95 {slowest:.1f}, "
         f"cost ${cost:.4f}"
     )
@@ -252,10 +285,23 @@ async def main() -> None:
         "--pool", action="store_true", help="also grade every Artist playing; costs more once"
     )
     parser.add_argument("--votes", type=int, default=ranker.VOTES, help="ranker votes to try")
+    parser.add_argument(
+        "--ranker",
+        choices=["haiku", "jev", "jev-reasons", "jev-rounded", "haiku-split"],
+        default="haiku",
+        help="haiku: the app's ranker. jev, jev-reasons, jev-rounded: Jev grades (most likely or "
+        "rounded expected level), with Haiku reasons for the Poster in the latter two. "
+        "haiku-split: Haiku grades without reasons, then writes them",
+    )
     parser.add_argument("cases", nargs="*", help="case IDs; all in the batch when left out")
     args = parser.parse_args()
     settings = Settings()  # pyright: ignore[reportCallIssue]
     ranker.VOTES = args.votes
+    if args.ranker != "haiku":
+        grader = "haiku" if args.ranker == "haiku-split" else "jev"
+        reasons = "none" if args.ranker == "jev" else "haiku"
+        rankers.ROUNDED = args.ranker == "jev-rounded"
+        pipeline.rank = rankers.make(grader, reasons, harness.real_model(settings))
     labels = {search.id: search for search in cases.load() if search.judged}
     chosen = batch_cases(args.batch)
     if args.cases:
@@ -276,6 +322,9 @@ async def main() -> None:
                     card.agreement = agreement(
                         card.levels, [*judged.must, *judged.good], judged.bad
                     )
+                    card.must = frozenset(map(normalize, judged.must))
+                    card.good = frozenset(map(normalize, judged.good))
+                    card.bad = frozenset(map(normalize, judged.bad))
                 await limits.record_spend(ledger, card.cost)
                 cards.append(card)
                 print("\n".join(lines(card)), flush=True)
@@ -284,6 +333,8 @@ async def main() -> None:
         grader.save()
     if cards:
         print("\n" + summary(cards))
+    if args.ranker != "haiku":
+        print(rankers.report())
 
 
 if __name__ == "__main__":

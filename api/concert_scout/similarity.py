@@ -13,8 +13,9 @@ logger = logging.getLogger(__name__)
 
 # Two hops start from this many of a seed's closest neighbours.
 SECOND_HOP_FROM = 15
-# ListenBrainz Labs publishes no rate limit, so a Search stays gentle with it.
-MAX_CONCURRENT = 4
+# ListenBrainz Labs publishes no rate limit, so a Search stays gentle with it. 8 took 0.8s
+# median for a seed's two hops against 1.3s for 4; drop back to 4 if Labs starts refusing.
+MAX_CONCURRENT = 8
 
 type Lookup = Callable[[SeedArtist | SimilarArtist], Awaitable[list[SimilarArtist]]]
 

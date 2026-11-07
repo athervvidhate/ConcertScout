@@ -281,8 +281,12 @@ async def _steps(
                 interpretation.start,
                 interpretation.end,
                 now,
+                on_found=tag_fetch.add if wants_tags else None,
             )
 
+    # Tags only score a Taste, so a place-only Search never asks for them.
+    wants_tags = bool(interpretation.artists or names_only or interpretation.tags)
+    tag_fetch = listenbrainz.TagFetch(services.listenbrainz, services.redis)
     # With a place, the pool needs nothing from the Taste, so the slowest steps overlap.
     tasks: list[asyncio.Task[Any]] = []
 
@@ -322,23 +326,25 @@ async def _steps(
             yield _event("status", Status(step="pool", message=message))
             concert_lookup = start(find_pool(None, [*interpretation.artists, *closest]))
         concerts = await concert_lookup
+        yield _event("pool", PoolTotal(total=len(concerts)))
+
+        artist_tags: dict[str, list[str]] = {}
+        if taste:
+            yield _event("status", Status(step="match", message="Matching Concerts to your Taste"))
+            with telemetry.step("match"):
+                # Most batches started while the pool was still arriving.
+                tag_fetch.add(concerts)
+                artist_tags = await tag_fetch.tags()
+                shortlist = matching.shortlist(
+                    matching.score_concerts(concerts, taste, artist_tags)
+                )
+        else:
+            shortlist = matching.notable(concerts)
     finally:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-    yield _event("pool", PoolTotal(total=len(concerts)))
-
-    artist_tags: dict[str, list[str]] = {}
-    if taste:
-        yield _event("status", Status(step="match", message="Matching Concerts to your Taste"))
-        mbids = {a.mbid for concert in concerts for a in concert.artists if a.mbid}
-        with telemetry.step("match"):
-            artist_tags = await listenbrainz.artist_tags(
-                services.listenbrainz, services.redis, sorted(mbids)
-            )
-            shortlist = matching.shortlist(matching.score_concerts(concerts, taste, artist_tags))
-    else:
-        shortlist = matching.notable(concerts)
+        await tag_fetch.close()
     names = matching.candidate_names(shortlist)
     yield _event("candidates", Candidates(names=names, total=len(shortlist)))
 

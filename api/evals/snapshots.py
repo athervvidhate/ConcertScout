@@ -98,21 +98,46 @@ class RecordingTransport(httpx.AsyncBaseTransport):
         )
 
 
+TAGS_PATH = "/1/metadata/artist/"
+HTTP_OK = 200
+
+
 class ReplayTransport(httpx.AsyncBaseTransport):
     def __init__(self, snapshot: Snapshot) -> None:
         self.records = snapshot.records
         self.misses: list[str] = []
+        self.tags = _recorded_tags(snapshot.records)
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         await request.aread()
         key = request_key(request)
         record = self.records.get(key)
+        if record is None and request.url.path == TAGS_PATH:
+            # Tag batches form in the order Ticketmaster pages arrive, which no replay repeats.
+            # Each Artist's tags are a fact of their own, so any batch of recorded ones can answer.
+            mbids = request.url.params["artist_mbids"].split(",")
+            if all(mbid in self.tags for mbid in mbids):
+                found = [self.tags[mbid] for mbid in mbids if self.tags[mbid] is not None]
+                return httpx.Response(200, json=found)
         if record is None:
             self.misses.append(key)
             return httpx.Response(404, json={})
         return httpx.Response(
             record.status, headers={"content-type": record.content_type}, content=record.body
         )
+
+
+def _recorded_tags(records: dict[str, Recorded]) -> dict[str, dict[str, object] | None]:
+    """Each recorded Artist's metadata record, or None when ListenBrainz had none for them."""
+    tags: dict[str, dict[str, object] | None] = {}
+    for key, record in records.items():
+        url = httpx.URL(key.split(" ")[1])
+        if url.path != TAGS_PATH or record.status != HTTP_OK:
+            continue
+        found = {item["artist_mbid"]: item for item in json.loads(record.body)}
+        for mbid in url.params["artist_mbids"].split(","):
+            tags[mbid] = found.get(mbid)
+    return tags
 
 
 class RecordingModel(WrapperModel):

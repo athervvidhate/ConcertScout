@@ -92,7 +92,7 @@ async def run(
     return result
 
 
-def _real_model(settings: Settings) -> Model:
+def real_model(settings: Settings) -> Model:
     return interpreter.make_model(settings.anthropic_api_key.get_secret_value())
 
 
@@ -106,7 +106,7 @@ async def capture(case_id: str, text: str, settings: Settings) -> tuple[Snapshot
         settings.lastfm_key,
     ]
     transport = RecordingTransport(secrets=[s.get_secret_value() for s in secrets if s])
-    model = RecordingModel(_real_model(settings))
+    model = RecordingModel(real_model(settings))
     async with cache.make_client(settings.redis_url) as ledger:
         await limits.check_spend(ledger, limits.EVAL_DAILY_SPEND)
         result = await run(text, today, settings, transport, model, ledger)
@@ -137,7 +137,7 @@ async def replay(
         update={"lastfm_key": SecretStr("replay") if snapshot.lastfm_enabled else None}
     )
     transport = ReplayTransport(snapshot)
-    model = ReplayModel(_real_model(settings), snapshot, live)
+    model = ReplayModel(real_model(settings), snapshot, live)
     with (
         patch.object(limits, "SLOT_SECONDS", 0.001),
         patch.object(limits, "MUSICBRAINZ_GAP", dt.timedelta(milliseconds=1)),

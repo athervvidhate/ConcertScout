@@ -46,10 +46,12 @@ async def find_concerts(
     start: dt.date | None,
     end: dt.date | None,
     now: dt.datetime,
+    on_found: ticketmaster.OnPage | None = None,
 ) -> list[Concert]:
     """Every Concert for the Search, seed Artists first, then the pool soonest first.
 
-    Chunks and lookups stay whole in the cache, so any date window can share them.
+    Chunks and lookups stay whole in the cache, so any date window can share them. `on_found`
+    sees each page's Concerts in the window as they arrive, so later steps can start early.
     """
     first, last = date_window(start, end, now.date())
     state = (
@@ -59,18 +61,31 @@ async def find_concerts(
     )
     point = ticketmaster.rounded_point(place) if place and not state else None
     radius = (place.radius_miles if place else None) or ticketmaster.RADIUS_MILES
+    # An Artist lookup already holds every listed date, so only a chosen end cuts it short.
+    seed_last = end or dt.date.max
+
+    def found_within(last_day: dt.date) -> ticketmaster.OnPage | None:
+        if on_found is None:
+            return None
+        report = on_found
+        return lambda concerts: report([c for c in concerts if _ahead(c, start, last_day, now)])
+
     seeds = await asyncio.gather(
-        *(_artist(client, redis, name, point, state, radius) for name in artists)
+        *(
+            _artist(client, redis, name, point, state, radius, found_within(seed_last))
+            for name in artists
+        )
     )
     chunks: list[list[Concert]] = []
     if state or point:
         earliest = _earliest(first, now.date())
         months = month_chunks(earliest, last)
         chunks = await asyncio.gather(
-            *(_chunk(client, redis, point, m, earliest, state, radius) for m in months)
+            *(
+                _chunk(client, redis, point, m, earliest, state, radius, found_within(last))
+                for m in months
+            )
         )
-    # An Artist lookup already holds every listed date, so only a chosen end cuts it short.
-    seed_last = end or dt.date.max
     from_seeds = [c for group in seeds for c in group if _ahead(c, start, seed_last, now)]
     from_pool = [c for group in chunks for c in group if _ahead(c, start, last, now)]
     return list({c.id: c for c in [*from_seeds, *from_pool]}.values())
@@ -125,9 +140,12 @@ async def _chunk(
     earliest: dt.date,
     state: tuple[str, str] | None,
     radius: int,
+    on_found: ticketmaster.OnPage | None,
 ) -> list[Concert]:
     key = f"pool:{_scope(point, state, radius)}:{month:%Y-%m}"
     if cached := await cache.read(redis, key, CachedConcerts):
+        if on_found:
+            on_found(cached.concerts)
         return cached.concerts
     last_day = calendar.monthrange(month.year, month.month)[1]
     concerts = await ticketmaster.find_concerts(
@@ -138,6 +156,7 @@ async def _chunk(
         month.replace(day=last_day),
         state=state,
         radius=radius,
+        on_page=on_found,
     )
     await cache.write(redis, key, CachedConcerts(concerts=concerts), CACHE_TTL)
     return concerts
@@ -150,12 +169,16 @@ async def _artist(
     point: str | None,
     state: tuple[str, str] | None,
     radius: int,
+    on_found: ticketmaster.OnPage | None,
 ) -> list[Concert]:
     key = f"artist:{_scope(point, state, radius)}:{normalize(name)}"
     if cached := await cache.read(redis, key, CachedConcerts):
-        return cached.concerts
-    concerts = await ticketmaster.find_artist_concerts(
-        client, redis, name, point, state=state, radius=radius
-    )
-    await cache.write(redis, key, CachedConcerts(concerts=concerts), CACHE_TTL)
+        concerts = cached.concerts
+    else:
+        concerts = await ticketmaster.find_artist_concerts(
+            client, redis, name, point, state=state, radius=radius
+        )
+        await cache.write(redis, key, CachedConcerts(concerts=concerts), CACHE_TTL)
+    if on_found:
+        on_found(concerts)
     return concerts

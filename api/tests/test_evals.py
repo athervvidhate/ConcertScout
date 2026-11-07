@@ -364,3 +364,38 @@ def test_compare_counts_artists_the_poster_would_show() -> None:
     assert change.after == {"Artist a": 2, "Artist c": 3}
     assert change.overlap == pytest.approx(1 / 3)
     assert "lost Artist b (2)" in compare.report([change])
+
+
+def tags_snapshot() -> Snapshot:
+    def recorded(mbids: list[str], found: list[str]) -> tuple[str, Recorded]:
+        url = httpx.URL("https://api.listenbrainz.org/1/metadata/artist/")
+        request = httpx.Request("GET", url.copy_merge_params({"artist_mbids": ",".join(mbids)}))
+        body = [{"artist_mbid": m, "tag": {"artist": [{"tag": f"t-{m}"}]}} for m in found]
+        return snapshots.request_key(request), Recorded(
+            status=200, content_type="application/json", body=json.dumps(body)
+        )
+
+    records = dict([recorded(["a", "b"], ["a", "b"]), recorded(["c", "d"], ["c"])])
+    return Snapshot(
+        id="tags",
+        text="x",
+        today=dt.date(2026, 11, 5),
+        seconds_to_poster=None,
+        lastfm_enabled=False,
+        records=records,
+        answers={},
+    )
+
+
+async def test_replay_answers_any_batch_of_recorded_artists() -> None:
+    transport = ReplayTransport(tags_snapshot())
+    async with httpx.AsyncClient(transport=transport) as client:
+        mixed = await client.get(
+            "https://api.listenbrainz.org/1/metadata/artist/", params={"artist_mbids": "d,a,c"}
+        )
+        unknown = await client.get(
+            "https://api.listenbrainz.org/1/metadata/artist/", params={"artist_mbids": "a,z"}
+        )
+    assert [item["artist_mbid"] for item in mixed.json()] == ["a", "c"]
+    assert unknown.status_code == 404
+    assert len(transport.misses) == 1

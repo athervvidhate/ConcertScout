@@ -32,6 +32,8 @@ This replays locally with no provider/model requests and no keys required. The S
 
 Read the Search and Poster, then label at most20 Artists with `m`/`must`, `g`/`good`, `b`/`bad` or Enter/`neutral`. Invalid input asks again. Add missed must-find Artists when prompted, then notes. Only a completed review writes labels and `judged: true` to the YAML. An all-neutral review is valid; an interrupted review writes nothing. `uv run python -m evals.judge <id>` still captures and judges in one session, with a real paid capture.
 
+To rate in the browser instead, run `uv run python -m evals.rate`. It opens http://127.0.0.1:8765 with every Search from the newest batch report (`--batch <name>` picks another), replays each offline with no keys or cost, and shows the Poster first with its reasons, then the shortlist, each with a Spotify search link. Keys `m`, `g`, `b` and `n` label the highlighted Artist and move down. Save writes the same YAML fields as `evals.judge`, and a rated Search can be opened again and changed.
+
 The tool does not infer why a person likes an Artist or label a missing Artist for them. Snapshot responses alone cannot prove Recommendation quality.
 
 ## Scorecard

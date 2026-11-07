@@ -138,3 +138,68 @@ The grader ranks Bonobo a 3 for ambient and Katseye a 0, as a person would. It r
 - Grade the remaining pools, to tell missing candidates from missing Concerts for every Search.
 - Hold the interpreter steady. It changes the shortlist for six Searches out of twenty.
 - Label a sample, so the grader's agreement with the owner is known.
+
+## Speed: tags while the pool arrives
+
+The match step waited for the whole pool, then sent every ListenBrainz tag request at once. London needs 14 requests of 50 Artists. Replayed live, one request alone took 0.9 seconds and all 14 together took 4.0, returning in waves about a second apart, so ListenBrainz queues them. Tag batches now start as Ticketmaster pages arrive. Cold captures of the same 28 Searches (`batch-2026-11-07-192838-9bf3e016`, $0.060):
+
+| | Search median | Search p95 | Match median | Match p95 | Match max |
+|---|---:|---:|---:|---:|---:|
+| Tags after the pool | 12.6s | 19.0s | 1.5s | 5.0s | 6.0s |
+| Tags while the pool arrives | 11.4s | 16.8s | 0.5s | 1.4s | 1.8s |
+
+Poster sizes held: 166 picks against 164. The pool step itself did not change, median 2.8 seconds, and is now the largest wait after the ranker.
+
+## Speed: daily cache warming
+
+`concert_scout.warm` runs the pool and tag lookups for 12 busy cities, once a day from Vercel's cron. Measured against local Redis, counting every command the way Upstash bills them, pipelined commands one by one:
+
+| Run | Ticketmaster | ListenBrainz | Geoapify | Redis commands | Time |
+|---|---:|---:|---:|---:|---:|
+| Empty cache | 125 | 118 | 12 | 3,567 | about 70s |
+| Everything cached | 0 | 0 | 0 | 215 | under 1s |
+
+A daily run in production sits between the two: pools have expired after 6 hours and most tags are still cached. At the empty-cache worst case, 30 runs a month are 107,000 commands, a fifth of Upstash's free 500,000, and 125 calls a day are 2.5% of the Ticketmaster allowance. The warmed keys take 11.2 MB, 9.7 MB of it pools, out of the free 250 MB. No model is called.
+
+Place names are written the way the interpreter writes them. "New York, NY" geocodes to a different 5-kilometre cell from "New York, New York, United States", and so to different cache keys. Every spelling the interpreter used in 28 captured Searches lands in the same cell as its city's entry.
+
+The same 18 Searches in warmed cities, run live once on an empty cache and once after warming:
+
+| | Search median | Search p95 | Pool median | Pool max | Match max |
+|---|---:|---:|---:|---:|---:|
+| Empty cache | 11.5s | 16.8s | 3.0s | 8.0s | 1.1s |
+| After warming | 7.5s | 13.1s | 0.2s | 0.4s | 0.1s |
+
+The pool now waits only for a seed Artist's own lookup. What remains for a Search that names an Artist is resolving that Artist and its neighbours (up to 8.5 seconds for `khruangbin-chicago` and `pop-new-york`) and the ranker. A city off the list, or a Search more than 6 hours after the run, is still cold.
+
+## Jev as the grader, Haiku for reasons
+
+`evals/rankers.py` is an experiment, not used by the app. Jev (TypeSafe, `jev-1.14.0`) grades every shortlisted row in one request: one Score question per row with the same four levels, each graded independently against a shared description of the Taste, so no row's place in a list can sway it. Code takes the most likely level, the lower one on a tie, picks the Poster with the same assembly as the app, and only then asks Haiku for the reasons of the Concerts shown, at most 8. `--ranker jev-reasons` swaps it into the scorecard.
+
+All 28 Searches of `batch-2026-11-07-192838-9bf3e016`, 3 runs each, sources replayed:
+
+| Ranker | Overlap | Lowest | Silver recall | Graded precision | Graded recall | Ranker median | p95 | Cost |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Haiku, 3 votes with reasons | 86% | 38% | 25% | 60% | 60% | 3.5s | 4.8s | $0.263 |
+| Jev grades, Haiku writes 8 reasons | 92% | 50% | 26% | 68% | 70% | 2.4s | 3.0s | $0.060 |
+
+Jev's calls took 0.13 seconds median and cost $0.015 for 84 of them; the Haiku reasons took 2.4 seconds median. Jev was steadier or equal on 23 of 28 Searches and had higher graded precision on 11, lower on 4 (`turnstile-new-york`, `boise-country`, `pop-new-york`, `ambient-seattle`). It is not fully repeatable either: `tyler-childers-chicago` and `khruangbin-chicago` overlapped 50% and 64%, because rows near a level boundary flip. Graded precision is still Sonnet's opinion, not a person's.
+
+Not yet tested: Haiku grading without reasons and then writing 8 reasons, which would show how much of the gain comes from Jev and how much from splitting grading from writing.
+
+## Against the owner's labels
+
+The owner labelled 8 Searches in `evals.rate`: 10 must Artists, 31 good and 8 bad. Every must Artist is on a shortlisted bill, but for three the ranker grades another Artist on that bill, the one matching found: Sammy Virji's show is graded as Sam Gellaitry, and the Ultra Music Festival listing, which also holds Dom Dolla and it's murph, as SOFI TUKKER. All four rankers ran on all 28 Searches, 3 runs each, sources replayed. "Must found" and "liked" use the labelled Searches only: liked is the share of labelled Poster Artists the owner called good or must, and bad shown is the share of the Poster called bad.
+
+| Ranker | Overlap | Lowest | Must found | Liked | Bad shown | Ranker median | p95 | Cost |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Haiku, 3 votes with reasons (the app) | 82% | 33% | 95% | 82% | 9% | 3.6s | 4.9s | $0.180 |
+| Jev grades, Haiku writes the Poster's reasons | 92% | 61% | 67% | 88% | 4% | 2.3s | 3.4s | $0.060 |
+| Jev, rounded expected level | 91% | 52% | 70% | 87% | 4% | 2.3s | 3.1s | $0.061 |
+| Haiku grades, then writes the Poster's reasons | 85% | 33% | 85% | 72% | 9% | 4.0s | 5.0s | $0.159 |
+
+Jev is the stricter grader. It shows fewer Artists the owner dislikes and more they like, and it is steadier and faster, but it leaves out must Artists near the boundary: Zeds Dead for Detroit techno was a stretch at 88%, and Doja Cat for melodic rap scored 1.63, between stretch and fair. For `techno-detroit` it graded nothing fair, so the Poster was empty, where Haiku showed Concerts the owner half liked. Rounding the expected level instead of taking the most likely one changed little.
+
+Splitting Haiku into grading and then writing is slower than one call and worse on every label measure, so the gain in the Jev row comes from Jev, not from the split.
+
+The labels cover 8 Searches and 10 musts, so the must gap rests on two or three Artists. It is not enough to tune Jev's threshold against without fitting these exact Searches. The app keeps Haiku. Jev stays an eval option, to retry once more Searches are labelled.
