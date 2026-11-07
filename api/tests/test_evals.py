@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -7,12 +8,18 @@ import httpx
 import pytest
 from pydantic_ai import Agent
 from pydantic_ai.exceptions import UnexpectedModelBehavior
-from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelMessagesTypeAdapter,
+    ModelResponse,
+    TextPart,
+)
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.usage import RequestUsage
 
 from concert_scout.models import Artist, Concert, Recommendation
-from evals import cases, harness, judge, run, snapshots
+from concert_scout.ranker import Pick, Ranking
+from evals import cases, compare, harness, judge, run, snapshots
 from evals.cases import Search
 from evals.harness import SearchRun
 from evals.metrics import Measures
@@ -317,3 +324,43 @@ async def test_a_pipeline_error_is_a_failed_case_not_a_successful_empty_poster(
     )
     assert not report.cases
     assert "no quality score" in report.failures[0].error_message
+
+
+def compared_snapshot(picks: dict[str, int]) -> Snapshot:
+    def event(id_: str) -> dict[str, Any]:
+        return {
+            "id": id_,
+            "name": f"Show {id_}",
+            "url": "https://tickets.example",
+            "dates": {"start": {}},
+            "_embedded": {"attractions": [{"name": f"Artist {id_}"}]},
+        }
+
+    body = {"_embedded": {"events": [event(id_) for id_ in ("a", "b", "c")]}}
+    ranking = Ranking(picks=[Pick(id=i, score=s, reason="Why") for i, s in picks.items()])
+    answer = ModelResponse(parts=[TextPart(ranking.model_dump_json())])
+    return Snapshot(
+        id="case",
+        text="x",
+        today=dt.date(2026, 11, 5),
+        seconds_to_poster=None,
+        lastfm_enabled=False,
+        records={
+            "GET https://app.ticketmaster.com/events.json x": Recorded(
+                status=200, content_type="application/json", body=json.dumps(body)
+            )
+        },
+        answers={"ranker": ModelMessagesTypeAdapter.dump_json([answer]).decode()},
+    )
+
+
+def test_compare_counts_artists_the_poster_would_show() -> None:
+    change = compare.compare(
+        "case",
+        compared_snapshot({"a": 80, "b": 60, "c": 49}),
+        compared_snapshot({"a": 70, "c": 90, "unknown": 95}),
+    )
+    assert change.before == {"Artist a": 80, "Artist b": 60}
+    assert change.after == {"Artist a": 70, "Artist c": 90}
+    assert change.overlap == pytest.approx(1 / 3)
+    assert "lost Artist b (60)" in compare.report([change])
