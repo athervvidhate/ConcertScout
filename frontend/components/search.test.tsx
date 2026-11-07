@@ -223,7 +223,7 @@ describe("refused Searches", () => {
   });
 
   it("sends the imported Taste with the Search", async () => {
-    keepTaste({ source: "lastfm", username: "someone", artists: ["Khruangbin"] });
+    keepTaste({ source: "lastfm", artists: ["Khruangbin"] });
     const fetchStub = stubStream(sse("done", {}));
     await searchFor("Chicago");
 

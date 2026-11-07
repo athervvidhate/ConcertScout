@@ -66,6 +66,10 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid cur
 .taste-import form { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; justify-content:center; padding:4px 0 12px; }
 .taste-import label { display:grid; gap:2px; font-weight:600; }
 .taste-import select,.taste-import input { min-height:44px; padding:0 10px; border:2px solid #10291F; border-radius:8px; background:#FFD3E4; color:#10291F; font:inherit; }
+.taste-import input[type="file"] { max-width:100%; padding:9px 10px; }
+.taste-list,.taste-list textarea { width:100%; }
+.taste-list textarea { box-sizing:border-box; padding:8px 10px; border:2px solid #10291F; border-radius:8px; background:#FFD3E4; color:#10291F; font:inherit; resize:vertical; }
+.taste-note { margin:0 0 10px; text-align:center; font-size:15px; }
 .taste-import form button { min-height:44px; padding:0 16px; border:0; border-radius:8px; background:#10291F; color:#FFD3E4; font-weight:700; }
 .taste-import form button:disabled { opacity:.55; }
 section.taste-import { display:flex; flex-wrap:wrap; gap:4px 12px; align-items:center; justify-content:center; text-align:center; }
