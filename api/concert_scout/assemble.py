@@ -12,6 +12,7 @@ from concert_scout.ranker import Pick
 logger = logging.getLogger(__name__)
 
 POSTER_SIZE = 8
+MIN_SCORE = 50
 # The most a genre alone can score, so with no ranker to drop them, genre fillers never qualify.
 QUALIFYING_SCORE = NARROW_GENRE_WEIGHT
 NOTABLE_REASON = "Coming up nearby"
@@ -57,7 +58,7 @@ def from_picks(picks: Sequence[Pick], shortlist: Sequence[Candidate]) -> list[Re
     best: dict[str, Pick] = {}
     for pick in sorted(picks, key=lambda p: p.score, reverse=True):
         # The model sometimes pads its answer with an empty row, which is not a recommendation.
-        if pick.id in concerts and pick.score >= 50 and pick.reason.strip():
+        if pick.id in concerts and pick.score >= MIN_SCORE and pick.reason.strip():
             best.setdefault(pick.id, pick)
     unknown = sum(pick.id not in concerts for pick in picks)
     if unknown:

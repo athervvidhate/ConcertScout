@@ -34,6 +34,16 @@ Read the Search and Poster, then label at most20 Artists with `m`/`must`, `g`/`g
 
 The tool does not infer why a person likes an Artist or label a missing Artist for them. Snapshot responses alone cannot prove Recommendation quality.
 
+## Compare two runs
+
+```sh
+uv run python -m evals.compare --before <batch> [<batch>...] --after <batch>
+```
+
+This reads the Snapshots themselves and makes no calls, so it works across code changes that stop an old Snapshot replaying. For each Search it lists the Artists the model would put on the Poster, who was lost and who is new, with their scores. A Poster count hides this: stacking dates shrinks it without losing an Artist.
+
+Two runs of the same input differ too, so a change only means something if it is bigger than that noise. [The November 7 report](../validation/2026-11-07-ranker-stability.md) measures it. Nothing here says which run is better. That still takes human labels.
+
 ## Replay the evidence
 
 ```sh
