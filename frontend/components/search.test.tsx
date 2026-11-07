@@ -145,7 +145,7 @@ describe("Search", () => {
 
     await searchFor("Nowhere");
 
-    expect(await screen.findByText(/No Concerts found for this Search/)).toBeTruthy();
+    expect(await screen.findByText(/Nothing qualifies for this Search/)).toBeTruthy();
   });
 
   it("asks for a new Search instead of a retry when the Search cannot work", async () => {

@@ -62,11 +62,11 @@ export function useSearch() {
           setState((state) => ({ ...state, candidates: data }));
         } else if (event === "poster") {
           setState((state) => ({ ...state, recommendations: data.recommendations }));
+        } else if (event === "done") {
+          finished = true;
         } else if (event === "error") {
           error = data.message;
           retryable = !NEEDS_A_NEW_SEARCH.includes(data.code) && data.retry_after === undefined;
-        } else {
-          finished = true;
         }
       }
       if (!finished) error = DROPPED;

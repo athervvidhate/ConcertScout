@@ -125,6 +125,7 @@ async def test_search_streams_each_step_then_the_poster() -> None:
         "pool",
         "status",
         "candidates",
+        "status",
         "poster",
         "done",
     ]
@@ -134,6 +135,7 @@ async def test_search_streams_each_step_then_the_poster() -> None:
         "resolve",
         "pool",
         "match",
+        "rank",
     ]
     assert events[1][1] == {
         "place": "Chicago",
@@ -148,7 +150,7 @@ async def test_search_streams_each_step_then_the_poster() -> None:
     }
     assert events[5][1] == {"total": 1}
     assert events[7][1] == {"names": ["Khruangbin"], "total": 1}
-    assert events[8][1]["recommendations"][0]["concert"] == {
+    assert events[9][1]["recommendations"][0]["concert"] == {
         "id": "vvG18Z_ueUZbii",
         "name": "Khruangbin: The Ether Tour",
         "url": "https://www.ticketmaster.com/event/040064D0B6018B2C",
@@ -160,7 +162,7 @@ async def test_search_streams_each_step_then_the_poster() -> None:
         "region": "IL",
         "price": {"min": 45.5, "max": 120.0, "currency": "USD"},
     }
-    assert events[9][1] == {}
+    assert events[10][1] == {}
     params = [r.url.params for r in requests if r.url.host == "app.ticketmaster.com"]
     assert sorted("keyword" in p for p in params) == [False, True]
     assert all(p["geoPoint"] == "dp3wn" for p in params)
@@ -187,7 +189,7 @@ async def test_a_repeat_search_makes_no_ticketmaster_calls() -> None:
 
 
 async def test_the_shortlist_cuts_the_pool_while_the_pool_event_counts_everything() -> None:
-    records = [upcoming_record(id=str(n)) for n in range(120)]
+    records = [concert_of(str(n), attraction(f"Artist {n}", f"mbid-{n}")) for n in range(120)]
 
     async with api_for(routed(tm_body(*records))) as api:
         response = await api.post("/search", json={"text": "Chicago"})
@@ -195,7 +197,7 @@ async def test_the_shortlist_cuts_the_pool_while_the_pool_event_counts_everythin
     events = dict(parse_sse(response.text))
     assert events["pool"] == {"total": 120}
     assert events["candidates"]["total"] == SHORTLIST_SIZE
-    assert len(events["poster"]["recommendations"]) == SHORTLIST_SIZE
+    assert len(events["poster"]["recommendations"]) == 8
 
 
 async def test_a_search_with_no_taste_calls_no_similarity_source() -> None:
@@ -212,6 +214,8 @@ async def test_a_search_with_no_taste_calls_no_similarity_source() -> None:
     assert hosts == {"api.geoapify.com", "app.ticketmaster.com"}
     steps = [data["step"] for name, data in parse_sse(response.text) if name == "status"]
     assert "match" not in steps
+    assert "rank" not in steps
+    assert len(dict(parse_sse(response.text))["poster"]["recommendations"]) == 0
 
 
 def attraction(name: str, mbid: str | None = None, subgenre: str | None = None) -> dict[str, Any]:
@@ -265,7 +269,7 @@ async def test_a_taste_orders_the_shortlist_and_fills_candidates() -> None:
     events = parse_sse(response.text)
     ids = poster_ids(events)
     assert ids[:2] == ["similar", "by-name"]
-    assert ids.index("tagged") < ids.index("radio") < ids.index("unrelated")
+    assert "radio" not in ids and "unrelated" not in ids
     assert dict(events)["candidates"]["names"][0] == "Hiss Golden Messenger"
     assert dict(events)["candidates"]["total"] == 5
 
@@ -286,7 +290,7 @@ async def test_with_listenbrainz_down_a_search_still_shortlists() -> None:
 
     events = parse_sse(response.text)
     assert "error" not in dict(events)
-    assert poster_ids(events) == ["seed", "genre", "other"]
+    assert poster_ids(events) == ["seed"]
 
 
 async def test_with_listenbrainz_down_last_fm_supplies_the_neighbours() -> None:
@@ -387,7 +391,7 @@ async def test_an_artist_with_no_place_is_looked_up_directly_anywhere() -> None:
         response = await api.post("/search", json={"text": "Khruangbin"})
 
     events = parse_sse(response.text)
-    assert [name for name, _ in events][-3:] == ["candidates", "poster", "done"]
+    assert [name for name, _ in events][-3:] == ["status", "poster", "done"]
     assert ("status", {"step": "pool", "message": POOL_MESSAGE}) in events
     assert dict(events)["pool"] == {"total": 1}
     ticketmaster = [r for r in requests if r.url.host == "app.ticketmaster.com"]
@@ -416,6 +420,7 @@ async def test_the_daily_limit_says_when_to_come_back_and_calls_ticketmaster_no_
 
 async def test_missing_facts_are_left_out_of_the_stream() -> None:
     record = upcoming_record()
+    record["_embedded"]["attractions"][0]["externalLinks"] = {"musicbrainz": [{"id": "mbid"}]}
     del record["priceRanges"]
     record["dates"]["start"]["timeTBA"] = True
 

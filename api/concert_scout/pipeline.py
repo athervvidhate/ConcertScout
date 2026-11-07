@@ -1,7 +1,7 @@
 import asyncio
 import datetime as dt
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 
 import httpx
@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from pydantic_ai.models import Model
 from redis.asyncio import Redis
 
-from concert_scout import limits, matching, pool, similarity
+from concert_scout import assemble, limits, matching, pool, similarity
 from concert_scout.interpreter import Interpretation, InterpreterError, interpret
 from concert_scout.models import (
     Candidates,
@@ -22,6 +22,7 @@ from concert_scout.models import (
     SeedArtist,
     Status,
 )
+from concert_scout.ranker import RankerError, rank
 from concert_scout.sources import geocoder, listenbrainz, musicbrainz, ticketmaster
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,22 @@ async def _find_taste(interpretation: Interpretation, services: Services) -> mat
         services.listenbrainz, services.lastfm, services.redis, seeds
     )
     return matching.Taste(seeds, neighbours, interpretation.tags)
+
+
+async def _recommend(
+    interpretation: Interpretation,
+    shortlist: Sequence[matching.Candidate],
+    artist_tags: Mapping[str, Sequence[str]],
+    services: Services,
+) -> list[Recommendation]:
+    try:
+        picks = await rank(interpretation, shortlist, artist_tags, services.model)
+    except RankerError as exc:
+        logger.warning("Ranker failed: %s", exc)
+        return assemble.from_matches(shortlist)
+    recommendations = assemble.from_picks(picks, shortlist)
+    # Picks that all name unknown IDs are a garbled answer, not a verdict that nothing fits.
+    return assemble.from_matches(shortlist) if picks and not recommendations else recommendations
 
 
 async def _steps(text: str, services: Services) -> AsyncIterator[ServerSentEvent]:
@@ -130,11 +147,18 @@ async def _steps(text: str, services: Services) -> AsyncIterator[ServerSentEvent
         artist_tags = await listenbrainz.artist_tags(
             services.listenbrainz, services.redis, sorted(mbids)
         )
-    shortlist = matching.shortlist(matching.score_concerts(concerts, taste, artist_tags))
+        shortlist = matching.shortlist(matching.score_concerts(concerts, taste, artist_tags))
+    else:
+        shortlist = matching.notable(concerts)
     names = matching.candidate_names(shortlist)
     yield _event("candidates", Candidates(names=names, total=len(shortlist)))
 
-    recommendations = [Recommendation(concert=c.concert) for c in shortlist]
+    if not taste:
+        # Product rule for place-only Searches: notable means Ticketmaster-listed; order by date.
+        recommendations = assemble.from_notable(shortlist)
+    else:
+        yield _event("status", Status(step="rank", message="Choosing the closest Concerts"))
+        recommendations = await _recommend(interpretation, shortlist, artist_tags, services)
     yield _event("poster", Poster(recommendations=recommendations))
 
 
