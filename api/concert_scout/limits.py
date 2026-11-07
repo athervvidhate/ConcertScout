@@ -26,6 +26,8 @@ FEEDBACK_PER_HOUR = 5
 FEEDBACK_EVERYONE_PER_HOUR = 20
 HOUR_SECONDS = 3600
 DAILY_SPEND = Decimal(1)
+# Eval runs are paid tuning work by the owner, so they get more room per day than visitors.
+EVAL_DAILY_SPEND = Decimal(3)
 MONTHLY_SPEND = Decimal(10)
 MICRODOLLARS = 1_000_000
 
@@ -95,7 +97,7 @@ def _seconds_until(moment: dt.datetime, now: dt.datetime) -> int:
     return int((moment - now).total_seconds()) + 1
 
 
-async def check_spend(redis: Redis) -> None:
+async def check_spend(redis: Redis, daily: Decimal = DAILY_SPEND) -> None:
     """Raises at either cap. Redis failures are the caller's to handle."""
     now = dt.datetime.now(dt.UTC)
     day_key, month_key = _spend_keys(now)
@@ -104,7 +106,7 @@ async def check_spend(redis: Redis) -> None:
         next_month = (now.replace(day=1) + dt.timedelta(days=32)).replace(day=1)
         start = next_month.replace(hour=0, minute=0, second=0, microsecond=0)
         raise SpendCapReached(_seconds_until(start, now))
-    if Decimal(int(day or 0)) / MICRODOLLARS >= DAILY_SPEND:
+    if Decimal(int(day or 0)) / MICRODOLLARS >= daily:
         tomorrow = dt.datetime.combine(now.date() + dt.timedelta(days=1), dt.time(), dt.UTC)
         raise SpendCapReached(_seconds_until(tomorrow, now))
 

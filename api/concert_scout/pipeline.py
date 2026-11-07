@@ -1,5 +1,6 @@
 import asyncio
 import datetime as dt
+import hashlib
 import logging
 from collections.abc import AsyncIterator, Coroutine, Mapping, Sequence
 from dataclasses import dataclass
@@ -12,7 +13,18 @@ from pydantic import BaseModel
 from pydantic_ai.models import Model
 from redis.asyncio import Redis
 
-from concert_scout import assemble, clock, limits, matching, pool, similarity, telemetry
+from concert_scout import (
+    assemble,
+    cache,
+    clock,
+    interpreter,
+    limits,
+    matching,
+    pool,
+    ranker,
+    similarity,
+    telemetry,
+)
 from concert_scout.interpreter import Interpretation, InterpreterError, interpret
 from concert_scout.models import (
     ArtistProfile,
@@ -136,6 +148,42 @@ async def _find_taste(
     return matching.Taste([*seeds, *extra], neighbours, interpretation.tags, interpretation.genres)
 
 
+# A repeated Search within this window gets the same reading and grades, so the same Poster,
+# and pays for neither model call. It matches the Concert pool's own cache.
+ANSWER_TTL = pool.CACHE_TTL
+
+
+def _answer_key(kind: str, *parts: str) -> str:
+    """Hashed, so a cache key never holds a visitor's Search text."""
+    digest = hashlib.sha256("\x00".join(parts).encode()).hexdigest()
+    return f"answer:{kind}:{digest}"
+
+
+async def _interpreted(text: str, today: dt.date, services: Services) -> Interpretation:
+    words = " ".join(text.split()).casefold()
+    key = _answer_key("interpret", interpreter.INSTRUCTIONS, today.isoformat(), words)
+    if cached := await cache.read(services.redis, key, Interpretation):
+        return cached
+    interpretation = await interpret(text, today, services.model)
+    await cache.write(services.redis, key, interpretation, ANSWER_TTL)
+    return interpretation
+
+
+async def _graded(
+    interpretation: Interpretation,
+    shortlist: Sequence[matching.Candidate],
+    artist_tags: Mapping[str, Sequence[str]],
+    services: Services,
+) -> list[ranker.Fit]:
+    prompt = ranker.build_prompt(interpretation, shortlist, artist_tags)
+    key = _answer_key("rank", ranker.INSTRUCTIONS, str(ranker.VOTES), prompt)
+    if cached := await cache.read(services.redis, key, ranker.Ranking):
+        return cached.fits
+    fits = await rank(interpretation, shortlist, artist_tags, services.model)
+    await cache.write(services.redis, key, ranker.Ranking(fits=fits), ANSWER_TTL)
+    return fits
+
+
 async def _recommend(
     interpretation: Interpretation,
     shortlist: Sequence[matching.Candidate],
@@ -143,7 +191,7 @@ async def _recommend(
     services: Services,
 ) -> list[Recommendation]:
     try:
-        fits = await rank(interpretation, shortlist, artist_tags, services.model)
+        fits = await _graded(interpretation, shortlist, artist_tags, services)
     except RankerError as exc:
         logger.warning("Ranker failed: %s", exc)
         return assemble.from_matches(shortlist)
@@ -184,7 +232,7 @@ async def _steps(
 ) -> AsyncIterator[ServerSentEvent]:
     yield _event("status", Status(step="interpret", message="Reading your Search"))
     with telemetry.step("interpret"):
-        interpretation = await interpret(text, now.date(), services.model)
+        interpretation = await _interpreted(text, now.date(), services)
     names_only: Sequence[str] = ()
     # A Taste typed into this Search says what the person wants now, so it beats an import.
     if not (interpretation.artists or interpretation.tags or interpretation.descriptors):

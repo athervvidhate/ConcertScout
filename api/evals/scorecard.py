@@ -260,7 +260,7 @@ async def main() -> None:
     try:
         async with cache.make_client(settings.redis_url) as ledger:
             for case, snapshot_id in chosen.items():
-                await limits.check_spend(ledger)
+                await limits.check_spend(ledger, limits.EVAL_DAILY_SPEND)
                 snapshot = snapshots.load(snapshot_id)
                 runs = 1 if args.live == "none" else args.runs
                 card, names = await repeat(case, snapshot, runs, args.live, settings)

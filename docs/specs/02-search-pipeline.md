@@ -107,6 +107,8 @@ The ranker grades rather than chooses. Asked to choose up to 8, the model someti
 
 Three votes run at once, each with the rows in its own fixed order, so no row gains from its place in the list. Each Concert takes its median level, and its reason comes from the most favourable vote. A vote that fails or misses the deadline drops out, and the others still count. On Haiku the three votes cost about three times one, a fraction of a cent.
 
+Both model answers are cached for 6 hours, the same as the Concert pool. The interpreter's is keyed by the visitor's date and the Search's words, and the ranker's by its exact prompt, so a repeated Search shows the same Poster and calls no model. Keys are hashed and never hold Search text.
+
 The ranker should drop poor fits. The spike showed tags pull in misses such as Kim Petras for Four Tet, and this step exists to remove them. A seed Artist is never a poor fit, because the visitor asked for them. Event text is untrusted, so it goes in delimited fields and the model has no tools.
 
 ## 7. Assemble

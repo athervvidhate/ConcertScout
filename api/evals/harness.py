@@ -106,7 +106,7 @@ async def capture(case_id: str, text: str, settings: Settings) -> tuple[Snapshot
     transport = RecordingTransport(secrets=[s.get_secret_value() for s in secrets if s])
     model = RecordingModel(_real_model(settings))
     async with cache.make_client(settings.redis_url) as ledger:
-        await limits.check_spend(ledger)
+        await limits.check_spend(ledger, limits.EVAL_DAILY_SPEND)
         result = await run(text, today, settings, transport, model, ledger)
     snapshot = Snapshot(
         id=f"{case_id}-{today.isoformat()}-{uuid4().hex[:8]}",
