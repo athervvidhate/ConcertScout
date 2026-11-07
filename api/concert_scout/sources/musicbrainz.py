@@ -48,6 +48,33 @@ async def resolve(client: httpx.AsyncClient, redis: Redis, name: str) -> SeedArt
     return seed
 
 
+async def filed_name(client: httpx.AsyncClient, redis: Redis, name: str) -> str:
+    """The name an Artist is filed under, for a billing that uses another: Usher Raymond is Usher.
+
+    `artist:` skips aliases, and an alias can be longer than the billing, so this is looser than
+    `resolve`. Only a billing with no Spotify page of its own comes here.
+    """
+    key = f"filed:{normalize(name)}"
+    if cached := await cache.read(redis, key, SeedArtist):
+        return cached.name
+
+    await limits.musicbrainz_call(redis)
+    try:
+        response = await client.get("/artist", params={"query": f'alias:"{_escaped(name)}"'})
+        response.raise_for_status()
+        artists: list[dict[str, Any]] = response.json()["artists"]
+    except httpx.HTTPStatusError as exc:
+        raise MusicBrainzError(f"status {exc.response.status_code}") from None
+    except httpx.HTTPError as exc:
+        raise MusicBrainzError(type(exc).__name__) from None
+    except (KeyError, TypeError, ValueError) as exc:
+        raise MusicBrainzError(f"unreadable response: {type(exc).__name__}") from None
+
+    best = next((a["name"] for a in artists if a["score"] >= MIN_SCORE), name)
+    await cache.write(redis, key, SeedArtist(name=best), CACHE_TTL)
+    return best
+
+
 def parse_seed(body: dict[str, Any], name: str) -> SeedArtist:
     """Take the best exact name. "Wednesday" scores below "Wednesday 13", so score alone fails."""
     wanted = normalize(name)

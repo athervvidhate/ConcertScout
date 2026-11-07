@@ -8,8 +8,8 @@ Follow `ui-skills.com` rules and Emil Kowalski's motion rules. Use coss ui (Base
 
 The page has one job, so it has one search box in the middle. A city typed there already works, so there is no second place box.
 
-- Top bar, right aligned: Saved Concerts and Your Taste. Your Taste opens a panel from the right edge, and importing happens there.
-- A location button sits inside the search box. It asks for the browser's location only when pressed, then shows Concerts near you below.
+- Top bar, right aligned: Saved Concerts and Your Taste. Your Taste opens a panel from the right edge. Connect Spotify leads it as the one filled button, and the imports sit behind an "Other ways to add your Taste" toggle.
+- A location button sits inside the search box. It asks for the browser's location only when pressed, then shows Concerts near you below. Later Searches that name no place look near that location.
 - The empty Search box rotates eight realistic examples with a typing/deleting effect. Pause while focused, while text is entered, or during a Search. Reduced motion keeps a static example.
 - Links to Tickets and other sites open a new tab, so a Poster is never lost.
 
@@ -57,7 +57,7 @@ Nothing on screen is a fake. No skeleton blocks, no invented progress percentage
 | 1. Opening | Submit | Equalizer bars in the Poster area, status "Reading your request", then each real `status` message. Keep this short: send `candidates` as early as possible, aiming for under 2s |
 | 2. Names | Nonempty `poster`, using real `candidates` | Equalizer leaves. Real candidate names fade in as small print, 32ms apart, a bounded sample proportional to the qualifying Poster (up to 24 names) |
 | 3. Ranking | Before `poster` | Equalizer and real status stay; no Artist wall appears before qualification |
-| 4. Picks | `poster` | Picks turn pink, the status changes to "8 picks from 60 Concerts considered", and other names fade together over 0.28s |
+| 4. Picks | `poster` | Picks turn pink, the status changes to "8 picks from 40 Concerts considered", and other names fade together over 0.28s |
 | 5. Fly-in | 550ms after picks turn pink, so the status can be read | See below |
 | 6. Ticket | As soon as the fly-in ends | First Ticket rises 12px over 420ms. The headliner stays pink |
 
@@ -106,3 +106,19 @@ With `prefers-reduced-motion`, the sun and equalizer stop, there is no fly-in, a
 ## Mock
 
 [The approved mock](../mocks/fine-print-loader.html) shows the full loader. Its data is made up, and this spec overrides it if they disagree.
+
+## Site navigation and home
+
+Every page has a small header: the brand on the left and a menu button on the right, holding Saved Concerts and Your Taste. The resting home page drops the brand, because the wordmark already says it. The brand returns a Poster to the resting home page. The home page adds example Searches, how a Search works, and the location and Taste actions below the search box. Concerts near you sits at the bottom of the page. Hide and Show collapse it without forgetting the location, the choice persists on that device, and Forget my location deletes the stored coordinates. The Privacy page names each data source.
+
+## Artist hint
+
+A visitor's first Ticket carries a small hint that the Artist's name opens more about them. Opening a panel or deciding a Ticket dismisses it for good on that device.
+
+## Search reports
+
+After a Search finishes, "Didn't find what you wanted? Tell us" opens a short note. Sending it emails the owner through Resend with the Search, the note, how the app read the Search, any error and the Poster's Concerts. It carries no coordinates and no connected Spotify data. Each visitor gets 5 reports an hour, and everyone shares 20. Reports stay off until `RESEND_API_KEY` and `FEEDBACK_EMAIL` are set.
+
+## Artist panel
+
+An Artist's name on a Ticket opens the Artist panel: a link to their Spotify page, Last.fm listeners, styles, a short bio, top songs and similar Artists. A missing fact stays out, and when Last.fm has nothing at all the panel says so and keeps the Spotify link. When Spotify has no Artist with exactly that name, the link is a Spotify search instead. Monthly listeners are not offered, because Spotify's API does not report them.

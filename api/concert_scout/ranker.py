@@ -31,12 +31,19 @@ shares a broad genre. null means no signal, so judge it on what you know of the 
 
 Return only Concerts someone with this Taste would really want to see. Drop poor fits even when \
 they have a signal, because tags and genres pull in misses, and a filler act is worse than a \
-shorter list. If nothing fits, return no picks. Return at most 8 picks.
+shorter list. The exception is a seed: the visitor asked for that Artist, so always pick one row \
+for each seed Artist. If nothing fits, return no picks. Return at most 8 picks, each a different \
+Artist. \
+Every pick needs a real reason, so never add an empty or placeholder row.
 
 - id: copied exactly from the candidate.
 - score: 0 to 100, how well it suits the Taste. Below 50 is a poor fit, so leave it out.
-- reason: one plain sentence of at most 140 characters on why this Artist suits this Taste. \
-Mention no dates, venues, prices or links."""
+- reason: one plain sentence of at most 14 words that tells someone who has never heard this \
+Artist what they sound like or are known for. Be concrete: name the style, scene, era or a \
+comparison. When via is set, name that Artist, as in "Moody trip-hop in the vein of Massive \
+Attack." Use the row's fields and what is widely known about the Artist. If you know little, \
+describe the listed genre and tags. Never say the Artist suits, matches or fits the Taste or \
+Search, and never just repeat the Search's words. Mention no dates, venues, prices or links."""
 
 
 class Pick(BaseModel):
@@ -104,14 +111,21 @@ def build_prompt(
     shortlist: Sequence[Candidate],
     artist_tags: Mapping[str, Sequence[str]],
 ) -> str:
-    """One JSON object, so a listing's text stays inside its own quoted field."""
+    """One JSON object, so a listing's text stays inside its own quoted field.
+
+    An Artist's other dates would only repeat a row, so each Artist appears once.
+    """
+    rows: dict[str, Row] = {}
+    for candidate in shortlist:
+        row = _row(candidate, artist_tags)
+        rows.setdefault(row.artist.casefold(), row)
     prompt = Prompt(
         taste={
             "artists": interpretation.artists,
             "descriptors": interpretation.descriptors,
             "tags": interpretation.tags,
         },
-        candidates=[_row(candidate, artist_tags) for candidate in shortlist],
+        candidates=list(rows.values()),
     )
     return prompt.model_dump_json()
 

@@ -2,6 +2,9 @@ import datetime as dt
 
 from pydantic import BaseModel
 
+# A circle this wide already covers most of a large country.
+MAX_RADIUS_MILES = 500
+
 
 class Price(BaseModel):
     min: float
@@ -18,6 +21,12 @@ class Artist(BaseModel):
     subgenre: str | None = None
 
 
+class Presale(BaseModel):
+    name: str
+    start: dt.datetime
+    end: dt.datetime
+
+
 class Concert(BaseModel):
     """A Concert's facts, as reported by its source. A missing fact stays None."""
 
@@ -31,12 +40,18 @@ class Concert(BaseModel):
     city: str | None = None
     region: str | None = None
     price: Price | None = None
+    image: str | None = None
+    general_sale: dt.datetime | None = None
+    presales: list[Presale] = []
 
 
 class Recommendation(BaseModel):
+    """One Artist on a Poster. `also` holds the same Artist's other dates, from the same source."""
+
     concert: Concert
     reason: str
     score: int | None = None
+    also: list[Concert] = []
 
 
 class Poster(BaseModel):
@@ -51,6 +66,8 @@ class Place(BaseModel):
     lon: float
     state_code: str | None = None
     country_code: str | None = None
+    # How far a region reaches. Without one, a place gets the standard radius.
+    radius_miles: int | None = None
 
 
 class SeedArtist(BaseModel):
@@ -77,6 +94,30 @@ class Nearby(BaseModel):
     concerts: list[Concert]
 
 
+class Track(BaseModel):
+    name: str
+    url: str
+
+
+class ArtistProfile(BaseModel):
+    """What the Artist panel shows. Anything a source does not report stays empty."""
+
+    name: str
+    lastfm_url: str | None = None
+    spotify_url: str | None = None
+    listeners: int | None = None
+    bio: str | None = None
+    tags: list[str] = []
+    top_tracks: list[Track] = []
+    similar: list[str] = []
+
+
+class ArtistProfiles(BaseModel):
+    """One profile, or one for each Artist on a tour billed as a single name."""
+
+    profiles: list[ArtistProfile]
+
+
 class Status(BaseModel):
     step: str
     message: str
@@ -84,9 +125,12 @@ class Status(BaseModel):
 
 class Interpreted(BaseModel):
     place: str | None
+    region: str | None
+    radius_miles: int | None
     start: dt.date | None
     end: dt.date | None
     artists: list[str]
+    genres: list[str]
 
 
 class PoolTotal(BaseModel):

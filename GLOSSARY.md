@@ -28,6 +28,9 @@ _Avoid_: Bill
 Concert Scout's judgment that a Concert suits one Search, with the reason why. The same Concert can have different Recommendations in different Searches.
 _Avoid_: Result, suggestion, match
 
+**Region**:
+A named area wider than a city and narrower than or different from a state, such as Southern California. A Search reaches it as a circle around a large city.
+
 **Poster**:
 The ranked Recommendations for one Search, seen together.
 _Avoid_: Lineup, results page, list
@@ -39,3 +42,5 @@ _Avoid_: Stub, card
 **Saved Concert**:
 A Concert a person chose to keep from a Poster.
 _Avoid_: Favorite, stub, wishlist item
+
+**Artist panel**: the side panel opened from an Artist's name on a Ticket, showing public facts from Last.fm and a link to Spotify. It never calls a model.

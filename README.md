@@ -14,9 +14,9 @@ cp api/.env.example api/.env
 make dev
 ```
 
-Open **http://127.0.0.1:3000**. The API runs without reload on port 8000 and uses real Redis, source APIs, limits and spend counters. `make start` builds and serves the production frontend instead. Keys stay on the API server and out of git.
+Open **http://127.0.0.1:3000**. The API runs without reload on port 8000 and uses real Redis, source APIs, limits and spend counters. `make start` builds and serves the production frontend instead. `make phone` does the same and prints an address for a phone on your network. Over plain HTTP, phones block location and Spotify refuses the sign-in redirect, so test those on an HTTPS deployment. Keys stay on the API server and out of git.
 
-Try `Khruangbin in Chicago next weekend`, `UKG in SF`, or a city on its own. The empty input rotates through examples. The location button asks for browser location only when pressed. Import Last.fm/ListenBrainz Taste or a local history file/list through Your Taste.
+Try `Khruangbin in Chicago next weekend`, `UKG in SF`, or a city on its own. The empty input rotates through examples. The location button asks for browser location only when pressed, and later Searches with no place look near it. Open an Artist from a Ticket for their Spotify link, top songs and similar Artists. Import Last.fm/ListenBrainz Taste or a local history file/list through Your Taste.
 
 Spotify connection is optional and invite-only. It has its own deterministic shelf and never supplies model input. [Setup and pending live acceptance](docs/development/spotify.md).
 
@@ -79,12 +79,12 @@ Install the browser once with `cd frontend && npx playwright install chromium`. 
 - `api/concert_scout/sources/`: async adapters; `pool.py` shares public Concert chunks and direct Artist lookups.
 - `api/concert_scout/spotify.py`: encrypted sessions and the isolated shelf; `limits.py`, `security.py`, `telemetry.py`: enforcement and numeric evidence.
 - `api/evals/`: capture, human judging and Pydantic Evals replay.
-- `frontend/components/`: Search, Poster, Ticket, Taste panel, saved/nearby Concerts and Spotify shelf.
+- `frontend/components/`: Search, Poster, Ticket, Artist and Taste panels, saved/nearby Concerts and Spotify shelf.
 - `frontend/e2e/`: browser contracts through the production API and frontend.
 - `docs/specs/` and `docs/adr/`: requirements and lasting decisions. `docs/validation/` records checks and their limits.
 
 ## Data credits and current limits
 
-Concert facts and links come from [Ticketmaster](https://www.ticketmaster.com). Artist identities/tags come from [MusicBrainz](https://musicbrainz.org); similarity/tags from [ListenBrainz](https://listenbrainz.org), with [Last.fm / AudioScrobbler](https://www.last.fm) as a similarity fallback and optional Taste import. Places use [Geoapify](https://www.geoapify.com) and [OpenStreetMap contributors](https://www.openstreetmap.org/copyright). The optional account shelf uses [Spotify](https://open.spotify.com) with its logo and links. The app links every source on its [credits page](frontend/app/credits/page.tsx); MusicBrainz's [data licenses](https://musicbrainz.org/doc/About/Data_License) apply to its metadata.
+Concert facts and links come from [Ticketmaster](https://www.ticketmaster.com). Artist identities/tags come from [MusicBrainz](https://musicbrainz.org); similarity/tags from [ListenBrainz](https://listenbrainz.org), with [Last.fm / AudioScrobbler](https://www.last.fm) as a similarity fallback and optional Taste import. Places use [Geoapify](https://www.geoapify.com) and [OpenStreetMap contributors](https://www.openstreetmap.org/copyright). The optional account shelf uses [Spotify](https://open.spotify.com) with its logo and links. The site footer links every source; MusicBrainz's [data licenses](https://musicbrainz.org/doc/About/Data_License) apply to its metadata.
 
 Ticketmaster coverage is not the whole live-music calendar. Sparse tags and missing Artist IDs can hide relevant Concerts, while broad electronic genres can still produce weak picks. The similarity Labs API needs its fallback. The dataset still needs owner judgments. Spotify's live OAuth acceptance and public hosting remain pending their respective setup steps. Physical-device drag acceptance also remains a human check. Local implementation and passing CI are not a claim that those steps are finished.

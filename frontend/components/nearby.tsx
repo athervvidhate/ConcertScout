@@ -1,9 +1,10 @@
 "use client";
 
 import { Button } from "@base-ui/react/button";
+import { useEffect, useRef, useState } from "react";
 
 import { formatDate, formatTime } from "@/lib/format";
-import { type Place, useNearby } from "@/lib/nearby";
+import { keepNearbyHidden, type Place, readNearbyHidden, useNearby } from "@/lib/nearby";
 import type { Concert } from "@/lib/search";
 
 function NearbyConcert({ concert }: { concert: Concert }) {
@@ -21,29 +22,57 @@ function NearbyConcert({ concert }: { concert: Concert }) {
   );
 }
 
-export function NearbyConcerts({ place, onClose }: { place: Place; onClose: () => void }) {
-  const nearby = useNearby(place);
+type Props = {
+  place: Place;
+  onForget: () => void;
+  /** After a request for this section, which sits at the bottom of a long page. */
+  scrollTo: boolean;
+};
+
+export function NearbyConcerts({ place, onForget, scrollTo }: Props) {
+  const [hidden, setHidden] = useState(readNearbyHidden);
+  const section = useRef<HTMLElement>(null);
+  // Hidden Concerts cost no lookup.
+  const nearby = useNearby(hidden ? null : place);
+
+  useEffect(() => {
+    if (scrollTo) section.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [scrollTo]);
+
+  function toggle() {
+    keepNearbyHidden(!hidden);
+    setHidden(!hidden);
+  }
 
   return (
-    <section className="nearby" aria-label="Concerts near you">
+    <section ref={section} className="nearby" aria-label="Concerts near you">
       <header>
         <h2>Concerts near you</h2>
-        <Button type="button" onClick={onClose}>
-          Hide
+        <Button type="button" aria-expanded={!hidden} onClick={toggle}>
+          {hidden ? "Show" : "Hide"}
         </Button>
       </header>
-      <div aria-live="polite">
-        {nearby.loading && <p>Looking for Concerts nearby</p>}
-        {nearby.error && <p>{nearby.error}</p>}
-        {nearby.empty && <p>No Concerts found in the next month. Search a nearby city instead.</p>}
-      </div>
-      {nearby.concerts.length > 0 && (
-        <ul className="nearby-list">
-          {nearby.concerts.map((concert) => (
-            <NearbyConcert key={concert.id} concert={concert} />
-          ))}
-        </ul>
+      {!hidden && (
+        <>
+          <div aria-live="polite">
+            {nearby.loading && <p>Looking for Concerts nearby</p>}
+            {nearby.error && <p>{nearby.error}</p>}
+            {nearby.empty && (
+              <p>No Concerts found in the next month. Search a nearby city instead.</p>
+            )}
+          </div>
+          {nearby.concerts.length > 0 && (
+            <ul className="nearby-list">
+              {nearby.concerts.map((concert) => (
+                <NearbyConcert key={concert.id} concert={concert} />
+              ))}
+            </ul>
+          )}
+        </>
       )}
+      <Button type="button" className="nearby-forget" onClick={onForget}>
+        Forget my location
+      </Button>
     </section>
   );
 }

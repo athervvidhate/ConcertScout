@@ -3,16 +3,18 @@
 import { Button } from "@base-ui/react/button";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { LocateFixed } from "lucide-react";
-import Link from "next/link";
 import { type SubmitEvent, useEffect, useRef, useState } from "react";
 
+import { HomeGuide } from "@/components/home-guide";
 import { NearbyConcerts } from "@/components/nearby";
 import { Poster } from "@/components/poster";
+import { SearchFeedback } from "@/components/search-feedback";
+import { SiteHeader } from "@/components/site-header";
 import { SpotifyShelf } from "@/components/spotify-shelf";
 import { useSpotifyConnection } from "@/lib/spotify";
-import { TastePanel } from "@/components/taste-panel";
+import { countOf, TastePanel } from "@/components/taste-panel";
 import { formatInterpreted, formatPosterHeading } from "@/lib/format";
-import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/nearby";
+import { forgetPlace, keepNearbyHidden, keepPlace, type Place, readPlace } from "@/lib/nearby";
 import { API_URL } from "@/lib/search";
 import { useSearchExample } from "@/lib/search-examples";
 import { useImportedTaste } from "@/lib/taste";
@@ -24,7 +26,7 @@ const TURNSTILE_SITE_KEY =
 
 export function Search() {
   const [text, setText] = useState("");
-  const [focused, setFocused] = useState(false);
+  const [tasteOpen, setTasteOpen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [botCheckFailed, setBotCheckFailed] = useState(false);
   const botCheck = useRef<TurnstileInstance>(null);
@@ -32,6 +34,7 @@ export function Search() {
   const spotify = useSpotifyConnection();
   const [place, setPlace] = useState<Place | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [nearbyRequests, setNearbyRequests] = useState(0);
   const {
     phase,
     searched,
@@ -46,9 +49,11 @@ export function Search() {
     clear,
   } = useSearch();
   const showPoster = phase === "searching" || hasPoster;
-  const resting = !showPoster && !place && !interpreted && !error;
-  const example = useSearchExample(!focused && !text && phase !== "searching");
+  const home = !showPoster && !interpreted && !error;
+  const example = useSearchExample(!text && phase !== "searching");
   const canSearch = token !== null && phase !== "searching";
+  const searchedFor =
+    interpreted && !interpreted.place && place ? { ...interpreted, place: "Near you" } : interpreted;
 
   useEffect(() => {
     const timer = setTimeout(() => setPlace(readPlace()), 0);
@@ -64,7 +69,7 @@ export function Search() {
   }, []);
 
   // The browser asks the visitor first, and only after this button is pressed.
-  function showNearby() {
+  function showNearby(scrollToNearby = false) {
     setLocationError(null);
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
@@ -72,12 +77,16 @@ export function Search() {
         keepPlace(here);
         setPlace(here);
         clear();
+        if (scrollToNearby) {
+          keepNearbyHidden(false);
+          setNearbyRequests((count) => count + 1);
+        }
       },
       () => setLocationError(NO_LOCATION),
     );
   }
 
-  function hideNearby() {
+  function forgetNearby() {
     forgetPlace();
     setPlace(null);
   }
@@ -87,7 +96,18 @@ export function Search() {
     // Each token works once, so the next Search needs a fresh one.
     setToken(null);
     botCheck.current?.reset();
-    search(query, token, taste?.artists ?? []);
+    // A typed place wins on the server, so a shared location only fills the gap.
+    search(query, token, taste?.artists ?? [], place);
+  }
+
+  function goHome() {
+    setText("");
+    clear();
+  }
+
+  function tryExample(example: string) {
+    setText(example);
+    run(example);
   }
 
   function submit(event: SubmitEvent<HTMLFormElement>) {
@@ -98,12 +118,15 @@ export function Search() {
 
   return (
     <>
-      <nav className="top-bar">
-        <Link href="/saved">Saved Concerts</Link>
-        <TastePanel spotify={spotify} />
-      </nav>
+      <SiteHeader
+        onHome={goHome}
+        hideBrand={home}
+        onTaste={() => setTasteOpen(true)}
+        tasteLabel={taste ? `Your Taste: ${countOf(taste.artists)}` : "Your Taste"}
+      />
+      <TastePanel spotify={spotify} open={tasteOpen} onOpenChange={setTasteOpen} />
 
-      <h1 className={resting ? "wordmark" : "sr-only"}>Concert Scout</h1>
+      <h1 className={home ? "wordmark" : "sr-only"}>Concert Scout</h1>
 
       <form onSubmit={submit} className="search-bar">
         <Button
@@ -111,7 +134,7 @@ export function Search() {
           className="locate"
           aria-label="Show Concerts near me"
           title="Show Concerts near me"
-          onClick={showNearby}
+          onClick={() => showNearby(true)}
         >
           <LocateFixed aria-hidden size={26} />
         </Button>
@@ -123,8 +146,6 @@ export function Search() {
           value={text}
           onChange={(event) => setText(event.target.value)}
           placeholder={example}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
           required
           maxLength={500}
         />
@@ -161,8 +182,8 @@ export function Search() {
       )}
 
       <div aria-live="polite" className="search-context">
-        {interpreted && (
-          <p title={formatInterpreted(interpreted)}>{formatPosterHeading(interpreted)}</p>
+        {searchedFor && (
+          <p title={formatInterpreted(searchedFor)}>{formatPosterHeading(searchedFor)}</p>
         )}
         {phase === "finished" && !error && recommendations.length === 0 && (
           <p>Nothing qualifies for this Search. Try wider dates or a nearby city.</p>
@@ -180,7 +201,7 @@ export function Search() {
         </div>
       )}
 
-      {showPoster ? (
+      {showPoster && (
         <Poster
           candidates={candidates}
           recommendations={recommendations}
@@ -188,18 +209,44 @@ export function Search() {
           hasPoster={hasPoster}
           status={status}
         />
-      ) : (
-        place && <NearbyConcerts place={place} onClose={hideNearby} />
+      )}
+      {phase === "finished" && (
+        <SearchFeedback
+          key={searched}
+          search={searched}
+          interpreted={interpreted}
+          recommendations={recommendations}
+          error={error}
+        />
       )}
       {spotify.connected && (
         <SpotifyShelf
           connectHref={spotify.connectHref}
+          onLocate={() => showNearby()}
+          upcoming={home}
           key={JSON.stringify([interpreted, place])}
           place={interpreted?.place}
           lat={interpreted?.place ? undefined : place?.lat}
           lon={interpreted?.place ? undefined : place?.lon}
+          radius={interpreted?.radius_miles}
           start={interpreted?.start}
           end={interpreted?.end}
+          genres={interpreted?.genres}
+        />
+      )}
+      {home && (
+        <HomeGuide
+          onExample={tryExample}
+          onLocate={() => showNearby(true)}
+          onTaste={() => setTasteOpen(true)}
+        />
+      )}
+      {!showPoster && place && (
+        <NearbyConcerts
+          key={nearbyRequests}
+          place={place}
+          onForget={forgetNearby}
+          scrollTo={nearbyRequests > 0}
         />
       )}
     </>

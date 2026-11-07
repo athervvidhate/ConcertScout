@@ -15,12 +15,25 @@ from pydantic_ai.models import Model
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from concert_scout import cache, interpreter, limits, security, spotify
+from concert_scout import cache, feedback, interpreter, limits, security, spotify
 from concert_scout.config import Settings
-from concert_scout.models import ImportedTaste, Nearby, SearchError
-from concert_scout.pipeline import ASK_FOR_A_SEARCH, Services, find_nearby, run_search
+from concert_scout.models import ArtistProfiles, ImportedTaste, Nearby, Place, SearchError
+from concert_scout.pipeline import (
+    ASK_FOR_A_SEARCH,
+    Services,
+    find_artist_profiles,
+    find_nearby,
+    run_search,
+)
 from concert_scout.security import Refused, SecurityHeaders
-from concert_scout.sources import geocoder, lastfm, listenbrainz, musicbrainz, ticketmaster
+from concert_scout.sources import (
+    geocoder,
+    lastfm,
+    listenbrainz,
+    musicbrainz,
+    spotify_catalog,
+    ticketmaster,
+)
 from concert_scout.sources.spotify import SpotifyError
 
 logger = logging.getLogger(__name__)
@@ -40,10 +53,26 @@ class TasteRequest(BaseModel):
 ArtistName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
 
+class Coordinates(BaseModel):
+    lat: Annotated[float, Field(ge=-90, le=90)]
+    lon: Annotated[float, Field(ge=-180, le=180)]
+
+
 class SearchRequest(BaseModel):
     text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
     token: Annotated[str, StringConstraints(min_length=1, max_length=2048)]
     taste: Annotated[list[ArtistName], Field(max_length=MAX_TASTE)] = []
+    # A location the visitor already shared, used when the Search names no place.
+    near: Coordinates | None = None
+
+
+def _catalog_client(
+    settings: Settings, transport: httpx.AsyncBaseTransport | None
+) -> httpx.AsyncClient | None:
+    if not (settings.spotify_client_id and settings.spotify_client_secret):
+        return None
+    secret = settings.spotify_client_secret.get_secret_value()
+    return spotify_catalog.make_client(settings.spotify_client_id, secret, transport)
 
 
 def make_services(
@@ -61,6 +90,7 @@ def make_services(
         musicbrainz=musicbrainz.make_client(transport),
         listenbrainz=listenbrainz.make_client(transport),
         lastfm=lastfm_client,
+        spotify_catalog=_catalog_client(settings, transport),
         redis=redis or cache.make_client(settings.redis_url),
         model=model or interpreter.make_model(settings.anthropic_api_key.get_secret_value()),
         turnstile=security.make_turnstile_client(transport),
@@ -112,6 +142,8 @@ def create_app(
         await services.listenbrainz.aclose()
         if services.lastfm:
             await services.lastfm.aclose()
+        if services.spotify_catalog:
+            await services.spotify_catalog.aclose()
         await services.turnstile.aclose()
         await services.redis.aclose()
 
@@ -175,6 +207,8 @@ def create_app(
     async def invalid_request(request: Request, _: RequestValidationError) -> JSONResponse:
         if request.url.path == "/search":
             return _failure(422, SearchError(code="invalid_search", message=ASK_FOR_A_SEARCH))
+        if request.url.path == "/artist":
+            return _failure(422, SearchError(code="invalid_artist", message="Choose an Artist."))
         if request.url.path.startswith("/taste/"):
             return _failure(422, SearchError(code="invalid_username", message="Enter a username."))
         return _failure(422, SearchError(code="invalid_place", message="Choose a place."))
@@ -196,6 +230,7 @@ def create_app(
     app.include_router(
         spotify.router(settings, services.redis, services.ticketmaster, services.geocoder)
     )
+    app.include_router(feedback.router(settings, services.redis, transport))
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -222,6 +257,13 @@ def create_app(
             return _failure(503, SearchError(code="ticketmaster_unavailable", message=message))
         return Nearby(concerts=concerts)
 
+    @app.get("/artist", response_model=ArtistProfiles, response_model_exclude_none=True)
+    async def artist(
+        request: Request, name: Annotated[str, Query(min_length=1, max_length=200)]
+    ) -> ArtistProfiles:
+        await limit_visitor(request, "artist", limits.ARTIST_PER_HOUR)
+        return ArtistProfiles(profiles=await find_artist_profiles(name, services))
+
     # A POST, so the username stays out of access logs.
     @app.post("/taste/{source}")
     async def import_taste(
@@ -232,7 +274,9 @@ def create_app(
 
     @app.post("/search", response_class=EventSourceResponse, dependencies=[Depends(guard_search)])
     async def search(search: SearchRequest) -> AsyncIterator[ServerSentEvent]:
-        async for event in run_search(search.text, search.taste, services):
+        here = search.near
+        near = Place(name="Near you", lat=here.lat, lon=here.lon) if here else None
+        async for event in run_search(search.text, search.taste, near, services):
             yield event
 
     return app
