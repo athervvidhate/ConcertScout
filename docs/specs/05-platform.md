@@ -2,7 +2,7 @@
 
 ## Local first
 
-All development runs on this computer, set up like a real server. Nothing depends on the domain or on hosting.
+All development runs on this computer, set up like a real server. Nothing depends on hosting.
 
 - FastAPI under `uvicorn` in production mode on `127.0.0.1:8000`. No reload, and debug off.
 - Real Redis locally.
@@ -52,7 +52,7 @@ Pydantic AI's OpenTelemetry output gives one trace per Search, with a span per p
 
 ## Hosting
 
-This is a later ticket. The target is Vercel Hobby for both apps, because it is free and the project is non-commercial. Fly.io is the fallback, at about $1 to $4 a month.
+The target is Vercel Hobby for both apps, because it is free and the project is non-commercial. Fly.io is the fallback, at about $1 to $4 a month.
 
 Measured on 2026-11-04 on Vercel Hobby, with a throwaway FastAPI, `httpx` and Pydantic AI function:
 

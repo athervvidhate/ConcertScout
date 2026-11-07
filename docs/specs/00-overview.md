@@ -34,7 +34,8 @@ Terms follow [GLOSSARY.md](../../GLOSSARY.md). Choices with lasting trade-offs l
 | Accounts | None in this rebuild. Saved Concerts live in the browser |
 | Streaming | SSE directly from the browser to FastAPI |
 | Money | $10-15 a month in total, no affiliate links, no ads |
-| Development | Local, run like a production server. Hosting is a later ticket |
+| Development | Local, run like a production server |
+| Address | `concertscout.app`, with the API on `api.concertscout.app` |
 
 ## Architecture
 
@@ -58,5 +59,4 @@ Accounts, chat, other Concert sources, buying tickets inside the app, ads, and a
 ## Open items
 
 - Genre matching needs tuning against judged Searches. [The spike](../research/12-candidate-matching-spike.md) found it strong for country and punk and weak for electronic.
-- The domain `concertscout.app` has expired. Nothing depends on it.
 - The per-visitor limit is set from measured cost, not guessed. See [05-platform](05-platform.md).
