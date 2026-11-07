@@ -49,6 +49,8 @@ export function Search() {
   const resting = !showPoster && !place && !interpreted && !error;
   const example = useSearchExample(!focused && !text && phase !== "searching");
   const canSearch = token !== null && phase !== "searching";
+  const searchedFor =
+    interpreted && !interpreted.place && place ? { ...interpreted, place: "Near you" } : interpreted;
 
   useEffect(() => {
     const timer = setTimeout(() => setPlace(readPlace()), 0);
@@ -87,7 +89,8 @@ export function Search() {
     // Each token works once, so the next Search needs a fresh one.
     setToken(null);
     botCheck.current?.reset();
-    search(query, token, taste?.artists ?? []);
+    // A typed place wins on the server, so a shared location only fills the gap.
+    search(query, token, taste?.artists ?? [], place);
   }
 
   function submit(event: SubmitEvent<HTMLFormElement>) {
@@ -161,8 +164,8 @@ export function Search() {
       )}
 
       <div aria-live="polite" className="search-context">
-        {interpreted && (
-          <p title={formatInterpreted(interpreted)}>{formatPosterHeading(interpreted)}</p>
+        {searchedFor && (
+          <p title={formatInterpreted(searchedFor)}>{formatPosterHeading(searchedFor)}</p>
         )}
         {phase === "finished" && !error && recommendations.length === 0 && (
           <p>Nothing qualifies for this Search. Try wider dates or a nearby city.</p>

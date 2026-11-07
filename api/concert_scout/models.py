@@ -2,6 +2,9 @@ import datetime as dt
 
 from pydantic import BaseModel
 
+# A circle this wide already covers most of a large country.
+MAX_RADIUS_MILES = 500
+
 
 class Price(BaseModel):
     min: float
@@ -34,9 +37,12 @@ class Concert(BaseModel):
 
 
 class Recommendation(BaseModel):
+    """One Artist on a Poster. `also` holds the same Artist's other dates, from the same source."""
+
     concert: Concert
     reason: str
     score: int | None = None
+    also: list[Concert] = []
 
 
 class Poster(BaseModel):
@@ -51,6 +57,8 @@ class Place(BaseModel):
     lon: float
     state_code: str | None = None
     country_code: str | None = None
+    # How far a region reaches. Without one, a place gets the standard radius.
+    radius_miles: int | None = None
 
 
 class SeedArtist(BaseModel):
@@ -84,9 +92,12 @@ class Status(BaseModel):
 
 class Interpreted(BaseModel):
     place: str | None
+    region: str | None
+    radius_miles: int | None
     start: dt.date | None
     end: dt.date | None
     artists: list[str]
+    genres: list[str]
 
 
 class PoolTotal(BaseModel):

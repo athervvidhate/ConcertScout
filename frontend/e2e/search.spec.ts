@@ -215,3 +215,15 @@ test("Spotify access denial explains the invite list and keeps no session", asyn
   await expect(page.getByRole("status")).toContainText("not on the app's invite list");
   expect((await context.cookies()).some(c => c.name === "concert_scout_spotify")).toBe(false);
 });
+test("a Search with no place uses the shared location", async ({page, context}) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({latitude: 32.7, longitude: -117.1});
+  await page.goto("/");
+  await page.getByRole("button", {name: "Show Concerts near me"}).click();
+  await expect(page.getByRole("heading", {name: /near/i})).toBeVisible();
+  const request = page.waitForRequest(r => r.url().endsWith("/search"));
+  await search(page, "rap near me");
+  expect((await request).postDataJSON().near).toEqual({lat: 32.7, lon: -117.1});
+  await expect(page.getByText("Near you", {exact: true})).toBeVisible();
+});
+

@@ -51,7 +51,7 @@ async def run(
     result = SearchRun()
     started = time.perf_counter()
     with telemetry.search() as usage:
-        async for event in stream_search(text, [], services, today):
+        async for event in stream_search(text, [], None, services, today):
             data: dict[str, Any] = event.data or {}
             if event.event == "candidates":
                 result.names = data["names"]

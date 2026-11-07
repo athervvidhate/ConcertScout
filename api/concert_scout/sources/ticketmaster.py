@@ -47,8 +47,9 @@ async def find_concerts(
     end: dt.date,
     *,
     state: tuple[str, str] | None = None,
+    radius: int = RADIUS_MILES,
 ) -> list[Concert]:
-    return await _find(client, redis, _base_params(point, state), start, end)
+    return await _find(client, redis, _base_params(point, state, radius), start, end)
 
 
 async def find_artist_concerts(
@@ -58,14 +59,18 @@ async def find_artist_concerts(
     point: str | None,
     *,
     state: tuple[str, str] | None = None,
+    radius: int = RADIUS_MILES,
 ) -> list[Concert]:
     """An Artist's upcoming Concerts. `keyword` is loose, so code checks the Lineup."""
-    concerts = await _find(client, redis, _base_params(point, state) | {"keyword": name})
+    params = _base_params(point, state, radius) | {"keyword": name}
+    concerts = await _find(client, redis, params)
     wanted = normalize(name)
     return [c for c in concerts if wanted in (normalize(a.name) for a in c.artists)]
 
 
-def _base_params(point: str | None, state: tuple[str, str] | None) -> dict[str, str | int]:
+def _base_params(
+    point: str | None, state: tuple[str, str] | None, radius: int
+) -> dict[str, str | int]:
     params: dict[str, str | int] = {
         "segmentName": "Music",
         "size": PAGE_SIZE,
@@ -74,7 +79,7 @@ def _base_params(point: str | None, state: tuple[str, str] | None) -> dict[str, 
     if state:
         params |= {"countryCode": state[0], "stateCode": state[1]}
     elif point:
-        params |= {"geoPoint": point, "radius": RADIUS_MILES, "unit": "miles"}
+        params |= {"geoPoint": point, "radius": radius, "unit": "miles"}
     return params
 
 

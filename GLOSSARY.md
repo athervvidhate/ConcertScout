@@ -28,6 +28,9 @@ _Avoid_: Bill
 Concert Scout's judgment that a Concert suits one Search, with the reason why. The same Concert can have different Recommendations in different Searches.
 _Avoid_: Result, suggestion, match
 
+**Region**:
+A named area wider than a city and narrower than or different from a state, such as Southern California. A Search reaches it as a circle around a large city.
+
 **Poster**:
 The ranked Recommendations for one Search, seen together.
 _Avoid_: Lineup, results page, list

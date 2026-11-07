@@ -27,6 +27,8 @@ from concert_scout.spotify import (
 )
 from tests.contracts import CONCERTS, contract_model, forbidden_http, install_sources, settings_with
 
+BY_ARTIST = [c for c in CONCERTS if c.artists[0].name == "Contract Artist"]
+
 ORIGIN = "http://localhost:3000"
 TOKEN = Credentials(
     access_token=SecretStr("private-access-token"),
@@ -113,7 +115,7 @@ async def test_shelf_uses_exact_source_facts_without_any_model_and_disconnect_de
         assert "no-store" in response.headers["cache-control"]
         items = response.json()["concerts"]
         assert [i["concert"] for i in items] == [
-            c.model_dump(mode="json", exclude_none=True) for c in CONCERTS
+            c.model_dump(mode="json", exclude_none=True) for c in BY_ARTIST
         ]
         assert all(i["artist"]["name"] == "Contract Artist" for i in items)
         disconnected = await api.post(PREFIX + "/disconnect", headers={"Origin": ORIGIN})
@@ -244,5 +246,5 @@ def test_exact_shelf_matching_does_not_turn_a_tribute_into_a_match() -> None:
         update={"id": "tribute", "artists": [Artist(name="A tribute to Contract Artist")]}
     )
     matched = exact_matches([tribute, *CONCERTS], ARTISTS)
-    assert [item.concert.id for item in matched] == [c.id for c in CONCERTS]
-    assert all(item.concert in CONCERTS for item in matched)
+    assert [item.concert.id for item in matched] == [c.id for c in BY_ARTIST]
+    assert all(item.concert in BY_ARTIST for item in matched)

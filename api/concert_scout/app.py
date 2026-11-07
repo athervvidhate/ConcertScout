@@ -17,7 +17,7 @@ from redis.exceptions import RedisError
 
 from concert_scout import cache, interpreter, limits, security, spotify
 from concert_scout.config import Settings
-from concert_scout.models import ImportedTaste, Nearby, SearchError
+from concert_scout.models import ImportedTaste, Nearby, Place, SearchError
 from concert_scout.pipeline import ASK_FOR_A_SEARCH, Services, find_nearby, run_search
 from concert_scout.security import Refused, SecurityHeaders
 from concert_scout.sources import geocoder, lastfm, listenbrainz, musicbrainz, ticketmaster
@@ -40,10 +40,17 @@ class TasteRequest(BaseModel):
 ArtistName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
 
+class Coordinates(BaseModel):
+    lat: Annotated[float, Field(ge=-90, le=90)]
+    lon: Annotated[float, Field(ge=-180, le=180)]
+
+
 class SearchRequest(BaseModel):
     text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
     token: Annotated[str, StringConstraints(min_length=1, max_length=2048)]
     taste: Annotated[list[ArtistName], Field(max_length=MAX_TASTE)] = []
+    # A location the visitor already shared, used when the Search names no place.
+    near: Coordinates | None = None
 
 
 def make_services(
@@ -232,7 +239,9 @@ def create_app(
 
     @app.post("/search", response_class=EventSourceResponse, dependencies=[Depends(guard_search)])
     async def search(search: SearchRequest) -> AsyncIterator[ServerSentEvent]:
-        async for event in run_search(search.text, search.taste, services):
+        here = search.near
+        near = Place(name="Near you", lat=here.lat, lon=here.lon) if here else None
+        async for event in run_search(search.text, search.taste, near, services):
             yield event
 
     return app
