@@ -8,7 +8,7 @@ One Search runs these steps in order. Only steps 1 and 6 use an LLM.
 3. Pool        Code gathers Concerts for the place and dates
 4. Match       Code scores each Concert against the Taste
 5. Shortlist   Code keeps the top 40
-6. Rank        Haiku scores the shortlist and writes reasons
+6. Rank        Haiku grades the shortlist and writes reasons
 7. Assemble    Code rejects bad IDs and fills in facts
 ```
 
@@ -94,20 +94,26 @@ This step emits the `candidates` event, whose names fill the loader. Names from 
 
 ## 6. Rank
 
-A second agent, with no tools, receives short fields for each candidate: ID, Artist, genre, tags and match signal. It also gets the Taste. It returns:
+A second agent, with no tools, receives short fields for each candidate: ID, Artist, genre, tags and match signal. It also gets the Taste. It grades every candidate:
 
 ```python
-class Pick(BaseModel):
+class Fit(BaseModel):
     id: str
-    score: int        # 0-100
-    reason: str       # one sentence, 140 characters at most
+    level: int        # 0 a miss, 1 a stretch, 2 a fair suggestion, 3 a strong fit
+    reason: str       # for level 2 or 3, one sentence, 140 characters at most
 ```
+
+The ranker grades rather than chooses. Asked to choose up to 8, the model sometimes returned a full Poster and sometimes almost nothing for identical input. Grading every row against fixed levels leaves the choice to code.
+
+Three votes run at once, each with the rows in its own fixed order, so no row gains from its place in the list. Each Concert takes its median level, and its reason comes from the most favourable vote. A vote that fails or misses the deadline drops out, and the others still count. On Haiku the three votes cost about three times one, a fraction of a cent. Thinking is off: with it on, the step took nearly twice as long and the grades were no better.
+
+Both model answers are cached for 6 hours, the same as the Concert pool. The interpreter's is keyed by the visitor's date and the Search's words, and the ranker's by its exact prompt, so a repeated Search shows the same Poster and calls no model. Keys are hashed and never hold Search text.
 
 The ranker should drop poor fits. The spike showed tags pull in misses such as Kim Petras for Four Tet, and this step exists to remove them. A seed Artist is never a poor fit, because the visitor asked for them. Event text is untrusted, so it goes in delimited fields and the model has no tools.
 
 ## 7. Assemble
 
-Code rejects any ID not in the shortlist and any row with no reason, sorts by score, puts seed Artists first, keeps one Recommendation per Artist, cuts to 8 and fills in facts from the source record. A seed the model left out still appears, with a neutral reason. An Artist\'s other dates travel with their Recommendation, and two listings of one Artist on one date count once. If the ranker fails, the Search shows the top matches from step 5 with a neutral reason built from the match signal. It says why the Concert matched, such as "Similar to Khruangbin".
+Code rejects any ID not in the shortlist, any level below 2 and any row with no reason. It orders by level, then by match score, then by shortlist order, so only the model's level can move a Concert. It puts seed Artists first, keeps one Recommendation per Artist, cuts to 8 and fills in facts from the source record. A seed the model left out still appears, with a neutral reason. An Artist's other dates travel with their Recommendation, and two listings of one Artist on one date count once. If the ranker fails, or grades only unknown IDs, the Search shows the top matches from step 5 with a neutral reason built from the match signal. It says why the Concert matched, such as "Similar to Khruangbin".
 
 ## API
 
@@ -156,6 +162,6 @@ api/concert_scout/
 
 ### Qualification and place-only Searches
 
-The ranker omits poor fits and assembly excludes scores below 50. If ranking fails, only matches with a score strictly greater than 0.3 qualify; genre-only and unmatched Concerts do not fill a Poster. Neutral fallback reasons describe the actual match signal. These thresholds are initial values for evaluation.
+The ranker grades poor fits below 2 and assembly leaves them out. If ranking fails, only matches with a score strictly greater than 0.3 qualify; genre-only and unmatched Concerts do not fill a Poster. Neutral fallback reasons describe the actual match signal. These thresholds are initial values for evaluation.
 
 For a place-only Search, use Concerts whose headliner has a MusicBrainz ID in Ticketmaster as a practical proxy for notability. Keep the first Concert per headliner, soonest first, up to eight. This proxy may omit notable Artists without linked IDs.

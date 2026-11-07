@@ -18,7 +18,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.usage import RequestUsage
 
 from concert_scout.models import Artist, Concert, Recommendation
-from concert_scout.ranker import Pick, Ranking
+from concert_scout.ranker import Fit, Ranking
 from evals import cases, compare, harness, judge, run, snapshots
 from evals.cases import Search
 from evals.harness import SearchRun
@@ -89,7 +89,7 @@ async def test_a_recorded_model_answer_replays_with_its_usage_and_a_new_question
     recording = RecordingModel(FunctionModel(answer))
     await agent.run("Chicago", model=recording)
     snapshot = snapshot_with({}).model_copy(update={"answers": recording.answers})
-    replay = ReplayModel(FunctionModel(answer), snapshot, live=False)
+    replay = ReplayModel(FunctionModel(answer), snapshot, live="none")
 
     result = await agent.run("Chicago", model=replay)
 
@@ -163,7 +163,7 @@ async def test_a_run_reports_a_snapshot_miss_instead_of_a_silent_score(
     monkeypatch.setattr(snapshots, "load", load_empty)
     search = Search(id="a", text="Chicago", snapshot="s", good=["One"], judged=True)
 
-    report = await run.evaluate([search], None, live_model=False)
+    report = await run.evaluate([search], None, live="none")
 
     assert report.cases == []
     assert "not in the Snapshot" in report.failures[0].error_message
@@ -185,7 +185,7 @@ async def test_a_replayed_search_scores_the_poster_against_source_facts(
     monkeypatch.setattr(run.harness, "replay", replay)
     search = Search(id="a", text="Chicago", snapshot="s", must=["One"], bad=["Two"], judged=True)
 
-    report = await run.evaluate([search], None, live_model=False)
+    report = await run.evaluate([search], None, live="none")
 
     case = report.cases[0]
     assert case.output.measures == Measures(0, 1, 1, 1, 1, 0)
@@ -320,7 +320,7 @@ async def test_a_pipeline_error_is_a_failed_case_not_a_successful_empty_poster(
     monkeypatch.setattr(snapshots, "load", load_empty)
     monkeypatch.setattr(run.harness, "replay", replay)
     report = await run.evaluate(
-        [Search(id="a", text="Chicago", snapshot="s", judged=True)], None, live_model=False
+        [Search(id="a", text="Chicago", snapshot="s", judged=True)], None, live="none"
     )
     assert not report.cases
     assert "no quality score" in report.failures[0].error_message
@@ -337,7 +337,7 @@ def compared_snapshot(picks: dict[str, int]) -> Snapshot:
         }
 
     body = {"_embedded": {"events": [event(id_) for id_ in ("a", "b", "c")]}}
-    ranking = Ranking(picks=[Pick(id=i, score=s, reason="Why") for i, s in picks.items()])
+    ranking = Ranking(fits=[Fit(id=i, level=s, reason="Why") for i, s in picks.items()])
     answer = ModelResponse(parts=[TextPart(ranking.model_dump_json())])
     return Snapshot(
         id="case",
@@ -357,10 +357,10 @@ def compared_snapshot(picks: dict[str, int]) -> Snapshot:
 def test_compare_counts_artists_the_poster_would_show() -> None:
     change = compare.compare(
         "case",
-        compared_snapshot({"a": 80, "b": 60, "c": 49}),
-        compared_snapshot({"a": 70, "c": 90, "unknown": 95}),
+        compared_snapshot({"a": 3, "b": 2, "c": 1}),
+        compared_snapshot({"a": 2, "c": 3, "unknown": 3}),
     )
-    assert change.before == {"Artist a": 80, "Artist b": 60}
-    assert change.after == {"Artist a": 70, "Artist c": 90}
+    assert change.before == {"Artist a": 3, "Artist b": 2}
+    assert change.after == {"Artist a": 2, "Artist c": 3}
     assert change.overlap == pytest.approx(1 / 3)
-    assert "lost Artist b (60)" in compare.report([change])
+    assert "lost Artist b (2)" in compare.report([change])

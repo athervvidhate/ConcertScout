@@ -311,3 +311,34 @@ async def test_a_search_reads_today_in_the_visitors_own_zone(
     monkeypatch.setattr(pipeline, "interpret", interpret)
     await api.post("/search", json={"text": "SF", "token": TOKEN, "time_zone": zone})
     assert days == [day]
+
+
+async def test_a_repeated_search_reuses_both_answers_and_shows_the_same_poster() -> None:
+    from pydantic_ai.messages import ModelMessage, ModelResponse
+    from pydantic_ai.models.function import AgentInfo, FunctionModel
+
+    from concert_scout import ranker
+
+    answer = contract_model().function
+    assert answer is not None
+    calls: list[str] = []
+
+    def counted(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        calls.append("rank" if info.instructions == ranker.INSTRUCTIONS else "interpret")
+        return answer(messages, info)  # pyright: ignore[reportReturnType]
+
+    app = create_app(
+        settings_with(),
+        httpx.MockTransport(forbidden_http),
+        FakeAsyncRedis(),
+        FunctionModel(counted),
+    )
+    body = {"text": "UKG in SF", "token": TOKEN, "time_zone": "UTC"}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as api:
+        first = parse_sse((await api.post("/search", json=body)).text)
+        second = parse_sse((await api.post("/search", json=body)).text)
+
+    poster = [data for name, data in first if name == "poster"]
+    assert poster == [data for name, data in second if name == "poster"]
+    assert calls.count("interpret") == 1
+    assert calls.count("rank") == ranker.VOTES

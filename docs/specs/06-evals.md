@@ -52,9 +52,27 @@ For advance capture, `uv run python -m evals.capture --limit 20` records the dra
 | Time to `poster` event, p95 | Under 15s |
 | Cost per Search | Measured and recorded |
 
-`uv run python -m evals.run` prints every measure. It replays each Snapshot, which holds every outbound call and model answer, so it needs no keys or network and costs nothing. A prompt, weight or shortlist change makes new model requests, so use `--live-model`, which calls the real model and costs money. Time to `poster` always comes from the cold capture, because a replay makes no real calls.
+`uv run python -m evals.run` prints every measure. It replays each Snapshot, which holds every outbound call and model answer, so it needs no keys or network and costs nothing. A ranker change makes new ranker requests, so use `--live ranker`, which keeps the recorded reading of the Search and calls the real ranker. An interpreter change needs `--live all`. Both cost money. Time to `poster` always comes from the cold capture, because a replay makes no real calls.
 
 Run the evals in CI only by hand or nightly, because they cost money. Fixture tests for `matching.py` run on every push.
+
+## Measures without labels
+
+Human labels are the final word, but there are only as many as the owner has time to give. Three checks run without them, so a change can be judged before any label exists. `uv run python -m evals.scorecard` reports all three per Search. See [the eval workflow](../development/evals.md#scorecard).
+
+| Measure | What it asks | Target |
+|---|---|---|
+| Overlap | Do repeated runs of one Search give the same Poster? Mean pairwise Jaccard of Artists. | At least 80%, lowest Search at least 60% |
+| Silver recall | For a Search that names an Artist, how many Artists that Deezer or Last.fm call similar, and who are playing, reach the Poster? | Rises, never falls |
+| Graded precision | What share of the Poster does a stronger model grade a fair fit or better? | At least 60% |
+
+Each has a known weakness, so no one of them decides alone:
+
+- A ranker that always returns the same bad Poster scores 100% overlap.
+- Deezer and Last.fm learn from listening, like ListenBrainz, so they share its popularity bias and miss small acts. Agreement with them is consistency, not quality. Neither feeds the candidates, which keeps the check from rewarding the pipeline for repeating its own data. If Last.fm ever does, it leaves the silver set.
+- The grader is a model. It never sees why an Artist was shortlisted, but it shares blind spots with the ranker and grades Artists it does not know as a stretch. It counts only while it agrees with the owner's labels.
+
+The scorecard also grades the shortlist, which shows whether a weak Poster is the ranker's fault or the matching's. With `--pool` it grades everyone playing, which shows when a pool holds no good answer at all. Ticketmaster lists little underground techno in Detroit, for example, so no change to matching can find it.
 
 ## Tuning
 

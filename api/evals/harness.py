@@ -22,6 +22,7 @@ from concert_scout.config import Settings
 from concert_scout.models import Poster, Recommendation
 from concert_scout.pipeline import stream_search
 from evals.snapshots import (
+    Live,
     RecordingModel,
     RecordingTransport,
     ReplayModel,
@@ -41,6 +42,7 @@ class SearchRun:
     seconds_to_poster: float | None = None
     cost: Decimal = Decimal(0)
     cost_complete: bool = True
+    steps: dict[str, float] = field(default_factory=dict[str, float])
 
 
 async def run(
@@ -84,6 +86,7 @@ async def run(
             finally:
                 result.cost = usage.cost
                 result.cost_complete = usage.complete
+                result.steps = usage.steps
                 if spend_redis is not None:
                     await limits.record_spend(spend_redis, usage.cost)
     return result
@@ -105,7 +108,7 @@ async def capture(case_id: str, text: str, settings: Settings) -> tuple[Snapshot
     transport = RecordingTransport(secrets=[s.get_secret_value() for s in secrets if s])
     model = RecordingModel(_real_model(settings))
     async with cache.make_client(settings.redis_url) as ledger:
-        await limits.check_spend(ledger)
+        await limits.check_spend(ledger, limits.EVAL_DAILY_SPEND)
         result = await run(text, today, settings, transport, model, ledger)
     snapshot = Snapshot(
         id=f"{case_id}-{today.isoformat()}-{uuid4().hex[:8]}",
@@ -120,9 +123,9 @@ async def capture(case_id: str, text: str, settings: Settings) -> tuple[Snapshot
 
 
 async def replay(
-    snapshot: Snapshot, settings: Settings | None, live_model: bool = False
+    snapshot: Snapshot, settings: Settings | None, live: Live = "none"
 ) -> tuple[SearchRun, list[str]]:
-    """Replays a Snapshot. Only `live_model` needs real settings, and only it spends money."""
+    """Replays a Snapshot. Only a `live` model needs real settings, and only it spends money."""
     # The pacing protects live services, and a replay calls none.
     settings = settings or Settings(
         _env_file=None,  # pyright: ignore[reportCallIssue]
@@ -134,7 +137,7 @@ async def replay(
         update={"lastfm_key": SecretStr("replay") if snapshot.lastfm_enabled else None}
     )
     transport = ReplayTransport(snapshot)
-    model = ReplayModel(_real_model(settings), snapshot, live_model)
+    model = ReplayModel(_real_model(settings), snapshot, live)
     with (
         patch.object(limits, "SLOT_SECONDS", 0.001),
         patch.object(limits, "MUSICBRAINZ_GAP", dt.timedelta(milliseconds=1)),

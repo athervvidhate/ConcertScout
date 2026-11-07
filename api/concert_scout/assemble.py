@@ -7,12 +7,13 @@ from collections.abc import Sequence
 from concert_scout.matching import NARROW_GENRE_WEIGHT, Candidate, Match
 from concert_scout.models import Concert, Recommendation
 from concert_scout.names import normalize
-from concert_scout.ranker import Pick
+from concert_scout.ranker import Fit
 
 logger = logging.getLogger(__name__)
 
 POSTER_SIZE = 8
-MIN_SCORE = 50
+# A fair suggestion or better. See the levels in ranker.INSTRUCTIONS.
+MIN_LEVEL = 2
 # The most a genre alone can score, so with no ranker to drop them, genre fillers never qualify.
 QUALIFYING_SCORE = NARROW_GENRE_WEIGHT
 NOTABLE_REASON = "Coming up nearby"
@@ -49,23 +50,30 @@ def _stacked(
     return list(stacked.values())
 
 
-def from_picks(picks: Sequence[Pick], shortlist: Sequence[Candidate]) -> list[Recommendation]:
-    """The best picks that name a shortlisted Concert, with only the reason kept from the model.
+def from_fits(fits: Sequence[Fit], shortlist: Sequence[Candidate]) -> list[Recommendation]:
+    """The best-graded Concerts in the shortlist, with only the reason kept from the model.
 
-    A seed Artist was asked for by name, so they lead the Poster whatever the model did.
+    Ties go to the stronger match and then to shortlist order, so the model's level is the only
+    thing that can move a Concert. A seed Artist was asked for by name, so they lead the Poster
+    whatever the model did.
     """
-    concerts = {candidate.concert.id: candidate.concert for candidate in shortlist}
-    best: dict[str, Pick] = {}
-    for pick in sorted(picks, key=lambda p: p.score, reverse=True):
-        # The model sometimes pads its answer with an empty row, which is not a recommendation.
-        if pick.id in concerts and pick.score >= MIN_SCORE and pick.reason.strip():
-            best.setdefault(pick.id, pick)
-    unknown = sum(pick.id not in concerts for pick in picks)
+    position = {candidate.concert.id: n for n, candidate in enumerate(shortlist)}
+    concerts = {candidate.concert.id: candidate for candidate in shortlist}
+    # The model sometimes pads its answer with an empty row, which is not a recommendation.
+    good = [
+        fit for fit in fits if fit.id in concerts and fit.level >= MIN_LEVEL and fit.reason.strip()
+    ]
+    unknown = sum(fit.id not in concerts for fit in fits)
     if unknown:
-        logger.warning("Dropped %d picks with unknown IDs", unknown)
+        logger.warning("Dropped %d grades with unknown IDs", unknown)
+
+    def order(fit: Fit) -> tuple[int, float, int]:
+        match = concerts[fit.id].match
+        return (-fit.level, -(match.score if match else 0), position[fit.id])
+
     chosen = [
-        Recommendation(concert=concerts[p.id], reason=p.reason, score=p.score)
-        for p in best.values()
+        Recommendation(concert=concerts[f.id].concert, reason=f.reason, score=f.level)
+        for f in sorted(good, key=order)
     ]
     seeds = [
         Recommendation(concert=candidate.concert, reason=_neutral_reason(match))
@@ -73,7 +81,7 @@ def from_picks(picks: Sequence[Pick], shortlist: Sequence[Candidate]) -> list[Re
         if (match := candidate.match) and match.signal == "seed"
     ]
     seed_artists = {_headliner(seed.concert) for seed in seeds}
-    # The sort is stable, so a seed the model picked keeps its reason over the neutral one.
+    # The sort is stable, so a seed the model graded keeps its reason over the neutral one.
     ordered = sorted([*chosen, *seeds], key=lambda r: _headliner(r.concert) not in seed_artists)
     return _stacked(ordered, shortlist)[:POSTER_SIZE]
 

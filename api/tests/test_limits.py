@@ -126,3 +126,13 @@ async def test_a_tiny_cost_still_counts() -> None:
     await limits.record_spend(redis, Decimal("0.0000001"))
 
     assert await redis.get(f"spend:day:{dt.datetime.now(dt.UTC).date()}") == b"1"
+
+
+async def test_eval_runs_may_pass_the_visitor_daily_cap_but_not_their_own() -> None:
+    redis = FakeAsyncRedis()
+    await limits.record_spend(redis, limits.DAILY_SPEND)
+
+    await limits.check_spend(redis, limits.EVAL_DAILY_SPEND)
+    await limits.record_spend(redis, limits.EVAL_DAILY_SPEND - limits.DAILY_SPEND)
+    with pytest.raises(limits.SpendCapReached):
+        await limits.check_spend(redis, limits.EVAL_DAILY_SPEND)

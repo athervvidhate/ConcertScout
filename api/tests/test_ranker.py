@@ -4,7 +4,7 @@ from concert_scout import assemble, ranker
 from concert_scout.interpreter import Interpretation
 from concert_scout.matching import Candidate, Match, Signal
 from concert_scout.models import Artist, Concert
-from concert_scout.ranker import Pick
+from concert_scout.ranker import Fit
 
 
 def candidate(
@@ -25,10 +25,10 @@ def candidate(
 
 def test_unknown_ids_are_dropped_and_facts_come_from_source() -> None:
     source = candidate("known", 1, "seed")
-    result = assemble.from_picks(
+    result = assemble.from_fits(
         [
-            Pick(id="unknown", score=100, reason="fake"),
-            Pick(id="known", score=81, reason="Similar sound"),
+            Fit(id="unknown", level=3, reason="fake"),
+            Fit(id="known", level=3, reason="Similar sound"),
         ],
         [source],
     )
@@ -40,8 +40,8 @@ def test_unknown_ids_are_dropped_and_facts_come_from_source() -> None:
 def test_a_seed_the_model_left_out_still_leads_the_poster() -> None:
     seed = candidate("seed", 1, "seed", artist="Niall Horan")
     similar = candidate("similar", 0.8, "one_hop", artist="Harry Styles")
-    poster = assemble.from_picks(
-        [Pick(id="similar", score=88, reason="Soft pop rock")], [seed, similar]
+    poster = assemble.from_fits(
+        [Fit(id="similar", level=3, reason="Soft pop rock")], [seed, similar]
     )
     assert [r.concert.id for r in poster] == ["seed", "similar"]
     assert poster[0].reason == "Niall Horan is in your Search"
@@ -52,10 +52,10 @@ def test_a_seed_the_model_picked_leads_and_keeps_its_reason() -> None:
     seed = candidate("seed", 1, "seed", artist="Niall Horan")
     similar = candidate("similar", 0.8, "one_hop", artist="Harry Styles")
     picks = [
-        Pick(id="similar", score=88, reason="Soft pop rock"),
-        Pick(id="seed", score=70, reason="Irish singer-songwriter with bright pop hooks"),
+        Fit(id="similar", level=3, reason="Soft pop rock"),
+        Fit(id="seed", level=2, reason="Irish singer-songwriter with bright pop hooks"),
     ]
-    poster = assemble.from_picks(picks, [seed, similar])
+    poster = assemble.from_fits(picks, [seed, similar])
     assert [r.concert.id for r in poster] == ["seed", "similar"]
     assert poster[0].reason == "Irish singer-songwriter with bright pop hooks"
 
@@ -82,8 +82,8 @@ async def test_model_output_is_assembled_from_source() -> None:
         return ModelResponse(
             parts=[
                 TextPart(
-                    '{"picks":[{"id":"fake","score":100,"reason":"fake"},'
-                    '{"id":"known","score":80,"reason":"A close match"}]}'
+                    '{"fits":[{"id":"99","level":3,"reason":"fake"},'
+                    '{"id":"1","level":3,"reason":"A close match"}]}'
                 )
             ]
         )
@@ -92,8 +92,8 @@ async def test_model_output_is_assembled_from_source() -> None:
     interpretation = Interpretation(
         artists=["Khruangbin"], descriptors=[], tags=[], place=None, start=None, end=None
     )
-    picks = await rank(interpretation, [source], {}, FunctionModel(respond))
-    result = assemble.from_picks(picks, [source])
+    fits = await rank(interpretation, [source], {}, FunctionModel(respond))
+    result = assemble.from_fits(fits, [source])
     assert len(result) == 1
     assert result[0].concert == source.concert
     assert result[0].reason == "A close match"
@@ -101,8 +101,8 @@ async def test_model_output_is_assembled_from_source() -> None:
 
 def test_a_padded_empty_row_is_not_a_recommendation() -> None:
     rows = [candidate("real", 1, "seed"), candidate("pad", 0.8, "one_hop")]
-    picks = [Pick(id="real", score=80, reason="Close match"), Pick(id="pad", score=80, reason=" ")]
-    assert [r.concert.id for r in assemble.from_picks(picks, rows)] == ["real"]
+    picks = [Fit(id="real", level=3, reason="Close match"), Fit(id="pad", level=3, reason=" ")]
+    assert [r.concert.id for r in assemble.from_fits(picks, rows)] == ["real"]
 
 
 def test_an_artist_stacks_their_dates_and_one_date_counts_once() -> None:
@@ -113,8 +113,8 @@ def test_an_artist_stacks_their_dates_and_one_date_counts_once() -> None:
         candidate("next-night", 1, "seed", "49 Winchester", second),
         candidate("other", 1, "seed", "Wade Bowen", first),
     ]
-    picks = [Pick(id=c.concert.id, score=80, reason="Fits") for c in rows]
-    poster = assemble.from_picks(picks, rows)
+    picks = [Fit(id=c.concert.id, level=3, reason="Fits") for c in rows]
+    poster = assemble.from_fits(picks, rows)
     assert [r.concert.id for r in poster] == ["belly-up", "other"]
     assert [c.id for c in poster[0].also] == ["next-night"]
     assert poster[1].also == []
@@ -135,3 +135,73 @@ def test_ranker_sees_each_artist_once() -> None:
     ]
     empty = Interpretation(artists=[], descriptors=[], tags=[], place=None, start=None, end=None)
     assert ranker.build_prompt(empty, rows, {}).count("49 Winchester") == 1
+
+
+def test_votes_take_the_median_level_and_the_most_favourable_reason() -> None:
+    votes = [
+        [Fit(id="a", level=3, reason="Dusty psych-funk"), Fit(id="b", level=1)],
+        [Fit(id="a", level=2, reason="Groovy"), Fit(id="b", level=2, reason="Close-ish")],
+        [Fit(id="a", level=0), Fit(id="b", level=1)],
+    ]
+    tallied = {fit.id: fit for fit in ranker.tally(votes)}
+    assert tallied["a"] == Fit(id="a", level=2, reason="Dusty psych-funk")
+    assert tallied["b"].level == 1
+
+
+def test_a_vote_that_skipped_a_concert_does_not_count_against_it() -> None:
+    votes = [[Fit(id="a", level=3, reason="Fits")], [], [Fit(id="a", level=3, reason="Fits")]]
+    assert ranker.tally(votes) == [Fit(id="a", level=3, reason="Fits")]
+
+
+def test_ties_go_to_the_stronger_match() -> None:
+    weak = candidate("weak", 0.3, "tags")
+    strong = candidate("strong", 0.8, "one_hop")
+    fits = [Fit(id="weak", level=3, reason="Fits"), Fit(id="strong", level=3, reason="Fits")]
+    assert [r.concert.id for r in assemble.from_fits(fits, [weak, strong])] == ["strong", "weak"]
+
+
+def test_a_stretch_stays_off_the_poster() -> None:
+    rows = [candidate("fair", 0.5, "tags"), candidate("stretch", 0.5, "genre")]
+    fits = [Fit(id="fair", level=2, reason="Close"), Fit(id="stretch", level=1, reason="Loose")]
+    assert [r.concert.id for r in assemble.from_fits(fits, rows)] == ["fair"]
+
+
+def test_later_votes_see_the_rows_in_another_fixed_order() -> None:
+    rows = [candidate(str(n), 1 - n / 10, "one_hop") for n in range(6)]
+    empty = Interpretation(artists=[], descriptors=[], tags=[], place=None, start=None, end=None)
+    first, second = (ranker.build_prompt(empty, rows, {}, vote) for vote in (0, 1))
+    assert first != second
+    assert second == ranker.build_prompt(empty, rows, {}, 1)
+    assert sorted(first) == sorted(second)
+
+
+async def test_a_failed_vote_drops_out_and_the_others_count() -> None:
+    from collections.abc import Sequence
+
+    from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
+    from pydantic_ai.models.function import AgentInfo, FunctionModel
+
+    calls: list[int] = []
+
+    def respond(_: Sequence[ModelMessage], __: AgentInfo) -> ModelResponse:
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("one vote fails")
+        return ModelResponse(parts=[TextPart('{"fits":[{"id":"1","level":3,"reason":"Fits"}]}')])
+
+    source = candidate("x", 1, "one_hop")
+    empty = Interpretation(artists=[], descriptors=[], tags=[], place=None, start=None, end=None)
+    fits = await ranker.rank(empty, [source], {}, FunctionModel(respond))
+    assert fits == [Fit(id="x", level=3, reason="Fits")]
+
+
+def test_rows_go_by_number_and_each_artist_once() -> None:
+    rows = [
+        candidate("tm-long-id-1", 1, "seed", "49 Winchester"),
+        candidate("tm-long-id-2", 1, "seed", "49 Winchester"),
+        candidate("tm-long-id-3", 0.8, "one_hop", "Wade Bowen"),
+    ]
+    assert [(row.id, concert) for row, concert in ranker.numbered(rows, {})] == [
+        ("1", "tm-long-id-1"),
+        ("2", "tm-long-id-3"),
+    ]

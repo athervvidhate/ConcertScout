@@ -11,7 +11,7 @@ from pydantic import SecretStr
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, UserPromptPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from concert_scout import pool, security, similarity
+from concert_scout import pool, ranker, security, similarity
 from concert_scout.config import Settings
 from concert_scout.models import Artist, Concert, Place, Price, SeedArtist
 from concert_scout.sources import geocoder, listenbrainz, musicbrainz, spotify_catalog
@@ -81,17 +81,18 @@ def contract_model() -> FunctionModel:
             if isinstance(p, UserPromptPart) and isinstance(p.content, str)
         )
         output: dict[str, Any]
-        if info.instructions and "Choose the Concerts" in info.instructions:
+        if info.instructions == ranker.INSTRUCTIONS:
             prompt = json.loads(text)
-            ids = [] if "empty" in prompt["taste"]["descriptors"] else [c.id for c in CONCERTS]
+            # An "empty" Taste grades every row a miss, which is a verdict that nothing fits.
+            fits = "empty" not in prompt["taste"]["descriptors"]
             output = {
-                "picks": [
-                    {"id": id, "score": 85, "reason": "A source-backed match"}
-                    for id in [*ids, "unknown-id"]
+                "fits": [
+                    {"id": id, "level": 3, "reason": "A source-backed match"}
+                    if fits
+                    else {"id": id, "level": 0}
+                    for id in [*(row["id"] for row in prompt["candidates"]), "999"]
                 ]
             }
-            if not ids:
-                output = {"picks": []}
         else:
             output = {
                 "artists": [],

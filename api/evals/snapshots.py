@@ -6,16 +6,19 @@ import json
 import os
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Literal
 from urllib.parse import quote, quote_plus, urlencode
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from pydantic_ai.exceptions import UnexpectedModelBehavior
-from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, ModelResponse
+from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, ModelResponse, TextPart
 from pydantic_ai.models import Model, ModelRequestParameters
 from pydantic_ai.models.wrapper import WrapperModel
 from pydantic_ai.settings import ModelSettings
 
+from concert_scout import ranker
+from concert_scout.interpreter import Interpretation
 from concert_scout.models import Concert
 from concert_scout.sources import ticketmaster
 
@@ -128,10 +131,15 @@ class RecordingModel(WrapperModel):
         return response
 
 
-class ReplayModel(WrapperModel):
-    """Repeats recorded answers. With `live`, it calls the wrapped model instead and costs money."""
+# Which model requests go to the real model, at a cost. "ranker" keeps the recorded reading of
+# the Search, so every run sees the same shortlist and only the ranker can differ.
+type Live = Literal["none", "ranker", "all"]
 
-    def __init__(self, wrapped: Model, snapshot: Snapshot, live: bool) -> None:
+
+class ReplayModel(WrapperModel):
+    """Repeats recorded answers, and calls the wrapped model for the requests `live` names."""
+
+    def __init__(self, wrapped: Model, snapshot: Snapshot, live: Live) -> None:
         super().__init__(wrapped)
         self.answers = snapshot.answers
         self.live = live
@@ -143,7 +151,8 @@ class ReplayModel(WrapperModel):
         model_settings: ModelSettings | None,
         model_request_parameters: ModelRequestParameters,
     ) -> ModelResponse:
-        if self.live:
+        ranking = any(getattr(m, "instructions", None) == ranker.INSTRUCTIONS for m in messages)
+        if self.live == "all" or (self.live == "ranker" and ranking):
             return await super().request(messages, model_settings, model_request_parameters)
         key = model_key(messages)
         answer = self.answers.get(key)
@@ -179,3 +188,17 @@ def source_concerts(snapshot: Snapshot) -> list[Concert]:
             for concert in ticketmaster.parse_concerts(json.loads(record.body)):
                 concerts[concert.id] = concert
     return list(concerts.values())
+
+
+def interpretation(snapshot: Snapshot) -> Interpretation | None:
+    """The interpreter's recorded reading of the Search. The ranker's answer fails to validate."""
+    for answer in snapshot.answers.values():
+        for message in ModelMessagesTypeAdapter.validate_json(answer):
+            if isinstance(message, ModelResponse):
+                for part in message.parts:
+                    if isinstance(part, TextPart):
+                        try:
+                            return Interpretation.model_validate_json(part.content)
+                        except ValidationError:
+                            continue
+    return None
