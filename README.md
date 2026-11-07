@@ -16,7 +16,7 @@ make dev
 
 Open **http://127.0.0.1:3000**. The API runs without reload on port 8000 and uses real Redis, source APIs, limits and spend counters. `make start` builds and serves the production frontend instead. `make phone` does the same and prints an address for a phone on your network. Over plain HTTP, phones block location and Spotify refuses the sign-in redirect, so test those on an HTTPS deployment. Keys stay on the API server and out of git.
 
-Try `Khruangbin in Chicago next weekend`, `UKG in SF`, or a city on its own. The empty input rotates through examples. The location button asks for browser location only when pressed, and later Searches with no place look near it. Open an Artist from a Ticket for their Spotify link, top songs and similar Artists. Import Last.fm/ListenBrainz Taste or a local history file/list through Your Taste.
+Try `Tame Impala in London next summer`, `Dreamy bands in SoCal next month`, or a city on its own. The empty input rotates through examples. The location button asks for browser location only when pressed, and later Searches with no place look near it. Open an Artist from a Ticket for their Spotify link, top songs and similar Artists. Import Last.fm/ListenBrainz Taste or a local history file/list through Your Taste.
 
 Spotify connection is optional and invite-only. It has its own deterministic shelf and never supplies model input. [Setup and pending live acceptance](docs/development/spotify.md).
 
@@ -44,7 +44,7 @@ Dates, venues, times, prices and Ticket links do not come from the model. Missin
 
 - **Separate Python service.** FastAPI owns source calls, secrets, SSE and enforcement; Next.js renders the interface. This keeps the agent work visible and testable in Python. [ADR 0001](docs/adr/0001-separate-python-agent-service.md).
 - **Source facts, small model outputs.** Ranking returns IDs and reasons rather than re-emitting Concert records, protecting links and keeping requests smaller. [ADR 0002](docs/adr/0002-facts-never-pass-through-the-llm.md).
-- **Shared Redis.** Public Concert chunks cache for six hours, Artist data for seven days and place lookups for thirty days. Rate and recorded-spend guards share the same store. New Searches stop at the recorded $1 daily or $10 monthly model-spend cap; nearby Concerts remain available.
+- **Shared Redis.** Public Concert chunks cache for six hours, Artist data for seven days and place lookups for thirty days. Rate and recorded-spend guards share the same store. New Searches stop at the recorded $1 daily or $10 monthly model-spend cap.
 - **Streaming with honest presentation.** Status comes from real work. The name reveal waits for qualified picks, so an empty Search never flashes a misleading wall of Artists. Sparse Posters use less space. Typography and motion follow the [interface spec](docs/specs/04-interface.md); reduced motion skips the fly-in.
 - **Local choices.** Saved Concerts and imported Taste use browser storage. History files are parsed locally; only Artist names leave the browser. Spotify account data never reaches a model. [ADR 0003](docs/adr/0003-official-spotify-access-only.md).
 
@@ -80,7 +80,7 @@ Install the browser once with `cd frontend && npx playwright install chromium`. 
 - `api/concert_scout/sources/`: async adapters; `pool.py` shares public Concert chunks and direct Artist lookups.
 - `api/concert_scout/spotify.py`: encrypted sessions and the isolated shelf; `limits.py`, `security.py`, `telemetry.py`: enforcement and numeric evidence.
 - `api/evals/`: capture, human judging and Pydantic Evals replay.
-- `frontend/components/`: Search, Poster, Ticket, Artist and Taste panels, saved/nearby Concerts and Spotify shelf.
+- `frontend/components/`: Search, Poster, Ticket, Artist and Taste panels, Saved Concerts and Spotify shelf.
 - `frontend/e2e/`: browser contracts through the production API and frontend.
 - `docs/specs/` and `docs/adr/`: requirements and lasting decisions. `docs/validation/` records checks and their limits.
 

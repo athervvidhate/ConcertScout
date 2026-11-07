@@ -21,17 +21,20 @@ type Props = {
   onExample: (text: string) => void;
   // Every Search needs a bot check token, which arrives a moment after the page.
   examplesReady: boolean;
-  onLocate: () => void;
+  /** A connected visitor already has both of these from the shelf and the menu. */
+  personal: boolean;
+  locationLabel: string;
+  onLocation: () => void;
   onTaste: () => void;
 };
 
-export function HomeGuide({ onExample, examplesReady, onLocate, onTaste }: Props) {
+export function HomeGuide({ onExample, examplesReady, personal, locationLabel, onLocation, onTaste }: Props) {
   return (
     <div className="home-guide">
       <section aria-labelledby="home-try">
         <h2 id="home-try">Try one of these</h2>
         <ul className="home-examples">
-          {SEARCH_EXAMPLES.slice(0, 6).map((example) => (
+          {SEARCH_EXAMPLES.map((example) => (
             <li key={example}>
               <Button type="button" disabled={!examplesReady} onClick={() => onExample(example)}>
                 {example}
@@ -53,7 +56,7 @@ export function HomeGuide({ onExample, examplesReady, onLocate, onTaste }: Props
         </ol>
       </section>
 
-      <section className="home-personal" aria-labelledby="home-yours">
+      {personal && <section className="home-personal" aria-labelledby="home-yours">
         <h2 id="home-yours">Make it yours</h2>
         <p>
           Share your location and Searches look near you unless you name a place. Add your Taste
@@ -62,14 +65,14 @@ export function HomeGuide({ onExample, examplesReady, onLocate, onTaste }: Props
           shows your Artists near you for the next two months.
         </p>
         <div>
-          <Button type="button" onClick={onLocate}>
-            Use my location
+          <Button type="button" onClick={onLocation}>
+            {locationLabel}
           </Button>
           <Button type="button" onClick={onTaste}>
             Add your Taste
           </Button>
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

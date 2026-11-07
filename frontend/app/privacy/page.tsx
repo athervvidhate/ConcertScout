@@ -15,7 +15,7 @@ export default function PrivacyPage() {
         <p>A Last.fm or ListenBrainz username is sent to that service when you import it. The app does not keep the username. The imported Artist list stays in your browser and accompanies later Searches until you remove it.</p>
         <p>History files, including Spotify history, are read on your device. The file contents are not uploaded. Only the resulting Artist list leaves the browser with a Search. A pasted list works the same way.</p>
         <h2>Your location</h2>
-        <p>Browser location is requested only when you press the location button. Coordinates go to the API to look for nearby Concerts and for any Search that names no place, and stay on this device until you press Forget my location or clear site storage. The app does not infer a place from your IP address. Ticketmaster receives a rounded search point or a state filter.</p>
+        <p>Browser location is requested only when you press the location button. Coordinates go to the API for any Search that names no place and for your Spotify shelf, and stay on this device until you press Forget my location or clear site storage. The app does not infer a place from your IP address. Ticketmaster receives a rounded search point or a state filter.</p>
         <h2>Artist details</h2>
         <p>Opening an Artist sends their name to Last.fm and to Spotify’s public catalog to show their details and page. This uses the app’s own credentials, not your accounts.</p>
         <h2>Data sources</h2>
@@ -43,11 +43,11 @@ export default function PrivacyPage() {
           <li>Hourly limits use a hash of the client address, not a raw address in Redis. Spend counters hold numeric totals.</li>
           <li>App traces record step times, token counts and cost. They omit Search text, Taste, exception contents and Spotify account data.</li>
         </ul>
-        <p>Server and hosting logs may still contain connection metadata, request times and URLs, including coordinates on nearby requests. OAuth callback codes are removed from the app’s access-log scope. Hosting services and upstream providers have their own retention practices.</p>
+        <p>Server and hosting logs may still contain connection metadata, request times and URLs, including coordinates on Spotify shelf requests. OAuth callback codes are removed from the app’s access-log scope. Hosting services and upstream providers have their own retention practices.</p>
         <h2>Other services</h2>
         <p>Cloudflare Turnstile checks requests for automation. The app adds no ads, advertising analytics or affiliate parameters. Upstream services process the requests they receive under their own policies.</p>
         <h2>Your controls</h2>
-        <p>Remove a Saved Concert on the Saved page. Remove imported Taste inside Your Taste. Press Forget my location under Concerts near you to delete the stored location. Disconnect Spotify before clearing cookies. Browser site settings can clear all remaining local choices.</p>
+        <p>Remove a Saved Concert on the Saved page. Remove imported Taste inside Your Taste. Press the location button again, labelled Forget my location, to delete the stored location. Disconnect Spotify before clearing cookies. Browser site settings can clear all remaining local choices.</p>
         <p>For questions, contact <a href="https://atherv.com" target="_blank" rel="noopener noreferrer">Atherv Vidhate through the portfolio</a>.</p>
         <p className="information-date">Updated November 6, 2026.</p>
       </article>

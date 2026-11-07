@@ -58,6 +58,13 @@ class Poster(BaseModel):
     recommendations: list[Recommendation]
 
 
+class Elsewhere(BaseModel):
+    """Nothing fit the Search's place, so these match its words anywhere. No model chose them."""
+
+    keyword: str
+    concerts: list[Concert]
+
+
 class Place(BaseModel):
     """Where a Search looks, as reported by the geocoder."""
 
@@ -88,10 +95,6 @@ class SimilarArtist(BaseModel):
 
 class Places(BaseModel):
     places: list[Place]
-
-
-class Nearby(BaseModel):
-    concerts: list[Concert]
 
 
 class Track(BaseModel):

@@ -47,8 +47,8 @@ The list takes about 30 Spotify calls for a large library, so it stays encrypted
 
 A Search's genres override favourites. They come from the typed Search and are compared in code with the genres Ticketmaster reports for the matched Lineup entry, so a favourite in another genre or with no reported genre stays out. Spotify's own deprecated `genres` field is not read.
 
-With no Search yet, the shelf sits above the home guide and shows the next two months near the visitor's shared location. Without a location it asks for one. A visitor who has not connected is pointed to it by the home guide's Make it yours text. Add your Taste opens the panel, where Connect Spotify comes first.
+With no Search yet, the shelf sits above the home guide and shows the next two months near the visitor's shared location. Without a location it asks for one. A connected visitor no longer sees Make it yours, because the shelf and the menu cover it. A visitor who has not connected is pointed to it by the home guide's Make it yours text. Add your Taste opens the panel, where Connect Spotify comes first.
 
-The shelf orders Concerts by the name list above, soonest first within an Artist, and every Artist's first date comes before anyone's second. It opens with 5 and adds 5 at a time.
+The shelf orders Concerts by the name list above, soonest first within an Artist, and every Artist's first date comes before anyone's second. It opens with 5 and adds 5 at a time. The visitor can hide it, which stays on that device and costs no lookup.
 
 The shelf has no LLM reasons. Each entry names its source: "From your top Artists", "From your top songs", "An Artist you follow" or "From your Liked Songs". The Spotify logo and attribution follow Spotify's design rules.

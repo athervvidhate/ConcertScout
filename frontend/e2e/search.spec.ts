@@ -2,6 +2,10 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { SEARCH_EXAMPLES } from "../lib/search-examples";
 
+async function locate(page: Page) {
+  await page.locator(".search-bar").getByRole("button", {name: "Use my location"}).click();
+}
+
 async function search(page: Page, text = "UKG in SF") {
   await page.getByRole("textbox", { name: "Search" }).fill(text);
   await expect(page.getByRole("button", { name: "Find concerts" })).toBeEnabled();
@@ -163,16 +167,13 @@ test("a refused storage write never claims a successful Save", async ({ page }) 
 test("location is used only after the visitor presses its button", async ({ page, context }) => {
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({latitude: 37.77, longitude: -122.42});
-  const requests: string[] = [];
-  page.on("request", r => { if (r.url().includes("/nearby?")) requests.push(r.url()); });
   await page.goto("/");
   await expect(page.getByRole("textbox", {name: "Search"})).toBeVisible();
-  expect(requests).toEqual([]);
-  const nearby = page.waitForResponse(r => r.url().includes("/nearby?"));
-  await page.getByRole("button", {name: "Show Concerts near me"}).click();
-  expect((await nearby).ok()).toBe(true);
-  expect(new URL(requests[0]).searchParams.get("lat")).toBe("37.77");
-  expect(new URL(requests[0]).searchParams.get("lon")).toBe("-122.42");
+  const stored = () => page.evaluate(() => localStorage.getItem("concert-scout-place"));
+  expect(await stored()).toBeNull();
+  await locate(page);
+  await expect(page.locator(".search-bar").getByRole("button", {name: "Forget my location"})).toBeVisible();
+  expect(JSON.parse((await stored())!)).toEqual({lat: 37.77, lon: -122.42});
 });
 
 
@@ -200,10 +201,10 @@ test("Spotify has its own shelf, never enters Search Taste, and disconnect remov
   const sent = await request;
   expect(sent.postDataJSON().taste).toEqual([]);
   expect(sent.headers().cookie ?? "").not.toContain("concert_scout_spotify");
-  const shelf = page.getByRole("region", {name: "Concerts from your Spotify Artists"});
-  await expect(shelf.locator(".spotify-artist")).toHaveCount(2);
+  const shelf = page.getByRole("region", {name: "From your Artists"});
+  await expect(shelf.locator(".listing-artist")).toHaveCount(2);
   await expect(shelf.getByRole("img", {name: "Spotify", exact: true})).toBeVisible();
-  await expect(shelf.locator(".spotify-artist").first()).toHaveAttribute("href", "https://open.spotify.com/artist/contract");
+  await expect(shelf.locator(".listing-artist").first()).toHaveAttribute("href", "https://open.spotify.com/artist/contract");
   await noOverflow(page);
   await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
   await page.screenshot({path: testInfo.outputPath("spotify-shelf.png"), fullPage: true});
@@ -228,7 +229,7 @@ test("a connected home page shows the shelf near a shared location", async ({ pa
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({latitude: 37.77, longitude: -122.42});
   await page.goto(await spotifyCallback(context, "account-code"));
-  const shelf = page.getByRole("region", {name: "Concerts from your Spotify Artists"});
+  const shelf = page.getByRole("region", {name: "From your Artists"});
   await expect(shelf).toContainText("Share your location");
   const request = page.waitForRequest(r => r.url().includes("/auth/spotify/shelf?"));
   await shelf.getByRole("button", {name: "Use my location"}).click();
@@ -236,7 +237,7 @@ test("a connected home page shows the shelf near a shared location", async ({ pa
   expect(sent.searchParams.get("lat")).toBe("37.77");
   expect(sent.searchParams.get("end")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   await expect(shelf).toContainText("Near you in the next two months");
-  await expect(shelf.locator(".spotify-artist").first()).toBeVisible();
+  await expect(shelf.locator(".listing-artist").first()).toBeVisible();
   await noOverflow(page);
 });
 
@@ -250,13 +251,13 @@ test("the shelf opens with 5 Concerts and shows more on request", async ({ page,
     await route.fulfill({response, json: {concerts}});
   });
   await page.goto(await spotifyCallback(context, "account-code"));
-  const shelf = page.getByRole("region", {name: "Concerts from your Spotify Artists"});
+  const shelf = page.getByRole("region", {name: "From your Artists"});
   await shelf.getByRole("button", {name: "Use my location"}).click();
-  await expect(shelf.locator(".spotify-artist")).toHaveCount(5);
+  await expect(shelf.locator(".listing-artist")).toHaveCount(5);
   await shelf.getByRole("button", {name: "Show 5 more"}).click();
-  await expect(shelf.locator(".spotify-artist")).toHaveCount(10);
+  await expect(shelf.locator(".listing-artist")).toHaveCount(10);
   await shelf.getByRole("button", {name: "Show 2 more"}).click();
-  await expect(shelf.locator(".spotify-artist")).toHaveCount(12);
+  await expect(shelf.locator(".listing-artist")).toHaveCount(12);
   await expect(shelf.getByRole("button", {name: /more/})).toHaveCount(0);
   await noOverflow(page);
 });
@@ -489,32 +490,20 @@ test("the wordmark stays on one line at every width", async ({page}) => {
   await noOverflow(page);
 });
 
-test("Concerts near you sit below the guide, and hiding keeps the location", async ({page, context}) => {
+test("Forget my location removes it from this device and from later Searches", async ({page, context}) => {
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({latitude: 37.77, longitude: -122.42});
   await page.goto("/");
-  await page.getByRole("button", {name: "Show Concerts near me"}).click();
-  const nearby = page.getByRole("region", {name: "Concerts near you"});
-  await expect(nearby.locator(".nearby-list li").first()).toBeVisible();
-  await expect(page.getByRole("heading", {name: "Concert Scout", level: 1})).toBeVisible();
-  // The page may still be scrolling here, so both edges come from the same moment.
-  const guide = await page.getByRole("region", {name: "Make it yours"}).elementHandle();
-  const below = await nearby.evaluate(
-    (section, above) => section.getBoundingClientRect().top >= above!.getBoundingClientRect().bottom,
-    guide,
-  );
-  expect(below).toBe(true);
-  await nearby.getByRole("button", {name: "Hide", exact: true}).click();
-  await expect(nearby.getByRole("heading", {name: "Concerts near you"})).toBeVisible();
-  await expect(nearby.locator(".nearby-list")).toHaveCount(0);
-  await page.reload();
-  await expect(nearby.getByRole("button", {name: "Show", exact: true})).toBeVisible();
-  await expect(nearby.locator(".nearby-list")).toHaveCount(0);
-  await nearby.getByRole("button", {name: "Show", exact: true}).click();
-  await expect(nearby.locator(".nearby-list li").first()).toBeVisible();
-  await nearby.getByRole("button", {name: "Forget my location"}).click();
-  await expect(nearby).toHaveCount(0);
+  await locate(page);
+  const guide = page.getByRole("region", {name: "Make it yours"});
+  await guide.getByRole("button", {name: "Forget my location"}).click();
+  await expect(guide.getByRole("button", {name: "Use my location"})).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("concert-scout-place"))).toBeNull();
+  await page.reload();
+  await expect(page.locator(".search-bar").getByRole("button", {name: "Use my location"})).toBeVisible();
+  const request = page.waitForRequest(r => r.url().endsWith("/search"));
+  await search(page, "rap near me");
+  expect((await request).postDataJSON().near).toBeNull();
 });
 
 test("a Ticket shows the source photo only when there is one", async ({page}) => {
@@ -564,8 +553,8 @@ test("a Search with no place uses the shared location", async ({page, context}) 
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({latitude: 32.7, longitude: -117.1});
   await page.goto("/");
-  await page.getByRole("button", {name: "Show Concerts near me"}).click();
-  await expect(page.getByRole("heading", {name: /near/i})).toBeVisible();
+  await locate(page);
+  await expect(page.locator(".search-bar").getByRole("button", {name: "Forget my location"})).toBeVisible();
   const request = page.waitForRequest(r => r.url().endsWith("/search"));
   await search(page, "rap near me");
   expect((await request).postDataJSON().near).toEqual({lat: 32.7, lon: -117.1});
@@ -623,7 +612,7 @@ test("a location answer that arrives late leaves the running Search alone", asyn
     };
   });
   await page.goto("/");
-  await page.getByRole("button", {name: "Show Concerts near me"}).click();
+  await locate(page);
   await search(page);
   await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
   await page.evaluate(() => (window as unknown as {grantLocation: () => void}).grantLocation());
@@ -659,14 +648,83 @@ test("a second Search opens on its first Ticket with nothing left from the last 
 test("one Search asks for the Spotify shelf once", async ({page, context}) => {
   await page.addInitScript(() => localStorage.setItem("concert-scout-place", JSON.stringify({lat: 41.88, lon: -87.63})));
   await page.goto(await spotifyCallback(context, "account-code"));
-  const shelf = page.getByRole("region", {name: "Concerts from your Spotify Artists"});
-  await expect(shelf.locator(".spotify-artist").first()).toBeVisible();
+  const shelf = page.getByRole("region", {name: "From your Artists"});
+  await expect(shelf.locator(".listing-artist").first()).toBeVisible();
   const requests: string[] = [];
   page.on("request", request => {
     if (request.url().includes("/auth/spotify/shelf?")) requests.push(request.url());
   });
   await search(page);
   await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
-  await expect(shelf.locator(".spotify-artist").first()).toBeVisible();
+  await expect(shelf.locator(".listing-artist").first()).toBeVisible();
   expect(requests).toHaveLength(1);
+});
+
+test("a Search replaces everything on home", async ({page, context}) => {
+  await page.addInitScript(() => localStorage.setItem("concert-scout-place", JSON.stringify({lat: 41.88, lon: -87.63})));
+  await page.goto(await spotifyCallback(context, "account-code"));
+  await expect(page.getByText("Near you in the next two months")).toBeVisible();
+  await search(page);
+  await expect(page.getByRole("heading", {name: "How it works"})).toHaveCount(0);
+  await expect(page.getByText("Near you in the next two months")).toHaveCount(0);
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+});
+
+test("connecting Spotify retires Make it yours", async ({page, context}) => {
+  await page.goto("/");
+  await expect(page.getByRole("region", {name: "Make it yours"})).toBeVisible();
+  await page.goto(await spotifyCallback(context, "account-code"));
+  await expect(page.getByRole("region", {name: "From your Artists"})).toBeVisible();
+  await expect(page.getByRole("region", {name: "Make it yours"})).toHaveCount(0);
+});
+
+test("an empty Search shows what matches its words elsewhere", async ({page}) => {
+  const concert = {id: "far", name: "Hyperpop Night", url: "https://tickets.example/far", artists: [], date: "2026-12-11", venue: "Far Hall", city: "Miami", region: "FL"};
+  const events = [
+    ["interpreted", {place: "San Francisco", artists: [], genres: []}],
+    ["poster", {recommendations: []}],
+    ["elsewhere", {keyword: "hyperpop", concerts: [concert]}],
+    ["done", {}],
+  ];
+  const body = events.map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join("");
+  await page.route("**/search", route => route.fulfill({status: 200, contentType: "text/event-stream", body}));
+  await page.goto("/");
+  await search(page, "hyperpop in sf");
+  const board = page.getByRole("region", {name: "Nothing in San Francisco"});
+  await expect(board).toContainText('These match "hyperpop" in other cities.');
+  await expect(board).toContainText("Miami, FL");
+  await expect(page.getByText("Nothing qualifies for this Search")).toHaveCount(0);
+});
+
+test("the sun runs behind the whole page", async ({page}) => {
+  await page.goto("/");
+  const covers = await page.evaluate(() => {
+    const sun = getComputedStyle(document.body, "::before");
+    const radius = parseFloat(sun.width) / 2;
+    const center = {x: innerWidth / 2, y: parseFloat(sun.top)};
+    const far = Math.hypot(innerWidth / 2, Math.max(center.y, innerHeight - center.y));
+    return sun.position === "fixed" && radius >= far;
+  });
+  expect(covers).toBe(true);
+});
+
+test("the shelf can be hidden, stays hidden and asks for nothing until shown", async ({page, context}) => {
+  await page.addInitScript(() => localStorage.setItem("concert-scout-place", JSON.stringify({lat: 41.88, lon: -87.63})));
+  await page.goto(await spotifyCallback(context, "account-code"));
+  const shelf = page.getByRole("region", {name: "From your Artists"});
+  await expect(shelf.locator(".listing-artist").first()).toBeVisible();
+  await shelf.getByRole("button", {name: "Hide", exact: true}).click();
+  await expect(shelf.locator(".listings")).toHaveCount(0);
+  await expect(shelf.getByRole("img", {name: "Spotify", exact: true})).toBeVisible();
+  let asked = 0;
+  page.on("request", request => {
+    if (request.url().includes("/auth/spotify/shelf?")) asked += 1;
+  });
+  await page.reload();
+  await expect(shelf.getByRole("button", {name: "Show", exact: true})).toBeVisible();
+  await expect(shelf.locator(".listings")).toHaveCount(0);
+  expect(asked).toBe(0);
+  await shelf.getByRole("button", {name: "Show", exact: true}).click();
+  await expect(shelf.locator(".listing-artist").first()).toBeVisible();
+  expect(asked).toBe(1);
 });

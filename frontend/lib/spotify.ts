@@ -10,6 +10,26 @@ const MESSAGES: Record<string, string> = {
   cancelled: "Spotify connection cancelled.",
 };
 
+const SHELF_HIDDEN_KEY = "concert-scout-shelf-hidden";
+
+/** Whether the visitor closed the shelf. It stays on this device. */
+export function readShelfHidden(): boolean {
+  try {
+    return localStorage.getItem(SHELF_HIDDEN_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+export function keepShelfHidden(hidden: boolean): void {
+  try {
+    if (hidden) localStorage.setItem(SHELF_HIDDEN_KEY, "1");
+    else localStorage.removeItem(SHELF_HIDDEN_KEY);
+  } catch {
+    // Without storage, the shelf only opens again on the next visit.
+  }
+}
+
 export type SpotifyConnection = {
   available: boolean;
   connected: boolean;

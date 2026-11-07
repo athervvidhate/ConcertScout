@@ -13,6 +13,7 @@ from concert_scout.names import normalize
 from concert_scout.sources import ticketmaster
 
 CACHE_TTL = dt.timedelta(hours=6)
+ELSEWHERE_SIZE = 12
 DEFAULT_WINDOW = dt.timedelta(days=180)
 
 
@@ -72,6 +73,24 @@ async def find_concerts(
     from_seeds = [c for group in seeds for c in group if _within(c, first, seed_last)]
     from_pool = [c for group in chunks for c in group if _within(c, first, last)]
     return list({c.id: c for c in [*from_seeds, *from_pool]}.values())
+
+
+async def find_elsewhere(
+    client: httpx.AsyncClient,
+    redis: Redis,
+    keyword: str,
+    start: dt.date | None,
+    end: dt.date | None,
+    today: dt.date,
+) -> list[Concert]:
+    """Concerts that match a Search's words in any place. This costs one Ticketmaster call."""
+    first, last = date_window(start, end, today)
+    key = f"elsewhere:{normalize(keyword)}:{first}:{last}"
+    if cached := await cache.read(redis, key, CachedConcerts):
+        return cached.concerts
+    concerts = await ticketmaster.find_keyword(client, redis, keyword, first, last, ELSEWHERE_SIZE)
+    await cache.write(redis, key, CachedConcerts(concerts=concerts), CACHE_TTL)
+    return concerts
 
 
 def _within(concert: Concert, first: dt.date, last: dt.date) -> bool:

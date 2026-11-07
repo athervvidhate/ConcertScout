@@ -18,6 +18,7 @@ from concert_scout.models import (
     ArtistProfile,
     Candidates,
     Concert,
+    Elsewhere,
     Interpreted,
     Place,
     PoolTotal,
@@ -43,8 +44,6 @@ logger = logging.getLogger(__name__)
 ASK_FOR_A_SEARCH = "Tell us an Artist, a style or a place."
 NEEDS_A_PLACE = "Add a place or an Artist, or press the location button."
 # The home page shows the soonest of these, so a month of Concerts is plenty.
-NEARBY_WINDOW = dt.timedelta(days=30)
-NEARBY_SIZE = 12
 # With no place there is no pool, so this many similar Artists get looked up by name.
 DIRECT_LOOKUPS = 15
 # Imported Artists past this many join as names only, so a long list costs no extra API calls.
@@ -62,15 +61,6 @@ class Services:
     redis: Redis
     model: Model
     turnstile: httpx.AsyncClient
-
-
-async def find_nearby(lat: float, lon: float, services: Services, today: dt.date) -> list[Concert]:
-    """Notable Concerts soonest first, for the home page. This path never calls a model."""
-    place = Place(name="Nearby", lat=lat, lon=lon)
-    concerts = await pool.find_concerts(
-        services.ticketmaster, services.redis, place, [], today, today + NEARBY_WINDOW, today
-    )
-    return [candidate.concert for candidate in matching.notable(concerts)[:NEARBY_SIZE]]
 
 
 async def find_artist_profile(name: str, services: Services) -> ArtistProfile:
@@ -160,6 +150,31 @@ async def _recommend(
     recommendations = assemble.from_picks(picks, shortlist)
     # Picks that all name unknown IDs are a garbled answer, not a verdict that nothing fits.
     return assemble.from_matches(shortlist) if picks and not recommendations else recommendations
+
+
+async def _find_elsewhere(
+    interpretation: Interpretation, place: Place, services: Services, today: dt.date
+) -> Elsewhere | None:
+    """The Poster has already answered this Search, so a failure here only means no extra list."""
+    words = [*interpretation.artists, *interpretation.tags, *interpretation.descriptors]
+    if not words:
+        return None
+    try:
+        with telemetry.step("elsewhere"):
+            concerts = await pool.find_elsewhere(
+                services.ticketmaster,
+                services.redis,
+                words[0],
+                interpretation.start,
+                interpretation.end,
+                today,
+            )
+    except (ticketmaster.TicketmasterError, limits.DailyLimitReached) as exc:
+        logger.warning("Elsewhere lookup failed: %s", type(exc).__name__)
+        return None
+    city = place.name.split(",")[0].casefold()
+    others = [concert for concert in concerts if (concert.city or "").casefold() != city]
+    return Elsewhere(keyword=words[0], concerts=others) if others else None
 
 
 async def _steps(
@@ -285,6 +300,10 @@ async def _steps(
         with telemetry.step("rank"):
             recommendations = await _recommend(interpretation, shortlist, artist_tags, services)
     yield _event("poster", Poster(recommendations=recommendations))
+    if place and taste and not recommendations:
+        elsewhere = await _find_elsewhere(interpretation, place, services, today)
+        if elsewhere:
+            yield _event("elsewhere", elsewhere)
 
 
 async def run_search(

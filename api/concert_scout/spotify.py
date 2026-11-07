@@ -337,7 +337,7 @@ def router(
                 await store.save_artists(session, artists)
         where: Place | None = None
         if lat is not None and lon is not None:
-            where = Place(name="Nearby", lat=lat, lon=lon)
+            where = Place(name="Near you", lat=lat, lon=lon)
         elif place:
             try:
                 where = await geocoder.geocode(geo, redis, place)

@@ -9,8 +9,8 @@ Follow `ui-skills.com` rules and Emil Kowalski's motion rules. Use coss ui (Base
 The page has one job, so it has one search box in the middle. A city typed there already works, so there is no second place box.
 
 - Top bar, right aligned: Saved Concerts and Your Taste. Your Taste opens a panel from the right edge. Connect Spotify leads it as the one filled button, and the imports sit behind an "Other ways to add your Taste" toggle.
-- A location button sits inside the search box. It asks for the browser's location only when pressed, then shows Concerts near you below. Later Searches that name no place look near that location.
-- The empty Search box rotates eight realistic examples with a typing/deleting effect. Pause while focused, while text is entered, or during a Search. Reduced motion keeps a static example.
+- A location button sits inside the search box. It asks for the browser's location only when pressed, then fills in. Later Searches that name no place look near that location, and the Spotify shelf uses it. Pressed again, it forgets the location, which deletes the stored coordinates.
+- The empty Search box rotates four examples with a typing/deleting effect, the same four the home page offers as buttons. They show four kinds of Search: an Artist with a place and dates, a genre with a place and dates, a sound in a Region with dates, and similar Artists in a city. Pause while focused, while text is entered, or during a Search. Reduced motion keeps a static example.
 - Links to Tickets and other sites open a new tab, so a Poster is never lost.
 
 ## Tokens
@@ -109,7 +109,7 @@ With `prefers-reduced-motion`, the sun and equalizer stop, there is no fly-in, a
 
 ## Site navigation and home
 
-Every page has a small header: the brand on the left and a menu button on the right, holding Saved Concerts and Your Taste. The resting home page drops the brand, because the wordmark already says it. The brand returns a Poster to the resting home page. The home page adds example Searches, how a Search works, and the location and Taste actions below the search box. Concerts near you sits at the bottom of the page. Hide and Show collapse it without forgetting the location, the choice persists on that device, and Forget my location deletes the stored coordinates. The Privacy page names each data source.
+Every page has a small header: the brand on the left and a menu button on the right, holding Saved Concerts and Your Taste. The resting home page drops the brand, because the wordmark already says it. The brand returns a Poster to the resting home page. The home page adds example Searches, how a Search works, and the location and Taste actions below the search box. The Privacy page names each data source.
 
 ## Artist hint
 
@@ -122,3 +122,15 @@ After a Search finishes, "Didn't find what you wanted? Tell us" opens a short no
 ## Artist panel
 
 An Artist's name on a Ticket opens the Artist panel: a link to their Spotify page, Last.fm listeners, styles, a short bio, top songs and similar Artists. A missing fact stays out, and when Last.fm has nothing at all the panel says so and keeps the Spotify link. When Spotify has no Artist with exactly that name, the link is a Spotify search instead. Monthly listeners are not offered, because Spotify's API does not report them.
+
+## Home and results
+
+The page has two states. Home holds everything that is not about a Search: the wordmark, the Spotify shelf and the guide. A Search replaces all of it. Results show the Poster, then the visitor's shelf filtered to that Search once the Search finishes.
+
+Listings share one form, a dark board of single-column rows that opens with 5 and adds 5 at a time. A row shows the date, the Artist, whatever the source's title says beyond the Artist, the place and a Tickets link. The title only ever loses words, so no fact is added.
+
+The sun is fixed to the screen and larger than its diagonal, so the rays run behind the whole page.
+
+## Elsewhere
+
+When a Search with a place and a Taste gets an empty Poster, one Ticketmaster call looks for its first Artist, tag or descriptor in any place. The results appear on a board that says nothing matched the place. No model chooses them, and a failure leaves the empty Poster as it was.

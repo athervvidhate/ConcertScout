@@ -106,3 +106,22 @@ def test_calendar_chunks_cover_each_day_across_a_year_boundary() -> None:
     while day <= last:
         assert day.replace(day=1) in months
         day += dt.timedelta(days=1)
+
+
+async def test_elsewhere_makes_one_call_and_caches_it() -> None:
+    calls: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, json={"page": {"totalElements": 0}})
+
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(respond), base_url="https://source.test"
+    )
+    redis = FakeAsyncRedis()
+    today = dt.date(2026, 11, 6)
+    for _ in range(2):
+        assert await pool.find_elsewhere(client, redis, "hyperpop", None, None, today) == []
+    assert len(calls) == 1
+    assert calls[0].url.params["keyword"] == "hyperpop"
+    assert calls[0].url.params["size"] == str(pool.ELSEWHERE_SIZE)

@@ -44,7 +44,7 @@ The old app forwarded no client IP, so its limit applied to everyone at once. A 
 
 Measured cost is about $0.001 to $0.0013 per Search, from captured and live runs, so the $1 daily cap covers about 750 Searches. One visitor at the limit spends at most about $0.31 a day. Revisit this once the 20 judged Searches give a fuller measure.
 
-`SEARCH_ENABLED=false` turns off Search. The spend counter lives in Redis and uses each call's real token counts. Without Redis, spend cannot be counted, so Search refuses rather than risk an unseen overspend, and the home page keeps working. `/nearby` has a higher hourly limit, and it passes during a Redis outage because it costs no money.
+`SEARCH_ENABLED=false` turns off Search. The spend counter lives in Redis and uses each call's real token counts. Without Redis, spend cannot be counted, so Search refuses rather than risk an unseen overspend, and the home page keeps working.
 
 ## Observability
 
