@@ -105,6 +105,14 @@ async def test_impossible_coordinates_are_refused(api: httpx.AsyncClient) -> Non
     assert response.status_code == 422
 
 
+async def test_artist_profile_survives_without_a_source(api: httpx.AsyncClient) -> None:
+    response = await api.get("/artist", params={"name": "Son Volt"})
+    assert response.status_code == 200
+    assert response.json() == {
+        "profiles": [{"name": "Son Volt", "tags": [], "top_tracks": [], "similar": []}]
+    }
+
+
 async def test_a_pipeline_failure_finishes_with_a_safe_error(
     api: httpx.AsyncClient,
     monkeypatch: pytest.MonkeyPatch,

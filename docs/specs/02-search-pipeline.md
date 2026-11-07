@@ -113,6 +113,7 @@ Code rejects any ID not in the shortlist and any row with no reason, sorts by sc
 ```
 GET  /health
 GET  /nearby?lat=&lon=
+GET  /artist?name=
 POST /search            streams SSE
 GET  /auth/spotify/login
 GET  /auth/spotify/callback

@@ -1,12 +1,13 @@
 "use client";
 
 import { Button } from "@base-ui/react/button";
-import { motion } from "motion/react";
-import { type KeyboardEvent, Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { PosterDone } from "@/components/poster-done";
 import { nameOf, Ticket } from "@/components/ticket";
+import { dismissArtistHint, useArtistHint } from "@/lib/artist-hint";
 import { flyIn } from "@/lib/fly-in";
-import { formatDate } from "@/lib/format";
 import { flyDuration, MAX_CANDIDATE_NAMES, namesDuration, PICK_READ_MS } from "@/lib/poster-timing";
 import { type Decision, saveConcert, skipConcert, useDecisions } from "@/lib/saved";
 import type { Candidates, Recommendation } from "@/lib/search";
@@ -20,6 +21,17 @@ type Props = {
   status: string | null;
 };
 type Stage = "opening" | "names" | "picks" | "fly" | "ticket";
+
+const TICKET_MOTION = {
+  enter: { opacity: 0, scale: 0.96 },
+  rest: { opacity: 1, scale: 1, x: 0, rotate: 0 },
+  // A decided Ticket keeps travelling the way it was thrown, from wherever the drag left it.
+  gone: (direction: number) => ({
+    x: direction * Math.max(window.innerWidth, 1000),
+    rotate: direction * 14,
+    opacity: 0,
+  }),
+};
 
 function tierOf(rank: number): number {
   if (rank === 0) return 1;
@@ -95,8 +107,13 @@ export function Poster(props: Props) {
   const reveal = qualified ? candidates : null;
   const [stage, setStage] = useStage(reveal, qualified, names.length);
   const [selected, setSelected] = useState(0);
+  const [finished, setFinished] = useState(false);
+  const artistHint = useArtistHint();
   const decisions = useDecisions();
   const [notice, setNotice] = useState("");
+  const [thrown, setThrown] = useState({ count: 0, direction: 1 });
+  const dragged = useRef(false);
+  const stillTicket = useReducedMotion();
   const wall = useRef<HTMLDivElement>(null);
   const poster = useRef<HTMLDivElement>(null);
   const showPoster = qualified && (stage === "fly" || stage === "ticket");
@@ -105,6 +122,7 @@ export function Poster(props: Props) {
   useEffect(() => {
     const timer = setTimeout(() => {
       setSelected(0);
+      setFinished(false);
       setNotice("");
     }, 0);
     return () => clearTimeout(timer);
@@ -123,6 +141,7 @@ export function Poster(props: Props) {
   const current = recommendations[selected];
 
   function decide(decision: Decision) {
+    if (!current) return;
     try {
       if (decision === "saved") saveConcert(current);
       else skipConcert(current.concert.id);
@@ -130,20 +149,18 @@ export function Poster(props: Props) {
       setNotice("This browser could not keep that choice. Allow local storage and try again.");
       return;
     }
+    dismissArtistHint();
     const done = decision === "saved" ? "saved on this device" : "skipped";
     setNotice(`${nameOf(current)} ${done}.`);
+    setThrown(({ count }) => ({ count: count + 1, direction: decision === "saved" ? 1 : -1 }));
     const after = [...recommendations.slice(selected + 1), ...recommendations.slice(0, selected)];
     const next = after.find((r) => !decisions[r.concert.id]);
     if (next) setSelected(recommendations.indexOf(next));
-  }
-
-  function decideByKey(event: KeyboardEvent) {
-    if (event.key === "ArrowRight") decide("saved");
-    if (event.key === "ArrowLeft") decide("skipped");
+    else setFinished(true);
   }
 
   function nameClass(rank: number) {
-    const tier = rank === selected ? "selected" : "";
+    const tier = rank === selected && !finished ? "selected" : "";
     return `poster-name tier-${tierOf(rank)} ${tier} ${decisions[recommendations[rank].concert.id] ?? ""}`;
   }
 
@@ -179,29 +196,28 @@ export function Poster(props: Props) {
           </div>
         )}
         {showPoster && (
-          <div className="poster" ref={poster}>
+          <div className={`poster ${stage === "ticket" ? "poster-settled" : ""}`} ref={poster}>
             {recommendations.map((recommendation, rank) => {
               const { concert } = recommendation;
               const name = nameOf(recommendation);
               const decision = decisions[concert.id];
-              const repeated = recommendations.filter((r) => nameOf(r) === name).length > 1;
-              const place = [concert.date && formatDate(concert.date), concert.venue].filter(Boolean);
-              const label = [name, ...(repeated ? place : []), decision].filter(Boolean);
               return (
                 <Fragment key={concert.id}>
                   <Button
                     type="button"
                     data-name={name}
-                    onClick={() => setSelected(rank)}
-                    aria-label={label.join(", ")}
-                    aria-pressed={rank === selected}
+                    onClick={() => {
+                      setSelected(rank);
+                      setFinished(false);
+                    }}
+                    aria-label={[name, decision].filter(Boolean).join(", ")}
+                    aria-pressed={rank === selected && !finished}
                     className={nameClass(rank)}
                   >
                     <span>{name}</span>
                     <span className="pink" aria-hidden="true">
                       {name}
                     </span>
-                    {repeated && <small>{place.join(" · ") || concert.name}</small>}
                     {decision === "saved" && <small>saved</small>}
                   </Button>
                   {rank === 2 && <span className="poster-break" aria-hidden="true" />}
@@ -214,23 +230,50 @@ export function Poster(props: Props) {
       <p className="loader-status" aria-live="polite">
         {statusText(props)}
       </p>
-      {stage === "ticket" && current && (
-        <div onKeyDown={decideByKey}>
-          <motion.div
-            key={current.concert.id}
-            className="ticket-drag"
-            drag="x"
-            dragSnapToOrigin
-            dragElastic={0.7}
-            whileDrag={{ scale: 0.98 }}
-            onDragEnd={(_, { offset, velocity }) => {
-              const decision = swipeDecision(offset.x, velocity.x);
-              if (decision) decide(decision);
-            }}
-          >
-            <Ticket recommendation={current} rank={selected} />
-          </motion.div>
-          <p className="ticket-hint">Drag right to save, left to skip, or use the arrow keys.</p>
+      {stage === "ticket" && finished && (
+        <PosterDone saved={recommendations.filter((r) => decisions[r.concert.id] === "saved")} />
+      )}
+      {stage === "ticket" && current && !finished && (
+        <div>
+          <div className="ticket-deck">
+            <AnimatePresence initial={false} mode="popLayout" custom={thrown.direction}>
+              <motion.div
+                key={`${current.concert.id}:${thrown.count}`}
+                className="ticket-drag"
+                custom={thrown.direction}
+                variants={TICKET_MOTION}
+                initial="enter"
+                animate="rest"
+                exit="gone"
+                transition={{ duration: stillTicket ? 0 : 0.3, ease: "easeOut" }}
+                drag="x"
+                dragSnapToOrigin
+                dragElastic={0.7}
+                whileDrag={{ scale: 0.98 }}
+                onDragStart={() => {
+                  dragged.current = true;
+                }}
+                onDragEnd={(_, { offset, velocity }) => {
+                  const decision = swipeDecision(offset.x, velocity.x);
+                  if (decision) decide(decision);
+                }}
+                onClickCapture={(event) => {
+                  // Letting go over a link or the Artist's name must not also press it.
+                  if (dragged.current) event.preventDefault();
+                  if (dragged.current) event.stopPropagation();
+                  dragged.current = false;
+                }}
+              >
+                <Ticket
+                  recommendation={current}
+                  rank={selected}
+                  artistHint={artistHint}
+                  onArtistOpen={dismissArtistHint}
+                />
+              </motion.div>
+            </AnimatePresence>
+          </div>
+          <p className="ticket-hint">Drag right to save, left to skip.</p>
           <div className="ticket-controls">
             <Button type="button" onClick={() => decide("skipped")}>
               Skip

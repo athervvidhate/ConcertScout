@@ -21,6 +21,12 @@ class Artist(BaseModel):
     subgenre: str | None = None
 
 
+class Presale(BaseModel):
+    name: str
+    start: dt.datetime
+    end: dt.datetime
+
+
 class Concert(BaseModel):
     """A Concert's facts, as reported by its source. A missing fact stays None."""
 
@@ -34,6 +40,9 @@ class Concert(BaseModel):
     city: str | None = None
     region: str | None = None
     price: Price | None = None
+    image: str | None = None
+    general_sale: dt.datetime | None = None
+    presales: list[Presale] = []
 
 
 class Recommendation(BaseModel):
@@ -83,6 +92,30 @@ class Places(BaseModel):
 
 class Nearby(BaseModel):
     concerts: list[Concert]
+
+
+class Track(BaseModel):
+    name: str
+    url: str
+
+
+class ArtistProfile(BaseModel):
+    """What the Artist panel shows. Anything a source does not report stays empty."""
+
+    name: str
+    lastfm_url: str | None = None
+    spotify_url: str | None = None
+    listeners: int | None = None
+    bio: str | None = None
+    tags: list[str] = []
+    top_tracks: list[Track] = []
+    similar: list[str] = []
+
+
+class ArtistProfiles(BaseModel):
+    """One profile, or one for each Artist on a tour billed as a single name."""
+
+    profiles: list[ArtistProfile]
 
 
 class Status(BaseModel):
