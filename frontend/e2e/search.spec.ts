@@ -657,7 +657,11 @@ test("a refusal that is not JSON reads as the API being down", async ({page}) =>
 test("an example waits for the bot check instead of doing nothing", async ({page}) => {
   await page.route("**/challenges.cloudflare.com/**", route => route.abort());
   await page.goto("/");
-  await expect(page.getByRole("button", {name: SEARCH_EXAMPLES[0]})).toBeDisabled();
+  const example = page.getByRole("button", {name: SEARCH_EXAMPLES[0]});
+  await expect(example).toBeDisabled();
+  // The token takes a moment, so a waiting example looks the same as a ready one.
+  await expect(example).toHaveCSS("background-color", "rgb(255, 211, 228)");
+  await expect(example).toHaveCSS("opacity", "1");
 });
 
 test("a second Search opens on its first Ticket with nothing left from the last one", async ({page}) => {
