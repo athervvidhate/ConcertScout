@@ -44,6 +44,8 @@ The old app forwarded no client IP, so its limit applied to everyone at once. A 
 
 Measured cost is about $0.001 to $0.0013 per Search, from captured and live runs, so the $1 daily cap covers about 750 Searches. One visitor at the limit spends at most about $0.31 a day. Revisit this once the 20 judged Searches give a fuller measure.
 
+The count runs per clock hour, so a visitor can reach twice the limit across the turn of an hour. The spend caps cover that. `scripts/check_visitor_limit.py` proves the limit against a running API with bad bot tokens, so it makes no model calls.
+
 `SEARCH_ENABLED=false` turns off Search. The spend counter lives in Redis and uses each call's real token counts. Without Redis, spend cannot be counted, so Search refuses rather than risk an unseen overspend, and the home page keeps working.
 
 ## Observability
