@@ -131,7 +131,7 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid cur
 .nearby header { display:flex; justify-content:space-between; align-items:center; }
 .nearby h2 { margin:0; font:400 clamp(32px,5vw,44px)/1.1 var(--font-poster),sans-serif; }
 .nearby header button { min-height:44px; padding:0 4px; border:0; background:none; color:inherit; font-weight:700; text-decoration:underline; cursor:pointer; }
-@media (prefers-reduced-motion:reduce) { .taste-panel,.taste-backdrop { transition:none; } }
+@media (prefers-reduced-motion:reduce) { .taste-panel,.taste-backdrop,.taste-other-trigger svg { transition:none; } }
 .bot-check { display:flex; justify-content:center; }
 .saved-title { max-width:940px; margin:12px auto 20px; text-align:left; font:400 clamp(40px,7vw,72px)/1.05 var(--font-poster),sans-serif; }
 .saved-empty { font:500 20px var(--font-body),sans-serif; }
@@ -183,9 +183,16 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid cur
 .poster-compact .poster-stage { min-height:0; padding-block:12px; }
 .poster-compact .wall { min-height:110px; align-items:center; }
 
-.spotify-control { border-top:1px solid currentColor; margin-top:28px; padding-top:20px; }
-.spotify-control h3 { font-size:22px; margin:0 0 8px; }
-.spotify-control a,.spotify-control button { display:inline-flex; align-items:center; min-height:44px; text-decoration:underline; color:inherit; font:700 17px var(--font-ui),sans-serif; background:none; border:0; padding:8px 0; }
+.spotify-control { display:grid; gap:12px; }
+.spotify-control h3 { margin:0; font:700 26px/1.15 var(--font-ui),sans-serif; }
+.spotify-connect { display:flex; justify-content:center; align-items:center; min-height:56px; border-radius:999px; background:#1ED760; color:#000; font:700 19px var(--font-ui),sans-serif; text-decoration:none; }
+.spotify-connect:hover { background:#3BE477; }
+.spotify-disconnect { justify-self:start; min-height:44px; padding:8px 0; border:0; background:none; color:inherit; font:700 17px var(--font-ui),sans-serif; text-decoration:underline; cursor:pointer; }
+.taste-other { margin-top:10px; border-top:1px solid #FFD3E455; padding-top:6px; font-size:16px; }
+.taste-other-trigger { display:flex; justify-content:space-between; align-items:center; width:100%; min-height:44px; padding:0; border:0; background:none; color:inherit; font:600 16px var(--font-body),sans-serif; cursor:pointer; }
+.taste-other-trigger svg { transition:transform 150ms ease; }
+.taste-other-trigger[data-panel-open] svg { transform:rotate(180deg); }
+.taste-other-panel { display:grid; gap:14px; padding-top:6px; }
 .spotify-shelf { margin:40px auto 0; max-width:1100px; border-radius:12px; padding:24px; background:#10291F; color:#FFD3E4; text-align:left; font-family:var(--font-body),sans-serif; }
 .spotify-shelf header { display:flex; justify-content:space-between; align-items:center; gap:24px; margin-bottom:20px; }
 .spotify-shelf header img { width:110px; height:auto; flex-shrink:0; }

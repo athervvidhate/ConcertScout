@@ -106,6 +106,7 @@ test("history stays local, and only imported Artist names enter a Search", async
   const requests: string[] = [];
   page.on("request", r => { if (r.method() === "POST" && r.url().startsWith("http://127.0.0.1:8146")) requests.push(r.postData() ?? ""); });
   await openMenuItem(page, /^Your Taste/);
+  await page.getByRole("button", {name: "Other ways to add your Taste"}).click();
   await page.getByLabel("Import from").selectOption("history");
   await page.getByLabel("Spotify history file", { exact: true }).setInputFiles({
     name: "Streaming_History_Audio.json", mimeType: "application/json",
@@ -273,6 +274,17 @@ test("a visitor can report a Search with its results", async ({ page }) => {
   expect(sent.search).toBeTruthy();
   expect(sent.results.length).toBeGreaterThan(0);
   await expect(report.getByRole("status")).toContainText("We got your report");
+});
+
+test("Spotify leads Your Taste and the imports wait behind a toggle", async ({ page }) => {
+  await page.goto("/");
+  await openMenuItem(page, /^Your Taste/);
+  await expect(page.getByRole("link", {name: "Connect Spotify"})).toBeVisible();
+  await expect(page.getByLabel("Import from")).toHaveCount(0);
+  await page.getByRole("button", {name: "Other ways to add your Taste"}).click();
+  const spotify = await page.getByRole("region", {name: "Spotify connection"}).boundingBox();
+  const imports = await page.getByLabel("Import from").boundingBox();
+  expect(spotify!.y + spotify!.height).toBeLessThanOrEqual(imports!.y);
 });
 
 test("Spotify access denial explains the invite list and keeps no session", async ({ page, context }) => {
