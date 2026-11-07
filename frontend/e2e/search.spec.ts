@@ -446,8 +446,13 @@ test("Concerts near you sit below the guide, and hiding keeps the location", asy
   const nearby = page.getByRole("region", {name: "Concerts near you"});
   await expect(nearby.locator(".nearby-list li").first()).toBeVisible();
   await expect(page.getByRole("heading", {name: "Concert Scout", level: 1})).toBeVisible();
-  const guide = await page.getByRole("region", {name: "Make it yours"}).boundingBox();
-  expect((await nearby.boundingBox())!.y).toBeGreaterThanOrEqual(guide!.y + guide!.height);
+  // The page may still be scrolling here, so both edges come from the same moment.
+  const guide = await page.getByRole("region", {name: "Make it yours"}).elementHandle();
+  const below = await nearby.evaluate(
+    (section, above) => section.getBoundingClientRect().top >= above!.getBoundingClientRect().bottom,
+    guide,
+  );
+  expect(below).toBe(true);
   await nearby.getByRole("button", {name: "Hide", exact: true}).click();
   await expect(nearby.getByRole("heading", {name: "Concerts near you"})).toBeVisible();
   await expect(nearby.locator(".nearby-list")).toHaveCount(0);
