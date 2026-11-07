@@ -79,12 +79,16 @@ export async function refusal(response: Response): Promise<SearchRefused> {
   }
 }
 
+// Nothing fit the Search's place, so these match its words anywhere.
+export type Elsewhere = { keyword: string; concerts: Concert[] };
+
 export type SearchEvent =
   | { event: "status"; data: { step: string; message: string } }
   | { event: "interpreted"; data: Interpreted }
   | { event: "pool"; data: { total: number } }
   | { event: "candidates"; data: Candidates }
   | { event: "poster"; data: { recommendations: Recommendation[] } }
+  | { event: "elsewhere"; data: Elsewhere }
   | { event: "error"; data: SearchError }
   | { event: "done"; data: Record<string, never> };
 

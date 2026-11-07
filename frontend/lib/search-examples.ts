@@ -1,14 +1,10 @@
 import { useEffect, useState } from "react";
 
+// Each shows a different way to Search. Keep the dates relative so the examples do not go stale.
 export const SEARCH_EXAMPLES = [
-  "Khruangbin in Chicago next week",
-  "UKG in SF this month",
-  "Indie rock in Texas in December",
+  "Tame Impala in London next summer",
   "Jazz in New Orleans this weekend",
-  "Four Tet and Caribou in London",
-  "DnB in Philadelphia next month",
-  "Dream pop in Seattle in January",
-  "R&B in Atlanta this Friday",
+  "Dreamy bands in SoCal next month",
 ];
 
 export function useSearchExample(active: boolean) {

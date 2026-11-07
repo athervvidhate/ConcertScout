@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type Candidates,
   type Coordinates,
+  type Elsewhere,
   type Interpreted,
   NEEDS_A_NEW_SEARCH,
   type Recommendation,
@@ -21,6 +22,7 @@ export type SearchState = {
   candidates: Candidates | null;
   recommendations: Recommendation[];
   hasPoster: boolean;
+  elsewhere: Elsewhere | null;
   error: string | null;
   retryable: boolean;
 };
@@ -34,6 +36,7 @@ const IDLE: SearchState = {
   candidates: null,
   recommendations: [],
   hasPoster: false,
+  elsewhere: null,
   error: null,
   retryable: true,
 };
@@ -65,6 +68,8 @@ export function useSearch() {
           setState((state) => ({ ...state, candidates: data }));
         } else if (event === "poster") {
           setState((state) => ({ ...state, hasPoster: true, recommendations: data.recommendations }));
+        } else if (event === "elsewhere") {
+          setState((state) => ({ ...state, elsewhere: data }));
         } else if (event === "done") {
           finished = true;
         } else if (event === "error") {

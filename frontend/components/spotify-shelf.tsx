@@ -4,9 +4,10 @@ import { Button } from "@base-ui/react/button";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 
-import {formatDate, formatTime, presaleLine} from "@/lib/format";
+import { Board, Listings } from "@/components/board";
+import { Listing } from "@/components/listing";
 import type { Concert } from "@/lib/search";
-import { SPOTIFY_ROOT, type SpotifyConnection } from "@/lib/spotify";
+import { keepShelfHidden, readShelfHidden, SPOTIFY_ROOT, type SpotifyConnection } from "@/lib/spotify";
 
 export function SpotifyControl({connection}: {connection: SpotifyConnection}) {
   return (
@@ -45,7 +46,6 @@ const SOURCE_LABELS: Record<Source, string> = {
   liked: "From your Liked Songs",
 };
 const UPCOMING_DAYS = 60;
-const SHELF_STEP = 5;
 
 function upcomingEnd(): string {
   const end = new Date();
@@ -55,13 +55,14 @@ function upcomingEnd(): string {
 
 export function SpotifyShelf({connectHref, onLocate, upcoming, place, lat, lon, radius, start, end, genres}: Props) {
   const [items, setItems] = useState<Item[]>([]);
-  const [shown, setShown] = useState(SHELF_STEP);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // A closed shelf costs no lookup.
+  const [hidden, setHidden] = useState(readShelfHidden);
   const hasPlace = !!place || (lat !== undefined && lon !== undefined);
 
   useEffect(() => {
-    if (!hasPlace) return;
+    if (!hasPlace || hidden) return;
     const controller = new AbortController();
     const params = new URLSearchParams();
     if (place) {
@@ -80,10 +81,7 @@ export function SpotifyShelf({connectHref, onLocate, upcoming, place, lat, lon, 
         const response = await fetch(`${SPOTIFY_ROOT}/shelf?${params}`, {credentials: "include", cache: "no-store", signal: controller.signal});
         const body = await response.json();
         if (!response.ok) setError(body.message);
-        else {
-          setItems(body.concerts);
-          setShown(SHELF_STEP);
-        }
+        else setItems(body.concerts);
       } catch {
         if (!controller.signal.aborted) setError("Your Spotify shelf could not load. Try again soon.");
       } finally {
@@ -92,42 +90,53 @@ export function SpotifyShelf({connectHref, onLocate, upcoming, place, lat, lon, 
     }
     load();
     return () => controller.abort();
-  }, [end, genres, hasPlace, lat, lon, place, radius, start, upcoming]);
+  }, [end, genres, hasPlace, hidden, lat, lon, place, radius, start, upcoming]);
 
-  const remaining = items.length - shown;
+  function toggle() {
+    keepShelfHidden(!hidden);
+    setHidden(!hidden);
+  }
 
   return (
-    <section className="spotify-shelf" aria-label="Concerts from your Spotify Artists">
-      <header>
-        <div><h2>From your Artists</h2><p>{upcoming ? "Near you in the next two months" : "Your Spotify shelf"}</p></div>
-        <Image src="/spotify-logo-white.svg" alt="Spotify" width={110} height={34} />
-      </header>
-      {!hasPlace ? (
-        <div className="spotify-locate">
+    <Board
+      title="From your Artists"
+      subtitle={upcoming ? "Near you in the next two months" : "Matching this Search"}
+      aside={
+        <div className="board-aside">
+          <Image src="/spotify-logo-white.svg" alt="Spotify" width={110} height={34} className="board-logo" />
+          <Button type="button" className="board-action" aria-expanded={!hidden} onClick={toggle}>
+            {hidden ? "Show" : "Hide"}
+          </Button>
+        </div>
+      }
+    >
+      {hidden ? null : !hasPlace ? (
+        <div className="board-prompt">
           <p>Share your location to see your Artists&apos; Concerts near you in the next two months.</p>
           <Button type="button" onClick={onLocate}>Use my location</Button>
         </div>
-      ) :
-        loading ? <p role="status">Looking for Concerts by your Artists</p> :
-          error ? <div role="alert"><p>{error}</p>{connectHref && <a href={connectHref} target="_blank" rel="noopener noreferrer">Reconnect Spotify</a>}</div> : items.length === 0 ?
-            <p>No Concerts from your Artists fit this. Try wider dates or a nearby city.</p> :
-            <>
-              <ul>{items.slice(0, shown).map(({concert, artist}) => (
-              <li key={concert.id}>
-                <a href={artist.url} target="_blank" rel="noopener noreferrer" className="spotify-artist">{artist.name}</a>
-                <p>{concert.name}</p>
-                <p>{[concert.date && formatDate(concert.date), concert.time && formatTime(concert.time), concert.venue, concert.city].filter(Boolean).join(" · ")}</p>
-                {presaleLine(concert) && <p>{presaleLine(concert)}</p>}
-                <span>{SOURCE_LABELS[artist.source]}</span>
-                <a href={concert.url} target="_blank" rel="noopener noreferrer" className="spotify-tickets">Tickets</a>
-              </li>
-              ))}</ul>
-              {remaining > 0 && (
-                <Button type="button" className="spotify-more" onClick={() => setShown(shown + SHELF_STEP)}>
-                  Show {Math.min(remaining, SHELF_STEP)} more
-                </Button>
-              )}
-            </>}
-    </section>
+      ) : loading ? (
+        <p role="status">Looking for Concerts by your Artists</p>
+      ) : error ? (
+        <div role="alert">
+          <p>{error}</p>
+          {connectHref && <a href={connectHref} target="_blank" rel="noopener noreferrer">Reconnect Spotify</a>}
+        </div>
+      ) : items.length === 0 ? (
+        <p>No Concerts from your Artists fit this. Try wider dates or a nearby city.</p>
+      ) : (
+        <Listings>
+          {items.map(({ concert, artist }) => (
+            <Listing
+              key={concert.id}
+              concert={concert}
+              artist={artist.name}
+              href={artist.url}
+              note={SOURCE_LABELS[artist.source]}
+            />
+          ))}
+        </Listings>
+      )}
+    </Board>
   );
 }

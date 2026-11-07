@@ -109,6 +109,7 @@ def contract_model() -> FunctionModel:
 def install_sources(patch: pytest.MonkeyPatch) -> None:
     patch.setattr(geocoder, "geocode", AsyncMock(return_value=PLACE))
     patch.setattr(pool, "find_concerts", AsyncMock(return_value=CONCERTS))
+    patch.setattr(pool, "find_elsewhere", AsyncMock(return_value=[]))
     patch.setattr(
         musicbrainz, "resolve", AsyncMock(return_value=SeedArtist(name="Contract Artist"))
     )

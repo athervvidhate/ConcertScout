@@ -112,7 +112,6 @@ Code rejects any ID not in the shortlist and any row with no reason, sorts by sc
 
 ```
 GET  /health
-GET  /nearby?lat=&lon=
 GET  /artist?name=
 POST /search            streams SSE
 GET  /auth/spotify/login
@@ -129,6 +128,7 @@ POST /auth/spotify/disconnect
 | `pool` | `{total}` |
 | `candidates` | `{names, total}` |
 | `poster` | `{recommendations}` |
+| `elsewhere` | `{keyword, concerts}`, only after an empty Poster |
 | `error` | `{code, message, retry_after}` |
 | `done` | `{}` |
 

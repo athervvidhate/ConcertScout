@@ -200,19 +200,17 @@ class BrokenRedis(FakeAsyncRedis):
 
 
 @pytest.mark.parametrize("stop", ["spend", "kill", "redis"])
-async def test_costly_search_fails_closed_but_nearby_remains_available(stop: str) -> None:
+async def test_costly_search_fails_closed(stop: str) -> None:
     redis = BrokenRedis() if stop == "redis" else FakeAsyncRedis()
     if stop == "spend":
         await limits.record_spend(redis, limits.DAILY_SPEND)
     async with api_for(redis, search_enabled=stop != "kill") as api:
         search = await api.post("/search", json={"text": "SF", "token": TOKEN})
-        nearby = await api.get("/nearby", params={"lat": 37.77, "lon": -122.42})
     assert search.status_code == 503
     assert (
         search.json()["code"]
         == {"spend": "budget_reached", "kill": "search_off", "redis": "limits_unavailable"}[stop]
     )
-    assert nearby.status_code == 200 and nearby.json()["concerts"]
 
 
 async def test_failed_model_usage_still_counts_toward_the_budget(
@@ -229,20 +227,44 @@ async def test_failed_model_usage_still_counts_toward_the_budget(
     assert await redis.get(f"spend:day:{dt.datetime.now(dt.UTC).date()}") == b"250000"
 
 
-async def test_nearby_requires_explicit_coordinates_and_no_model(
-    api: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    interpret = AsyncMock(side_effect=AssertionError("must not run"))
-    monkeypatch.setattr(pipeline, "interpret", interpret)
-    assert (await api.get("/nearby", headers={"x-forwarded-for": "8.8.8.8"})).status_code == 422
-    response = await api.get("/nearby", params={"lat": 37.77, "lon": -122.42})
-    assert response.status_code == 200
-    interpret.assert_not_awaited()
-
-
 async def test_security_headers_cover_errors_too(api: httpx.AsyncClient) -> None:
     response = await api.get("/missing")
     assert "default-src 'none'" in response.headers["content-security-policy"]
     assert "max-age" in response.headers["strict-transport-security"]
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["referrer-policy"] == "no-referrer"
+
+
+async def test_an_empty_poster_looks_elsewhere_with_one_lookup(
+    api: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    other = CONCERTS[0].model_copy(update={"city": "Eugene", "region": "OR"})
+    here = CONCERTS[1].model_copy(update={"city": PLACE.name.split(",")[0].upper()})
+    lookup = AsyncMock(return_value=[other, here])
+    monkeypatch.setattr(pool, "find_elsewhere", lookup)
+    response = await api.post("/search", json={"text": "empty", "token": TOKEN})
+    events = [event for event, _ in parse_sse(response.text)]
+    assert events[-3:] == ["poster", "elsewhere", "done"]
+    elsewhere = dict(parse_sse(response.text))["elsewhere"]
+    assert elsewhere["keyword"] == "uk garage"
+    assert [c["city"] for c in elsewhere["concerts"]] == ["Eugene"]
+    lookup.assert_awaited_once()
+
+
+async def test_a_full_poster_never_looks_elsewhere(
+    api: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lookup = AsyncMock()
+    monkeypatch.setattr(pool, "find_elsewhere", lookup)
+    await api.post("/search", json={"text": "UKG in SF", "token": TOKEN})
+    lookup.assert_not_awaited()
+
+
+async def test_a_failed_elsewhere_lookup_still_finishes_the_search(
+    api: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lookup = AsyncMock(side_effect=ticketmaster.TicketmasterError("down"))
+    monkeypatch.setattr(pool, "find_elsewhere", lookup)
+    response = await api.post("/search", json={"text": "empty", "token": TOKEN})
+    events = [event for event, _ in parse_sse(response.text)]
+    assert events[-2:] == ["poster", "done"] and "error" not in events

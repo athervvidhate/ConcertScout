@@ -18,7 +18,7 @@ export function SiteHeader({ onHome, hideBrand, onTaste, tasteLabel }: Props) {
   const onSavedPage = usePathname() === "/saved";
 
   return (
-    <header className="site-header">
+    <header className={hideBrand ? "site-header site-header-bare" : "site-header"}>
       {!hideBrand && (
         <Link href="/" className="site-brand" onClick={onHome}>
           Concert Scout
