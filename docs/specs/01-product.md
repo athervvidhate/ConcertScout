@@ -24,27 +24,27 @@ The page streams real progress. See the loader in [04-interface](04-interface.md
 
 ## Poster
 
-A Poster shows up to 8 Recommendations, ranked and set in festival-style tiers: one headliner, two second-tier names, and the rest beneath. If fewer than 8 Concerts qualify, the Poster is shorter. It never pads with weak picks.
+A Poster shows up to 8 Recommendations in Grid or List view. Grid follows the number of picks: a solo Ticket, two halves, a large pick and two stacked, four halves, or a larger composition for five to eight. It never pads with weak picks.
 
-Each Artist appears once. Their other dates sit behind "more dates" on the Ticket. Clicking a name opens its Ticket. Saved names are underlined with a "saved" label. Skipped names are struck through at 35% opacity and stay on the Poster.
+Each Artist appears once. Their other dates sit behind "more dates" on the Ticket. Clicking a Concert opens its Ticket dialog; one pick also shows its Ticket directly on the Poster. A saved Concert carries a check and a "Saved" label. For three or fewer picks, the other shortlisted Artists appear under "Also playing, not picked".
 
 If nothing qualifies, the page says so and offers the nearest useful change, such as a wider date range.
 
 ## Ticket
 
-A Ticket shows the date, Artist, the reason for the pick, venue, day and time, price if the source has one, and a link to buy from Ticketmaster. When the source has a real photo of the lead Artist or the Concert, a band across the top shows it, with a light tint of the Ticket's color. A Ticket with only Ticketmaster's generic placeholder has no band. While a Concert is not yet on general sale, a Ticket names its next presale that has not ended and when it starts. VIP packages do not count.
+A Ticket shows the date, Artist, the reason for the pick, venue, day and time, price if the source has one, and a link to buy from Ticketmaster. When the source has a real photo, the Ticket shows it beside the details on desktop and above them on phones. A missing or generic source photo stays out. While a Concert is not yet on general sale, a Ticket names its next presale that has not ended and when it starts. VIP packages do not count.
 
 Dates and times read on the venue's clock. A visitor in the same time zone sees "7:30 PM". A visitor anywhere else sees the venue's zone too, as in "7:30 PM CST". Presales open at one moment, so they stay in the visitor's zone.
 
 The reason comes from the ranker. Every other fact comes from the source record, per [ADR 0002](../adr/0002-facts-never-pass-through-the-llm.md). A missing time or price is left out. The app never invents a value, which fixes the old fake "8:00 PM".
 
-The visitor can Save or Skip with buttons, or by dragging the Ticket right or left. After either action, the next undecided Ticket opens. After the last one, an end panel lists what was saved from this Poster and links to the Saved page, or says nothing was saved. Every action is a button, so all of them work from the keyboard.
+The visitor saves from the Ticket. Saving leaves it open and confirms where it was kept. The dialog closes with its close button, Escape or the backdrop and returns focus to the Concert that opened it. Skip, dragging and the one-by-one deck were removed by the owner's decision on November 7, 2026. Every action works from the keyboard.
 
 ## Saved Concerts
 
 A guest's Saved Concerts live in `localStorage` and stay on one device. A Saved Concert stores its source ID and the facts needed to show it, and a page lists them with past Concerts removed.
 
-An optional account keeps Saved Concerts on every device. Sign in from the menu with Google, or with an email and password after confirming the email. While signed in, a Save goes to the account, and the API reads the Concert's facts from Ticketmaster before storing it. Signing in moves the device's guest saves into the account. Each one leaves the device only once the account holds it, and any the API cannot confirm with Ticketmaster stay on the device for the next sign-in. Skips stay on the device. Signing out shows none of the account's saves. The Account page offers sign-out and account deletion, which needs a sign-in from the last 10 minutes.
+An optional account keeps Saved Concerts on every device. Sign in from the menu with Google, or with an email and password after confirming the email. While signed in, a Save goes to the account, and the API reads the Concert's facts from Ticketmaster before storing it. Signing in moves the device's guest saves into the account. Each one leaves the device only once the account holds it, and any the API cannot confirm with Ticketmaster stay on the device for the next sign-in. Signing out shows none of the account's saves. The Account page offers sign-out and account deletion, which needs a sign-in from the last 10 minutes.
 
 ## Spotify shelf
 

@@ -45,6 +45,7 @@ async function follow(page: Page, link: URL) {
 }
 
 async function openMenuItem(page: Page, name: string | RegExp) {
+  if (await page.getByRole("button", {name:"Close Ticket"}).isVisible()) await page.getByRole("button", {name:"Close Ticket"}).click();
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page.getByRole("menuitem", { name }).click();
 }
@@ -60,7 +61,8 @@ async function signIn(page: Page, email: string, password = PASSWORD) {
 
 async function saveFirstConcert(page: Page) {
   await page.getByRole("textbox", { name: "Search" }).fill("UKG in SF");
-  await page.getByRole("button", { name: "Find concerts" }).click();
+  await page.getByRole("button", { name: "Search", exact:true }).click();
+  await page.locator(".card-open").first().click();
   await expect(page.getByRole("link", { name: "Tickets for Contract Concert One" })).toBeVisible();
   await page.getByRole("button", { name: "Save", exact: true }).click();
 }

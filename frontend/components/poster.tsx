@@ -1,17 +1,22 @@
 "use client";
 
-import { Button } from "@base-ui/react/button";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Dialog } from "@base-ui/react/dialog";
+import { LayoutGrid, List, X, Check, Bookmark, AudioLines } from "lucide-react";
+import {
+  AnimatePresence,
+  LayoutGroup,
+  motion,
+  useReducedMotion,
+} from "motion/react";
+import Image from "next/image";
+import { useId, useState } from "react";
 
-import { PosterDone } from "@/components/poster-done";
 import { nameOf, Ticket } from "@/components/ticket";
 import { dismissArtistHint, useArtistHint } from "@/lib/artist-hint";
-import { flyIn } from "@/lib/fly-in";
-import { EASE_OUT, flyDuration, MAX_CANDIDATE_NAMES, namesDuration, PICK_READ_MS } from "@/lib/poster-timing";
-import { type Decision, type Saving, saveConcert, skipConcert, useDecisions } from "@/lib/saved";
+import { formatDate, formatConcertTime } from "@/lib/format";
+import { saveConcert, useDecisions } from "@/lib/saved";
 import type { Candidates, Recommendation } from "@/lib/search";
-import { swipeDecision } from "@/lib/swipe";
+import { showTitle } from "@/lib/show-title";
 
 type Props = {
   candidates: Candidates | null;
@@ -19,277 +24,357 @@ type Props = {
   hasPoster: boolean;
   searching: boolean;
   status: string | null;
-};
-type Stage = "opening" | "names" | "picks" | "fly" | "ticket";
-
-const TICKET_MOTION = {
-  enter: { opacity: 0, scale: 0.96 },
-  rest: { opacity: 1, scale: 1, x: 0, rotate: 0 },
-  // A decided Ticket keeps travelling the way it was thrown, from wherever the drag left it.
-  gone: (direction: number) => ({
-    x: direction * Math.max(window.innerWidth, 1000),
-    rotate: direction * 14,
-    opacity: 0,
-    pointerEvents: "none" as const,
-  }),
+  onWiderDates?: () => void;
+  onAnywhere?: () => void;
+  onChange?: () => void;
 };
 
-function tierOf(rank: number): number {
-  if (rank === 0) return 1;
-  return rank < 3 ? 2 : 3;
-}
-
-// Each stage starts from a real event. After `poster`, only presentation timing remains.
-function useStage(candidates: Candidates | null, hasPoster: boolean, nameCount: number) {
-  const [stage, setStage] = useState<Stage>("opening");
-  const namesStarted = useRef(0);
-
-  useEffect(() => {
-    if (!candidates) return;
-    namesStarted.current = Date.now();
-    const timer = setTimeout(() => setStage("names"), 0);
-    return () => clearTimeout(timer);
-  }, [candidates]);
-
-  useEffect(() => {
-    if (!hasPoster) return;
-    const direct = window.matchMedia("(prefers-reduced-motion: reduce)").matches || !candidates;
-    const namesLeft = namesDuration(nameCount) - (Date.now() - namesStarted.current);
-    const timer = setTimeout(
-      () => setStage(direct ? "ticket" : "picks"),
-      direct ? 0 : Math.max(0, namesLeft),
-    );
-    return () => clearTimeout(timer);
-  }, [candidates, hasPoster, nameCount]);
-
-  useEffect(() => {
-    if (stage !== "picks") return;
-    const timer = setTimeout(() => setStage("fly"), PICK_READ_MS);
-    return () => clearTimeout(timer);
-  }, [stage]);
-
-  return [stage, setStage] as const;
-}
-
-function useHeadlinerFit(poster: React.RefObject<HTMLDivElement | null>, visible: boolean) {
-  useLayoutEffect(() => {
-    if (!visible) return;
-    const headliner = poster.current?.querySelector<HTMLElement>(".tier-1");
-    if (!headliner) return;
-    const fit = () => {
-      headliner.style.fontSize = "";
-      const width = headliner.firstElementChild!.getBoundingClientRect().width;
-      if (width > headliner.clientWidth) {
-        const size = parseFloat(getComputedStyle(headliner).fontSize);
-        headliner.style.fontSize = `${(size * headliner.clientWidth) / width}px`;
-      }
-    };
-    fit();
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
-  }, [poster, visible]);
-}
-
-function statusText({ candidates, recommendations, hasPoster, searching, status }: Props) {
-  if (!hasPoster) return searching ? (status ?? "Reading your request") : "";
-  if (!recommendations.length) return "";
-  const picks = `${recommendations.length} ${recommendations.length === 1 ? "pick" : "picks"}`;
-  return candidates ? `${picks} from ${candidates.total} Concerts considered` : picks;
-}
-
-export function Poster(props: Props) {
-  const { candidates, recommendations, hasPoster, searching } = props;
-  // A name reveal only begins once there are Recommendations to reveal. Keep a small
-  // Poster proportionate, and include every chosen name so each has a place to fly from.
-  const qualified = hasPoster && recommendations.length > 0;
-  const names = qualified && candidates
-    ? [...new Set([...recommendations.map(nameOf), ...candidates.names])]
-      .slice(0, Math.min(MAX_CANDIDATE_NAMES, Math.max(8, recommendations.length * 3)))
-    : [];
-  const reveal = qualified ? candidates : null;
-  const [stage, setStage] = useStage(reveal, qualified, names.length);
+export function Poster({
+  candidates,
+  recommendations,
+  hasPoster,
+  searching,
+  status,
+  onWiderDates,
+  onAnywhere,
+  onChange,
+}: Props) {
+  const group = useId();
+  const reduced = useReducedMotion();
+  const [view, setView] = useState<"grid" | "list">("grid");
   const [selected, setSelected] = useState(0);
-  const [finished, setFinished] = useState(false);
-  const artistHint = useArtistHint();
-  const decisions = useDecisions();
+  const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState("");
-  const [thrown, setThrown] = useState({ count: 0, direction: 1 });
-  const dragged = useRef(false);
-  const stillTicket = useReducedMotion();
-  const wall = useRef<HTMLDivElement>(null);
-  const poster = useRef<HTMLDivElement>(null);
-  const showPoster = qualified && (stage === "fly" || stage === "ticket");
-  useHeadlinerFit(poster, showPoster);
-
-  useEffect(() => {
-    if (stage !== "fly" || !wall.current || !poster.current) return;
-    const cancel = flyIn(wall.current, poster.current);
-    const timer = setTimeout(() => setStage("ticket"), flyDuration(recommendations.length));
-    return () => {
-      clearTimeout(timer);
-      cancel();
-    };
-  }, [recommendations.length, setStage, stage]);
-
+  const decisions = useDecisions();
+  const hint = useArtistHint();
   const current = recommendations[selected];
+  const picked = new Set(
+    recommendations.flatMap((r) => r.concert.artists.map((a) => a.name)),
+  );
+  const passed = candidates?.names.filter((n) => !picked.has(n)) ?? [];
+  const duration = reduced ? 0 : 0.45;
 
-  function decide(decision: Decision) {
-    if (!current) return;
-    const name = nameOf(current);
-    let saving: Saving | null = null;
+  function save(recommendation = current) {
+    if (!recommendation) return;
     try {
-      if (decision === "saved") saving = saveConcert(current);
-      else skipConcert(current.concert.id);
+      const saving = saveConcert(recommendation);
+      dismissArtistHint();
+      setNotice(
+        `${nameOf(recommendation)} saved ${saving.where === "device" ? "on this device" : "to your account"}.`,
+      );
+      if (saving.where === "account")
+        saving.done.catch(() =>
+          setNotice(
+            `${nameOf(recommendation)} could not be saved to your account. Try again.`,
+          ),
+        );
     } catch {
-      setNotice("This browser could not keep that choice. Allow local storage and try again.");
-      return;
+      setNotice(
+        "This browser could not keep that choice. Allow local storage and try again.",
+      );
     }
-    dismissArtistHint();
-    if (!saving) setNotice(`${name} skipped.`);
-    else if (saving.where === "device") setNotice(`${name} saved on this device.`);
-    else {
-      setNotice(`${name} saved to your account.`);
-      saving.done.catch(() => setNotice(`${name} could not be saved to your account. Try again.`));
-    }
-    setThrown(({ count }) => ({ count: count + 1, direction: decision === "saved" ? 1 : -1 }));
-    const after = [...recommendations.slice(selected + 1), ...recommendations.slice(0, selected)];
-    const next = after.find((r) => !decisions[r.concert.id]);
-    if (next) setSelected(recommendations.indexOf(next));
-    else setFinished(true);
   }
 
-  function nameClass(rank: number) {
-    const tier = rank === selected && !finished ? "selected" : "";
-    return `poster-name tier-${tierOf(rank)} ${tier} ${decisions[recommendations[rank].concert.id] ?? ""}`;
-  }
-
-  function wallClass(name: string) {
-    if (stage !== "picks") return "";
-    return recommendations.some((r) => nameOf(r) === name) ? "pick" : "faded";
+  function photo(r: Recommendation, inDialog = false) {
+    if (!r.concert.image) return null;
+    return (
+      <motion.div
+        className={inDialog ? "dialog-photo" : "card-photo"}
+        layoutId={`photo-${r.concert.id}`}
+        transition={{ duration, ease: [0.2, 0.8, 0.2, 1] }}
+      >
+        <Image
+          src={r.concert.image}
+          alt=""
+          fill
+          unoptimized
+          sizes="(max-width:640px) 100vw, 60vw"
+          draggable={false}
+        />
+      </motion.div>
+    );
   }
 
   return (
-    <section className={`poster-area ${hasPoster && recommendations.length <= 3 ? "poster-compact" : ""}`}>
-      <div className="poster-stage">
-        {searching && !qualified && (
-          <div className="equalizer" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-            <i />
-            <i />
-          </div>
-        )}
-        {qualified && candidates && (
-          <div ref={wall} className={`wall ${showPoster ? "wall-hidden" : ""}`}>
-            {names.map((name, index) => (
-              <span
-                key={name}
-                data-name={name}
-                className={wallClass(name)}
-                style={{ animationDelay: `${index * 32}ms` }}
-              >
-                {name}
-              </span>
-            ))}
-          </div>
-        )}
-        {showPoster && (
-          <div className={`poster ${stage === "ticket" ? "poster-settled" : ""}`} ref={poster}>
-            {recommendations.map((recommendation, rank) => {
-              const { concert } = recommendation;
-              const name = nameOf(recommendation);
-              const decision = decisions[concert.id];
-              return (
-                <Fragment key={concert.id}>
-                  <Button
-                    type="button"
-                    data-name={name}
-                    onClick={() => {
-                      setSelected(rank);
-                      setFinished(false);
-                    }}
-                    aria-label={[name, decision].filter(Boolean).join(", ")}
-                    aria-pressed={rank === selected && !finished}
-                    className={nameClass(rank)}
-                  >
-                    <span>{name}</span>
-                    <span className="pink" aria-hidden="true">
+    <LayoutGroup id={group}>
+      <section className="fluid-poster" aria-label="Poster">
+        {!hasPoster && searching && (
+          <div className="run-card">
+            <div className="run-head">
+              <AudioLines aria-hidden />
+              <p role="status">{status ?? "Reading your Search"}</p>
+            </div>
+            {candidates && (
+              <>
+                <p className="cloud-head">
+                  Choosing from {candidates.total} Concerts
+                </p>
+                <div className="cloud" aria-label="Candidate Artists">
+                  {candidates.names.slice(0, 40).map((name) => (
+                    <motion.span
+                      className="name"
+                      layoutId={`name-${name}`}
+                      key={name}
+                    >
                       {name}
-                    </span>
-                    {decision === "saved" && <small>saved</small>}
-                  </Button>
-                  {rank === 2 && <span className="poster-break" aria-hidden="true" />}
-                </Fragment>
-              );
-            })}
+                    </motion.span>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
-      </div>
-      <p className="loader-status" aria-live="polite">
-        {statusText(props)}
-      </p>
-      {stage === "ticket" && finished && (
-        <PosterDone saved={recommendations.filter((r) => decisions[r.concert.id] === "saved")} />
-      )}
-      {stage === "ticket" && current && !finished && (
-        <div>
-          <div className="ticket-deck">
-            <AnimatePresence initial={false} mode="popLayout" custom={thrown.direction}>
-              <motion.div
-                key={`${current.concert.id}:${thrown.count}`}
-                className="ticket-drag"
-                custom={thrown.direction}
-                variants={TICKET_MOTION}
-                initial="enter"
-                animate="rest"
-                exit="gone"
-                transition={stillTicket ? { duration: 0 } : { duration: 0.3, ease: EASE_OUT }}
-                drag="x"
-                dragSnapToOrigin
-                dragElastic={0.7}
-                whileDrag={{ scale: 0.98 }}
-                onPointerDownCapture={() => {
-                  // A touch drag ends with no click, so each press starts clean.
-                  dragged.current = false;
-                }}
-                onDragStart={() => {
-                  dragged.current = true;
-                }}
-                onDragEnd={(_, { offset, velocity }) => {
-                  const decision = swipeDecision(offset.x, velocity.x);
-                  if (decision) decide(decision);
-                }}
-                onClickCapture={(event) => {
-                  // Letting go over a link or the Artist's name must not also press it.
-                  if (!dragged.current) return;
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-              >
-                <Ticket
-                  recommendation={current}
-                  rank={selected}
-                  artistHint={artistHint}
-                  onArtistOpen={dismissArtistHint}
-                />
-              </motion.div>
-            </AnimatePresence>
-          </div>
-          <p className="ticket-hint">Drag right to save, left to skip.</p>
-          <div className="ticket-controls">
-            <Button type="button" onClick={() => decide("skipped")}>
-              Skip
-            </Button>
-            <Button type="button" onClick={() => decide("saved")}>
-              Save
-            </Button>
-          </div>
-          <p className="decision-status" role="status">
-            {notice}
-          </p>
-        </div>
-      )}
-    </section>
+        {hasPoster && (
+          <>
+            {recommendations.length > 0 ? (
+              <>
+                <header className="poster-head">
+                  <div>
+                    <h2>
+                      {recommendations.length}{" "}
+                      {recommendations.length === 1 ? "Concert" : "Concerts"}{" "}
+                      worth going out for
+                    </h2>
+                    {candidates && (
+                      <p>
+                        {recommendations.length} picks from {candidates.total}{" "}
+                        Concerts considered
+                      </p>
+                    )}
+                  </div>
+                  <div className="views" role="group" aria-label="Poster view">
+                    <button
+                      aria-label="Grid view"
+                      title="Grid view"
+                      aria-pressed={view === "grid"}
+                      onClick={() => setView("grid")}
+                    >
+                      <LayoutGrid aria-hidden />
+                    </button>
+                    <button
+                      aria-label="List view"
+                      title="List view"
+                      aria-pressed={view === "list"}
+                      onClick={() => setView("list")}
+                    >
+                      <List aria-hidden />
+                    </button>
+                  </div>
+                </header>
+                <Dialog.Root open={open} onOpenChange={setOpen}>
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.div
+                      key={view}
+                      className={`concerts-${view}`}
+                      data-count={recommendations.length}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: reduced ? 0 : 0.12 }}
+                    >
+                      {recommendations.map((r, rank) => {
+                        const { concert, reason } = r;
+                        const name = nameOf(r);
+                        const date = concert.date
+                          ? formatDate(concert.date)
+                          : null;
+                        const meta = [
+                          concert.venue,
+                          concert.city,
+                          formatConcertTime(concert),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ");
+                        if (recommendations.length === 1 && view === "grid")
+                          return (
+                            <article
+                              className="solo concert-card"
+                              key={concert.id}
+                            >
+                              <div className="solo-photo">{photo(r)}</div>
+                              <div className="solo-body">
+                                <Ticket
+                                  recommendation={r}
+                                  rank={rank}
+                                  artistHint={hint}
+                                  onArtistOpen={dismissArtistHint}
+                                  hidePhoto
+                                />
+                                <div className="solo-actions">
+                                  <button
+                                    className="primary"
+                                    onClick={() => save(r)}
+                                    disabled={decisions[concert.id] === "saved"}
+                                  >
+                                    {decisions[concert.id] === "saved"
+                                      ? "Saved"
+                                      : "Save"}
+                                  </button>
+                                  <Dialog.Trigger
+                                    className="quiet"
+                                    aria-label={`Open Ticket for ${name}`}
+                                    onClick={() => setSelected(rank)}
+                                  >
+                                    Open Ticket
+                                  </Dialog.Trigger>
+                                </div>
+                                <p role="status" className="decision-status">
+                                  {notice}
+                                </p>
+                              </div>
+                            </article>
+                          );
+                        return (
+                          <motion.article
+                            key={concert.id}
+                            className={`concert-card rank-${rank} ${concert.image ? "has-photo" : "no-photo"}`}
+                            initial={{ opacity: 0, y: reduced ? 0 : 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{
+                              duration: reduced ? 0 : 0.3,
+                              delay: reduced ? 0 : Math.min(rank * 0.035, 0.18),
+                            }}
+                          >
+                            {photo(r)}
+                            <Dialog.Trigger
+                              className="card-open"
+                              aria-label={`Open Ticket for ${name}`}
+                              onClick={() => setSelected(rank)}
+                            />
+                            {date && (
+                              <time
+                                className="card-date"
+                                dateTime={concert.date}
+                              >
+                                {date}
+                              </time>
+                            )}
+                            {decisions[concert.id] === "saved" && (
+                              <span className="card-saved">
+                                <Check aria-hidden size={16} /> Saved
+                              </span>
+                            )}
+                            <div className="card-body">
+                              <motion.h3
+                                className="card-name"
+                                layoutId={`name-${name}`}
+                                transition={{ duration }}
+                              >
+                                {name}
+                              </motion.h3>
+                              {showTitle(concert, name) && (
+                                <p className="card-bill">
+                                  {showTitle(concert, name)}
+                                </p>
+                              )}
+                              <p className="card-meta">{meta}</p>
+                              {reason && <p className="card-why">{reason}</p>}
+                            </div>
+                          </motion.article>
+                        );
+                      })}
+                    </motion.div>
+                  </AnimatePresence>
+                  <Dialog.Portal>
+                    <Dialog.Backdrop className="ticket-backdrop" />
+                    <Dialog.Popup className="ticket-dialog">
+                      {current && (
+                        <>
+                          <Dialog.Title className="sr-only">
+                            Ticket for {nameOf(current)}
+                          </Dialog.Title>
+                          <Dialog.Description className="sr-only">
+                            Concert details and why it fits your Search.
+                          </Dialog.Description>
+                          {photo(current, true)}
+                          <div className="dialog-details">
+                            <Ticket
+                              recommendation={current}
+                              rank={selected}
+                              artistHint={hint}
+                              onArtistOpen={dismissArtistHint}
+                              hidePhoto
+                            />
+                            <div className="dialog-actions">
+                              <button
+                                className="primary"
+                                onClick={() => save()}
+                                disabled={
+                                  decisions[current.concert.id] === "saved"
+                                }
+                              >
+                                {decisions[current.concert.id] === "saved" ? (
+                                  <Check aria-hidden size={19} />
+                                ) : (
+                                  <Bookmark aria-hidden size={19} />
+                                )}
+                                {decisions[current.concert.id] === "saved"
+                                  ? "Saved"
+                                  : "Save"}
+                              </button>
+                            </div>
+                            <p className="decision-status" role="status">
+                              {notice}
+                            </p>
+                          </div>
+                          <Dialog.Close
+                            className="dialog-close"
+                            aria-label="Close Ticket"
+                          >
+                            <X aria-hidden />
+                          </Dialog.Close>
+                        </>
+                      )}
+                    </Dialog.Popup>
+                  </Dialog.Portal>
+                </Dialog.Root>
+              </>
+            ) : (
+              <div className="empty">
+                <div>
+                  <h2>Nothing here fits</h2>
+                  <p>
+                    {candidates
+                      ? `${candidates.total} Concerts considered. `
+                      : ""}
+                    Try wider dates, another place, or a different sound.
+                  </p>
+                </div>
+                <div className="empty-actions">
+                  {onWiderDates && (
+                    <button onClick={onWiderDates}>
+                      Look at the next three months
+                    </button>
+                  )}
+                  {onAnywhere && (
+                    <button onClick={onAnywhere}>Look anywhere</button>
+                  )}
+                  <button onClick={onChange}>Change the Search</button>
+                </div>
+              </div>
+            )}
+            {recommendations.length <= 3 && passed.length > 0 && (
+              <section className="passed" aria-label="Also playing, not picked">
+                <h3>Also playing, not picked</h3>
+                <p>These Artists had Concerts in the shortlist.</p>
+                <div className="cloud">
+                  {passed.slice(0, expanded ? undefined : 18).map((n) => (
+                    <span className="name" key={n}>
+                      {n}
+                    </span>
+                  ))}
+                  {!expanded && passed.length > 18 && (
+                    <button className="name" onClick={() => setExpanded(true)}>
+                      Show {passed.length - 18} more
+                    </button>
+                  )}
+                </div>
+              </section>
+            )}
+          </>
+        )}
+      </section>
+    </LayoutGroup>
   );
 }

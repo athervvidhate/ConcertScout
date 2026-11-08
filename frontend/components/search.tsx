@@ -2,9 +2,14 @@
 
 import { Button } from "@base-ui/react/button";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
+import { motion, useReducedMotion } from "motion/react";
 import { LocateFixed } from "lucide-react";
 import { type SubmitEvent, useEffect, useRef, useState } from "react";
 
+import { SearchInput } from "@/components/search-input";
+import { HomeHero } from "@/components/home-hero";
+import { HomeStrip } from "@/components/home-strip";
+import { useHomeExamples } from "@/lib/home-examples";
 import { Board, Listings } from "@/components/board";
 import { HomeGuide } from "@/components/home-guide";
 import { Listing } from "@/components/listing";
@@ -18,15 +23,20 @@ import { countOf, TastePanel } from "@/components/taste-panel";
 import { formatInterpreted, formatPosterHeading } from "@/lib/format";
 import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/place";
 import { API_URL } from "@/lib/search";
-import { useSearchExample } from "@/lib/search-examples";
 import { useImportedTaste } from "@/lib/taste";
 import { useSearch } from "@/lib/use-search";
 
-const NO_LOCATION = "We could not get your location. Type a city in the search box instead.";
+const NO_LOCATION =
+  "We could not get your location. Type a city in the search box instead.";
 const TURNSTILE_SITE_KEY =
   process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "1x00000000000000000000AA";
 
 export function Search() {
+  const examples = useHomeExamples();
+  const reduced = useReducedMotion();
+  const [activeExample, setActiveExample] = useState(0);
+  const input = useRef<HTMLInputElement>(null);
+  const [exampleNotice, setExampleNotice] = useState("");
   const [text, setText] = useState("");
   const [tasteOpen, setTasteOpen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -50,22 +60,26 @@ export function Search() {
     retryable,
     search,
     clear,
+    showExample,
   } = useSearch();
   const showPoster = phase === "searching" || hasPoster;
   // Home holds everything that isn't about a Search, so a Search replaces all of it.
   const home = phase === "idle";
-  const example = useSearchExample(!text && home);
   const locationLabel = place ? "Forget my location" : "Use my location";
   const canSearch = token !== null && phase !== "searching";
   const searchedFor =
-    interpreted && !interpreted.place && place ? { ...interpreted, place: "Near you" } : interpreted;
+    interpreted && !interpreted.place && place
+      ? { ...interpreted, place: "Near you" }
+      : interpreted;
 
   useEffect(() => {
     const timer = setTimeout(() => setPlace(readPlace()), 0);
     // Wake the Python function while the visitor reads/types; never delay the Search box.
     const controller = new AbortController();
     const deadline = setTimeout(() => controller.abort(), 5000);
-    void fetch(`${API_URL}/health`, {signal: controller.signal}).catch(() => {});
+    void fetch(`${API_URL}/health`, { signal: controller.signal }).catch(
+      () => {},
+    );
     return () => {
       clearTimeout(timer);
       clearTimeout(deadline);
@@ -92,23 +106,31 @@ export function Search() {
     setPlace(null);
   }
 
-  function run(query: string) {
+  function run(query: string, near: Place | null = place) {
     if (!token) return;
     // Each token works once, so the next Search needs a fresh one.
     setToken(null);
     botCheck.current?.reset();
     // A typed place wins on the server, so a shared location only fills the gap.
-    search(query, token, taste?.artists ?? [], place);
+    search(query, token, taste?.artists ?? [], near);
   }
 
   function goHome() {
     setText("");
+    setExampleNotice("");
     clear();
   }
 
   function tryExample(example: string) {
     setText(example);
-    run(example);
+    const cached = examples.find((item) => item.text === example);
+    if (cached) {
+      showExample(cached);
+      setExampleNotice("");
+    } else
+      setExampleNotice(
+        "This example is being refreshed. You can Search with these words instead.",
+      );
   }
 
   function submit(event: SubmitEvent<HTMLFormElement>) {
@@ -121,15 +143,29 @@ export function Search() {
     <>
       <SiteHeader
         onHome={goHome}
-        hideBrand={home}
         onTaste={() => setTasteOpen(true)}
-        tasteLabel={taste ? `Your Taste: ${countOf(taste.artists)}` : "Your Taste"}
+        tasteLabel={
+          taste ? `Your Taste: ${countOf(taste.artists)}` : "Your Taste"
+        }
       />
-      <TastePanel spotify={spotify} open={tasteOpen} onOpenChange={setTasteOpen} />
+      <TastePanel
+        spotify={spotify}
+        open={tasteOpen}
+        onOpenChange={setTasteOpen}
+      />
 
-      <h1 className={home ? "wordmark" : "sr-only"}>Concert Scout</h1>
+      {home ? (
+        <HomeHero onCycle={setActiveExample} />
+      ) : (
+        <h1 className="sr-only">Concert Scout</h1>
+      )}
 
-      <form onSubmit={submit} className="search-bar">
+      <motion.form
+        layout="position"
+        transition={{ duration: reduced ? 0 : 0.35 }}
+        onSubmit={submit}
+        className={`search-bar ${text.trim() ? "ready" : ""}`}
+      >
         <Button
           type="button"
           className="locate"
@@ -143,18 +179,16 @@ export function Search() {
         <label htmlFor="search" className="sr-only">
           Search
         </label>
-        <input
-          id="search"
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          placeholder={home ? example : undefined}
-          required
-          maxLength={500}
+        <SearchInput
+          text={text}
+          onText={setText}
+          home={home}
+          inputRef={input}
         />
         <Button type="submit" disabled={!canSearch}>
-          Find concerts
+          Search
         </Button>
-      </form>
+      </motion.form>
 
       <Turnstile
         ref={botCheck}
@@ -183,14 +217,38 @@ export function Search() {
         </p>
       )}
 
-      {home && <SearchExamples onExample={tryExample} ready={token !== null} />}
+      {home && (
+        <>
+          <p className="pitch">
+            An Artist, a sound, a place. We find the Concerts worth going out
+            for.
+          </p>
+          <SearchExamples onExample={tryExample} ready />
+          {exampleNotice && <p role="status">{exampleNotice}</p>}
+          {!spotify.connected && (
+            <HomeStrip
+              active={activeExample}
+              examples={examples}
+              onExample={tryExample}
+            />
+          )}
+        </>
+      )}
 
       <div aria-live="polite" className="search-context">
         {searchedFor && (
-          <p title={formatInterpreted(searchedFor)}>{formatPosterHeading(searchedFor)}</p>
-        )}
-        {phase === "finished" && !error && recommendations.length === 0 && !elsewhere && (
-          <p>Nothing qualifies for this Search. Try wider dates or a nearby city.</p>
+          <>
+            <p title={formatInterpreted(searchedFor)}>
+              {formatPosterHeading(searchedFor)}
+            </p>
+            <div className="understood" aria-label="How we read your Search">
+              {[...searchedFor.artists, ...searchedFor.genres].map((name) => (
+                <span className="chip" key={name}>
+                  {name}
+                </span>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
@@ -198,7 +256,11 @@ export function Search() {
         <div role="alert" className="search-error">
           <p>{error}</p>
           {retryable && (
-            <Button type="button" disabled={!canSearch} onClick={() => run(searched)}>
+            <Button
+              type="button"
+              disabled={!canSearch}
+              onClick={() => run(searched)}
+            >
               Try again
             </Button>
           )}
@@ -213,19 +275,60 @@ export function Search() {
           searching={phase === "searching"}
           hasPoster={hasPoster}
           status={status}
+          onChange={() => {
+            input.current?.focus();
+            input.current?.select();
+          }}
+          onWiderDates={
+            canSearch && searchedFor
+              ? () => {
+                  const words = [
+                    ...searchedFor.artists,
+                    ...searchedFor.genres,
+                    searchedFor.region ?? searchedFor.place,
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+                  const wider = `${words} in the next three months`;
+                  setText(wider);
+                  run(wider);
+                }
+              : undefined
+          }
+          onAnywhere={
+            elsewhere
+              ? () =>
+                  document
+                    .getElementById("elsewhere")
+                    ?.scrollIntoView({
+                      behavior: reduced ? "instant" : "smooth",
+                    })
+              : canSearch && interpreted && interpreted.artists.length > 0
+                ? () => {
+                    const anywhere = [
+                      ...interpreted.artists,
+                      ...interpreted.genres,
+                    ].join(" ");
+                    setText(anywhere);
+                    run(anywhere, null);
+                  }
+                : undefined
+          }
         />
       )}
       {elsewhere && phase === "finished" && (
-        <Board
-          title={`Nothing in ${interpreted?.region ?? interpreted?.place?.split(",")[0] ?? "this area"}`}
-          subtitle={`These match "${elsewhere.keyword}" in other cities.`}
-        >
-          <Listings>
-            {elsewhere.concerts.map((concert) => (
-              <Listing key={concert.id} concert={concert} anywhere />
-            ))}
-          </Listings>
-        </Board>
+        <div id="elsewhere">
+          <Board
+            title={`Nothing in ${interpreted?.region ?? interpreted?.place?.split(",")[0] ?? "this area"}`}
+            subtitle={`These match "${elsewhere.keyword}" in other cities.`}
+          >
+            <Listings>
+              {elsewhere.concerts.map((concert) => (
+                <Listing key={concert.id} concert={concert} anywhere />
+              ))}
+            </Listings>
+          </Board>
+        </div>
       )}
       {phase === "finished" && (
         <SearchFeedback
@@ -236,23 +339,25 @@ export function Search() {
           error={error}
         />
       )}
-      {spotify.connected && (home || (phase === "finished" && interpreted && !error)) && (
-        <SpotifyShelf
-          connectHref={spotify.connectHref}
-          onLocate={shareLocation}
-          upcoming={home}
-          key={JSON.stringify([interpreted, place])}
-          place={interpreted?.place}
-          lat={interpreted?.place ? undefined : place?.lat}
-          lon={interpreted?.place ? undefined : place?.lon}
-          radius={interpreted?.radius_miles}
-          start={interpreted?.start}
-          end={interpreted?.end}
-          genres={interpreted?.genres}
-        />
-      )}
+      {spotify.connected &&
+        (home || (phase === "finished" && interpreted && !error)) && (
+          <SpotifyShelf
+            connectHref={spotify.connectHref}
+            onLocate={shareLocation}
+            upcoming={home}
+            key={JSON.stringify([interpreted, place])}
+            place={interpreted?.place}
+            lat={interpreted?.place ? undefined : place?.lat}
+            lon={interpreted?.place ? undefined : place?.lon}
+            radius={interpreted?.radius_miles}
+            start={interpreted?.start}
+            end={interpreted?.end}
+            genres={interpreted?.genres}
+          />
+        )}
       {home && (
         <HomeGuide
+          example={examples.find((e) => e.poster.recommendations.length > 0)}
           personal={!spotify.connected}
           locationLabel={locationLabel}
           onLocation={toggleLocation}

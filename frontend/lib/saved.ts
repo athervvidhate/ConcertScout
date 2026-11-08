@@ -5,16 +5,14 @@ import { dateIn, viewerZone } from "@/lib/format";
 import type { Recommendation } from "@/lib/search";
 
 const SAVED_KEY = "concert-scout-saved";
-const SKIPPED_KEY = "concert-scout-skipped";
 const EMPTY = "[]";
 
-export type Decision = "saved" | "skipped";
+export type Decision = "saved";
 
 /**
  * Saved Concerts live on the device for a guest and in the account once signed in. The two never
  * mix: signing in moves the device's saves into the account, signed-in views read only the
  * account, and signing out never copies the account back to the device.
- * Skips always stay on the device.
  */
 export type SavedView = {
   where: "device" | "account";
@@ -68,7 +66,6 @@ async function moveDeviceSaves(): Promise<Moved | undefined> {
     const added = new Set(result.saved.map((r) => r.concert.id));
     writeDevice(
       readList<Recommendation>(SAVED_KEY).filter((r) => !added.has(r.concert.id)),
-      readList(SKIPPED_KEY),
     );
     return { added: added.size, left: device.length - added.size };
   } catch {
@@ -114,15 +111,9 @@ function readList<T>(key: string): T[] {
   return parseList(localStorage.getItem(key) ?? EMPTY);
 }
 
-function writeDevice(saved: Recommendation[], skipped: string[]) {
+function writeDevice(saved: Recommendation[]) {
   localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
-  localStorage.setItem(SKIPPED_KEY, JSON.stringify(skipped));
   notify();
-}
-
-function withoutSkip(id: string) {
-  const skipped = readList<string>(SKIPPED_KEY);
-  if (skipped.includes(id)) writeDevice(readList(SAVED_KEY), skipped.filter((s) => s !== id));
 }
 
 function accountSaves(): AccountSaves | null {
@@ -140,8 +131,7 @@ export function saveConcert(recommendation: Recommendation): Saving {
   const signedIn = accountSaves();
   if (!signedIn) {
     const others = readList<Recommendation>(SAVED_KEY).filter((r) => r.concert.id !== id);
-    const skipped = readList<string>(SKIPPED_KEY).filter((skippedId) => skippedId !== id);
-    writeDevice([...others, recommendation], skipped);
+    writeDevice([...others, recommendation]);
     return { where: "device" };
   }
   const { owner } = signedIn;
@@ -149,7 +139,6 @@ export function saveConcert(recommendation: Recommendation): Saving {
   setAccount({ ...signedIn, saved: [...without(signedIn.saved), recommendation] });
   const done = (async () => {
     try {
-      withoutSkip(id);
       const response = await accountFetch(`/saved/${encodeURIComponent(id)}`, {
         method: "PUT",
         body: JSON.stringify({ reason: recommendation.reason }),
@@ -166,20 +155,12 @@ export function saveConcert(recommendation: Recommendation): Saving {
   return { where: "account", done };
 }
 
-export function skipConcert(id: string): void {
-  const signedIn = accountSaves();
-  const saved = readList<Recommendation>(SAVED_KEY).filter((r) => r.concert.id !== id);
-  const skipped = readList<string>(SKIPPED_KEY).filter((skippedId) => skippedId !== id);
-  writeDevice(signedIn ? readList(SAVED_KEY) : saved, [...skipped, id]);
-  if (signedIn?.saved.some((r) => r.concert.id === id)) void removeSaved(id).catch(() => {});
-}
-
 /** Rejects, with the Concert back in place, when the account could not remove it. */
 export async function removeSaved(id: string): Promise<void> {
   const signedIn = accountSaves();
   if (!signedIn) {
     const saved = readList<Recommendation>(SAVED_KEY).filter((r) => r.concert.id !== id);
-    writeDevice(saved, readList<string>(SKIPPED_KEY));
+    writeDevice(saved);
     return;
   }
   const { owner, saved: before } = signedIn;
@@ -231,12 +212,7 @@ export function useSavedConcerts(): SavedView {
 
 export function useDecisions(): Record<string, Decision> {
   const { saved } = useSavedConcerts();
-  const rawSkipped = useStored(SKIPPED_KEY);
-  return useMemo(() => {
-    const skipped = parseList<string>(rawSkipped).map((id) => [id, "skipped" as const]);
-    const kept = saved.map((r) => [r.concert.id, "saved" as const]);
-    return Object.fromEntries([...skipped, ...kept]);
-  }, [saved, rawSkipped]);
+  return useMemo(() => Object.fromEntries(saved.map(r => [r.concert.id, "saved" as const])), [saved]);
 }
 
 /** A Concert with no known date stays, because it may still be ahead. */

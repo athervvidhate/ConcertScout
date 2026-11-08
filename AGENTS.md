@@ -8,7 +8,7 @@ Work in this conversation with one agent. Start subagents only when the user exp
 
 After compaction, a provider switch, or missing context, read `.claude/skills/continue-session/SKILL.md`. Keep a short checkpoint in the gitignored `.agent-context/current.md` at task boundaries: objective, decisions, active branch/PR, evidence, and next action. Recover details from transcript pointers instead of rediscovering the repo. Installation and troubleshooting: `docs/development/session-recovery.md`.
 
-Before writing code, read `GLOSSARY.md`, `docs/specs/00-overview.md`, the specs your issue lists, and `docs/adr/`. Use the glossary's terms in code and docs. `docs/mocks/fine-print-loader.html` is the approved UI mock, and `docs/specs/04-interface.md` overrides it if they disagree.
+Before writing code, read `GLOSSARY.md`, `docs/specs/00-overview.md`, the specs your issue lists, and `docs/adr/`. Use the glossary's terms in code and docs. `docs/mocks/fluid-search/` is the approved UI mock, and `docs/specs/04-interface.md` overrides it if they disagree.
 
 When choosing tests, read `docs/development/testing.md` for contract and browser boundaries.
 

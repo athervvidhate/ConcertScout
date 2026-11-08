@@ -1,136 +1,49 @@
 # Interface
 
-The old UI looked generated, so the rebuild has a real point of view: a screen-printed festival poster on a hot orange field. Decoration must help someone find a Concert. Anything that exists for its own sake goes.
+The approved [Fluid Search study](../mocks/fluid-search/README.md) supplies the layouts and motion. Moss light and dark replace the orange field, rotating sun, coloured Tickets and one-by-one deck. This spec governs the live application; study-only controls do not ship.
 
-Follow `ui-skills.com` rules and Emil Kowalski's motion rules. Use coss ui (Base UI) for controls. The fly-in uses the Web Animations API, and Ticket drag uses Motion. Short React Bits text effects are allowed. WebGL backgrounds are not.
+## Tokens, type and identity
+
+Use the study's role tokens: light paper `#f3f5f2`, surface `#ffffff`, ink `#12261f`, pine band `#12352b`, coral action `#c4461f`. Dark paper is `#0d1915`, surface `#14241f`, ink `#e8f0eb`, pine band `#1f4a3b`, coral action `#ff7449`. Derive hairlines from ink. Flat surfaces and a small shadow; photographs provide colour. Gradients may support photo legibility, never decorate the page.
+
+Anton is display type and Bricolage Grotesque is UI/body type, loaded with `next/font/local`. Dates and prices use tabular numbers. The ticket/compass identity has standalone outlined SVG variants for light, dark and pine surfaces; header colour follows the page before paint. The adaptive SVG favicon and PNG/ICO renditions use the symbol alone.
+
+Follow the system colour scheme on first visit. The header menu switches light/dark and remembers the choice when storage permits. Failure to persist must not prevent switching for the visit.
 
 ## Home
 
-The page has one job, so it has one search box in the middle. A city typed there already works, so there is no second place box.
+The header carries the logo and a menu with Saved Concerts, Your Taste, theme and optional account controls. The logo returns to the resting home page. Search replaces the home sections; navigation never submits a Search.
 
-- Top bar, right aligned: Saved Concerts and Your Taste. Your Taste opens a panel from the right edge. Connect Spotify leads it as the one filled button, and the imports sit behind an "Other ways to add your Taste" toggle.
-- A location button sits inside the search box. It asks for the browser's location only when pressed, then fills in. Later Searches that name no place look near that location, and the Spotify shelf uses it. Pressed again, it forgets the location, which deletes the stored coordinates.
-- The empty Search box rotates three examples with a typing/deleting effect, the same three the home page offers as buttons right below the search box. They show three kinds of Search: an Artist with a place and dates, a genre with a place and dates, and a sound in a Region with dates. Pause while focused or while text is entered. Examples belong to the resting home page, so the box stays blank during and after a Search, even with its text deleted. Reduced motion keeps a static example.
-- Links to Tickets and other sites open a new tab, so a Poster is never lost.
+The headline rolls through example ways to Search. The main Search box has one input, an explicit location button and Search action. The input rotates the three examples while it is empty on home, then stays blank after a Search. Reduced motion uses static text. Examples also appear as buttons below the box.
 
-## Tokens
+A labelled photo strip shows cached public example Posters, refreshed by the authenticated nightly warm job. Neither a visit nor an example click can make a paid Search. A cache miss leaves the strip out and puts the example words in the input with an explanation. A visitor may explicitly submit those words as an ordinary Search. Expired source dates stay out. Spotify-connected visitors see their own separate shelf instead of the public strip.
 
-| Token | Value |
-|---|---|
-| Field | `#FF5A1F` |
-| Field stripe | `#FF7A1F` |
-| Ink | `#10291F` |
-| Pink | `#FFD3E4` |
-| Ticket colors | `#F7C5D5`, `#F6E27A`, `#A7DCE2`, `#F4C27A`, `#D9E7A1` |
-| Ticket text | `#1A1A18` |
+How a Search works replays one actual cached Search in three panels: understood words, candidates, then picks. Content remains in layout while it fades, keeping each panel's finished height. Animation stops out of view; reduced motion displays the finished state. Without cached data it shows the three explanations without inventing a demo. Make it yours offers location and Taste; it retires once Spotify is connected. The footer links Privacy and the owner.
 
-The sun is a `repeating-conic-gradient` of 7.5 degree stripes that rotates once every 90 seconds.
+Location is requested only on an explicit button press. Forget my location deletes the stored coordinates. Typed places win over shared coordinates, and no place comes from an IP address.
 
-## Type
+## Working view
 
-| Use | Font |
-|---|---|
-| Poster names | Anton 400, which matches the owner's reference image |
-| UI | Bricolage Grotesque, variable |
-| Ticket Artist | Big Shoulders Display 800 |
-| Ticket date and price | Doto 800 |
-| Body and status | Hanken Grotesk |
+The live SSE stream drives status, understood Artist/sound/place/date context and the candidate cloud. Candidate names arrive from `candidates`, never invented or taken from Spotify. Show up to 40 shortlisted Artist names while ranking. On `poster`, picked names become the Concert titles through Motion shared layout. There is no percentage progress, artificial network wait or legacy multi-second loader sequence. An empty Poster removes the cloud and offers useful changes.
 
-Poster sizes:
+## Poster and Ticket
 
-| Tier | Size | Weight |
-|---|---|---|
-| Headliner | `clamp(52px, 11.7vw, 164px)` | 400 |
-| Second tier | `clamp(34px, 7.4vw, 104px)` | 400 |
-| Third tier | `clamp(24px, 3.8vw, 54px)` | 400 |
+Grid and List use two icon buttons with accessible names and pressed states. Both show exactly the same Recommendations in rank order. Grid follows the count: 1 a solo Ticket, 2 halves, 3 a large pick with two stacked, 4 halves, 5–8 a large pick, stacked picks, then thirds/halves. Phones stack the Concerts. List shows date, Artist, rest of source title, venue, time, reason and photo where reported. At three or fewer picks, list the other candidate Artists, initially 18 with a Show more button.
 
-Above 700px wide, each size also shrinks with the viewport height, so the Poster and Ticket fit an ordinary laptop screen. A headliner too long for its row shrinks to fit.
+A Concert opens an accessible Ticket dialog. Motion shares the source photo's layout between its Poster frame and the dialog; closing returns it to the Poster. The details use the same source facts as Saved Concerts: Artist panel, first-Ticket hint, date and venue time zone, reason, price only if known, next presale before general sale, other dates grouped by venue, and the source ticket link. A single Recommendation also exposes its Ticket directly on the Poster.
 
-Load fonts with `next/font`. Use tabular numbers for dates and prices.
+The owner chose Save only on November 7, 2026. Remove Skip and drag, the deck, and its end panel. Save confirms device/account storage without closing or advancing. A saved check and text work without colour alone; failed storage never claims success. Account failure rolls back the optimistic save and permits retry. Escape, close and backdrop restore focus to the opening Concert. The Artist panel remains a nested accessible dialog.
 
-## The loader: Fine print
+List switching fades the old view then raises the new Concerts with a short stagger. Reduced motion shows end states immediately. Only transforms and opacity animate continuously; there are no pointer-following effects. Keep touch controls at least 44px. Verify 390px and 1280px widths, both themes, reduced motion, keyboard focus and no horizontal document overflow. Physical-device frame rate and screen-reader acceptance are separate from automated Chromium checks.
 
-Nothing on screen is a fake. No skeleton blocks, no invented progress percentages. Each stage runs on real SSE events.
+## Empty, errors and existing features
 
-| Stage | Trigger | What shows |
-|---|---|---|
-| 1. Opening | Submit | Equalizer bars in the Poster area, status "Reading your request", then each real `status` message. Keep this short: send `candidates` as early as possible, aiming for under 2s |
-| 2. Names | Nonempty `poster`, using real `candidates` | Equalizer leaves. Real candidate names fade in as small print, 32ms apart, a bounded sample proportional to the qualifying Poster (up to 24 names) |
-| 3. Ranking | Before `poster` | Equalizer and real status stay; no Artist wall appears before qualification |
-| 4. Picks | `poster` | Picks turn pink, the status changes to "8 picks from 40 Concerts considered", and other names fade together over 0.28s |
-| 5. Fly-in | 550ms after picks turn pink, so the status can be read | See below |
-| 6. Ticket | As soon as the fly-in ends | First Ticket rises 12px over 420ms. The headliner stays pink |
+An empty Poster says Nothing here fits. Offer a Search over the next three months using the understood Taste/place, a worldwide Search when the API supports a named Artist, and editing the Search. Actions that submit still require a fresh bot token. Elsewhere remains a source-only board for an empty place/Taste Search. It never becomes a model-ranked Poster.
 
-Stages 4 to 6 are presentation only. Every Recommendation already exists when the `poster` event arrives, so nothing after it waits on the network. The 550ms before the fly-in exists only so the status can be read, and no other pause is allowed.
+Keep Turnstile, visitor/spend limits, Search-off 503, actionable errors and truncated-stream retry. The API pipeline and source-fact assembly remain the authority. Keep Spotify exact-name matching, its separate data path and hide/paging controls; Taste imports; optional accounts and synced saves; Privacy and credits.
 
-Save and Skip stay hidden until stage 6. The name reveal begins only after a nonempty `poster` arrives, so an empty Search never flashes Artists that did not qualify. Include every chosen Artist in the reveal and cap its size at the larger of 8 or three times the pick count, up to 24. Posters of three or fewer Recommendations collapse unused vertical space.
+## Artist panel, hint and reports
 
-### Fly-in
+An Artist's name opens public Last.fm facts and a Spotify page/search link without a model. Missing facts stay out; if Last.fm knows nothing, say so and keep the Spotify link. The first-Ticket hint disappears after opening a panel or saving and stays dismissed on that device.
 
-Names must never feel rushed. Growing while travelling caused the collisions, so the fly-in has two separate steps.
-
-| Value | Setting |
-|---|---|
-| Glide duration | 750ms per name |
-| Start gap | 100ms, headliner first, in rank order |
-| Glide easing | `cubic-bezier(.22, .61, .36, 1)` |
-| Rest | 80ms after the last name lands |
-| Grow duration | 450ms, all names together |
-| Grow easing | `cubic-bezier(.22, .61, .36, 1)` |
-| Total | 1,980ms |
-
-1. Each name glides to the center of its final spot at small size. Ease-out starts it fast and settles it softly, which makes the app feel quick.
-2. Once every name has landed, all of them grow together.
-
-Each name scales up inside its own final box during the grow step, so names cannot touch there. The owner shortened the first version, 2,890ms long, because it felt slow. The shorter start gap lets small names cross a little more often during the glide.
-
-To avoid stutter, keep the animation on the compositor:
-
-- Animate only `transform` and `opacity`. Animating `color` in the same animation moves the whole thing to the main thread.
-- Render each name at full size with `will-change: transform`, then scale it down. This keeps the text sharp as it grows.
-- Stack a pink copy over the ink name and fade its opacity during the grow step, rather than animating color. The headliner stays pink.
-- Read FLIP positions from the DOM once, before the animation starts, and remove `will-change` when it ends.
-
-### Reduced motion
-
-With `prefers-reduced-motion`, the sun and equalizer stop, there is no fly-in, and the Poster appears directly. Status text stays, and it is an `aria-live` region.
-
-## Interaction
-
-- Ticket drag uses Motion and needs real device testing. The mock never tested it.
-- Saved and skipped states work without color alone: underline plus a "saved" label, and strikethrough.
-- All targets are at least 44px on touch screens.
-- Check at 390px and 1280px wide.
-- Pink on orange is below 4.5:1 contrast, so use it only for large display text. Never use it for body copy.
-
-## Mock
-
-[The approved mock](../mocks/fine-print-loader.html) shows the full loader. Its data is made up, and this spec overrides it if they disagree.
-
-## Site navigation and home
-
-Every page has a small header: the brand on the left and a menu button on the right, holding Saved Concerts and Your Taste. The resting home page drops the brand, because the wordmark already says it. The brand returns a Poster to the resting home page. The home page adds how a Search works, and the location and Taste actions below the search box. The Privacy page names each data source.
-
-## Artist hint
-
-A visitor's first Ticket carries a small hint that the Artist's name opens more about them. Opening a panel or deciding a Ticket dismisses it for good on that device.
-
-## Search reports
-
-After a Search finishes, "Didn't find what you wanted? Tell us" opens a short note. Sending it emails the owner through Resend with the Search, the note, how the app read the Search, any error and the Poster's Concerts. It carries no coordinates and no connected Spotify data. Each visitor gets 5 reports an hour, and everyone shares 20. Reports stay off until `RESEND_API_KEY` and `FEEDBACK_EMAIL` are set.
-
-## Artist panel
-
-An Artist's name on a Ticket opens the Artist panel: a link to their Spotify page, Last.fm listeners, styles, a short bio, top songs and similar Artists. A missing fact stays out, and when Last.fm has nothing at all the panel says so and keeps the Spotify link. When Spotify has no Artist with exactly that name, the link is a Spotify search instead. Monthly listeners are not offered, because Spotify's API does not report them.
-
-## Home and results
-
-The page has two states. Home holds everything that is not about a Search: the wordmark, the Spotify shelf and the guide. A Search replaces all of it. Results show the Poster, then the visitor's shelf filtered to that Search once the Search finishes.
-
-Listings share one form, a dark board of single-column rows that opens with 5 and adds 5 at a time. A row shows the date, the Artist, whatever the source's title says beyond the Artist, the place and a Tickets link. The title only ever loses words, so no fact is added.
-
-The sun is fixed to the screen and larger than its diagonal, so the rays run behind the whole page.
-
-## Elsewhere
-
-When a Search with a place and a Taste gets an empty Poster, one Ticketmaster call looks for its first Artist, tag or descriptor in any place. The results appear on a board that says nothing matched the place. No model chooses them, and a failure leaves the empty Poster as it was.
+After a Search, Tell us opens a note. Reports use Resend and preserve existing limits and configuration. They include Search, interpretation, error and Poster facts, never location coordinates or connected Spotify data. Privacy opens in a separate tab so the active Search survives.

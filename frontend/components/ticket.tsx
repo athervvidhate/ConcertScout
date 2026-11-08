@@ -71,9 +71,10 @@ type TicketProps = {
   // Shown once, on a visitor's first Ticket, because the name doesn't look like a button.
   artistHint?: boolean;
   onArtistOpen?: () => void;
+  hidePhoto?: boolean;
 };
 
-export function Ticket({ recommendation, rank, artistHint, onArtistOpen }: TicketProps) {
+export function Ticket({ recommendation, rank, artistHint, onArtistOpen, hidePhoto }: TicketProps) {
   const { concert, reason, also = [] } = recommendation;
   const details = [
     placeOf(concert),
@@ -84,7 +85,7 @@ export function Ticket({ recommendation, rank, artistHint, onArtistOpen }: Ticke
 
   return (
     <article className="ticket" data-color={rank % 5}>
-      {concert.image && (
+      {concert.image && !hidePhoto && (
         <div className="ticket-photo">
           {/* Ticketmaster already sizes these, so nothing is resized here. */}
           <Image src={concert.image} alt="" fill unoptimized draggable={false} />
@@ -111,7 +112,7 @@ export function Ticket({ recommendation, rank, artistHint, onArtistOpen }: Ticke
         {also.length > 0 && <OtherDates concerts={also} />}
       </div>
       <div className="ticket-stub">
-        <span>Admit one</span>
+
         {concert.price && <Price text={formatPrice(concert.price, true)} />}
         <a
           href={concert.url}

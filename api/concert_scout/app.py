@@ -16,7 +16,17 @@ from pydantic_ai.models import Model
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from concert_scout import accounts, cache, feedback, interpreter, limits, security, spotify, warm
+from concert_scout import (
+    accounts,
+    cache,
+    feedback,
+    home,
+    interpreter,
+    limits,
+    security,
+    spotify,
+    warm,
+)
 from concert_scout.config import Settings
 from concert_scout.models import ArtistProfiles, ImportedTaste, Place, SearchError
 from concert_scout.pipeline import (
@@ -254,10 +264,14 @@ def create_app(
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    @app.get("/examples", response_model=home.Examples, response_model_exclude_none=True)
+    async def examples() -> home.Examples:
+        return await home.read(services.redis, dt.datetime.now(dt.UTC).date())
+
     if settings.cron_secret:
         expected = f"Bearer {settings.cron_secret.get_secret_value()}"
 
-        # Vercel's scheduler calls this with the project's CRON_SECRET. It spends no model money.
+        # Only this authenticated job builds the public example Posters.
         @app.get("/warm", include_in_schema=False)
         async def warm_cache(
             authorization: Annotated[str, Header()] = "",
@@ -269,7 +283,10 @@ def create_app(
                     await supabase.keep_awake(accounts_client, settings.supabase_secret_key)
                 except supabase.SupabaseError as exc:
                     logger.warning("Supabase keep-awake failed: %s", exc)
-            return await warm.warm(services, dt.datetime.now(dt.UTC))
+            warmed = await warm.warm(services, dt.datetime.now(dt.UTC))
+            if settings.search_enabled:
+                await home.refresh(services)
+            return warmed
 
     @app.get("/artist", response_model=ArtistProfiles, response_model_exclude_none=True)
     async def artist(

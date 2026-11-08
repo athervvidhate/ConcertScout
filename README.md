@@ -2,7 +2,7 @@
 
 Find live music you would actually want to see. **[concertscout.app](https://concertscout.app)**
 
-Describe what you like and where you can go, in your own words. "Tame Impala in London next summer" works, and so does "dreamy bands in SoCal next month" or a city on its own. Concert Scout reads the Search, works out which Concerts near you suit it, and sets up to eight of them as a festival Poster. Open a name for its Ticket, with the reason it was picked, the date, venue and a link to buy. Save it or skip it.
+Describe what you like and where you can go, in your own words. "Tame Impala in London next summer" works, and so does "dreamy bands in SoCal next month" or a city on its own. Concert Scout reads the Search, works out which Concerts near you suit it, and sets up to eight of them as a Poster in Grid or List view. Open a Concert for its Ticket, with the reason it was picked, the date, venue and a link to buy. Save the ones you want to keep. The home examples open cached Posters without running a paid Search.
 
 There are no accounts and no ads. Saved Concerts stay in your browser. Connect Spotify and your own Artists get a separate shelf of Concerts near you.
 
