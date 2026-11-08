@@ -408,7 +408,8 @@ button:disabled { opacity:.6; cursor:default; }
 .artist-name:hover { text-decoration-color:currentColor; }
 .ticket .artist-hint { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-2); margin:0 0 16px; }
 .other-dates { margin:16px 0; font-size:14px; }
-.other-dates summary { display:flex; align-items:center; min-height:44px; cursor:pointer; text-decoration:underline; }
+.other-toggle { display:flex; align-items:center; min-height:44px; padding:0; border:0; background:none; text-decoration:underline; }
+.other-content { overflow:hidden; }
 .other-dates ul { list-style:none; padding:0; margin:0; }
 .other-venues { display:grid; gap:16px; }
 .ticket .other-place { margin:0; font-weight:600; }
@@ -573,7 +574,7 @@ button:disabled { opacity:.6; cursor:default; }
 .save-symbol { display:grid; place-items:center; }
 .save-symbol.saved svg { animation:save-check .6s cubic-bezier(.34,1.56,.64,1); }
 @keyframes save-check { from { transform:scale(.3) rotate(-30deg); } to { transform:none; } }
-@media(max-width:640px) { .ticket-dialog { height:100svh; align-content:start; } .run-text { font-size:15px; } }
+@media(max-width:640px) { .run-text { font-size:15px; } }
 .header-actions { display:flex; align-items:center; gap:8px; }
 .nav-saved { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:0 14px; border-radius:999px; text-decoration:none; font-size:14px; font-weight:550; }
 .nav-saved:hover { background:var(--sunk); }
@@ -605,9 +606,9 @@ button:disabled { opacity:.6; cursor:default; }
 .hero-flap { height:1.12em; min-height:1.12em; }
 .hero-flap .split-flap-display { width:100%; height:100%; font:inherit; }
 .hero-flap .split-flap-display.long-flap-mode .split-flap-digit { width:100%; min-width:0; height:1.12em; min-height:1.12em; font:inherit; background:var(--bg); border-radius:0; }
-.hero-flap .split-flap-part { border:0; box-shadow:none; border-radius:0; background:var(--bg); }
+.hero-flap .split-flap-display .split-flap-part { border:0; box-shadow:none; border-radius:0; background:var(--bg); transition:none; }
 .hero-flap .split-flap-part::before,.hero-flap .split-flap-part::after { display:none; }
-.hero-flap .split-flap-char { height:200%; line-height:1.08; }
+.hero-flap .split-flap-display.long-flap-mode .split-flap-char { height:200%; line-height:1.08; }
 .hero-flap .split-flap-part.top .split-flap-char { top:0; }
 .hero-flap .split-flap-part.bottom .split-flap-char { bottom:0; }
 .hero-phrase { display:block; white-space:pre; font:inherit; }
@@ -615,20 +616,48 @@ button:disabled { opacity:.6; cursor:default; }
 .card-save { position:absolute; z-index:4; top:14px; right:14px; width:44px; height:44px; min-height:44px; padding:0; border:1px solid var(--line-2); }
 .card-save[aria-busy=true] { opacity:.65; }
 .concerts-list .card-save { top:32px; right:8px; }
-/* Each Ticket keeps its opening frame; additional dates scroll within the details pane. */
-.ticket-dialog { height:var(--ticket-height,auto); grid-template-rows:minmax(0,1fr); overflow:hidden; }
-.ticket-dialog:has(.dialog-photo) { min-height:min(400px,calc(100svh - 48px)); }
-.dialog-photo { min-height:0; }
-.dialog-details { min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
+/* The sheet follows the animated dates. The photograph keeps its opening size. */
+.ticket-dialog { grid-template-rows:minmax(0,1fr); overflow:hidden; }
+.dialog-media { display:grid; align-items:center; min-height:0; background:var(--photo-bg); overflow:hidden; }
+.dialog-photo { min-height:0; height:var(--ticket-photo-height,400px); width:100%; }
+.dialog-details { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; gap:0 12px; min-height:0; padding:28px; overflow-y:auto; overscroll-behavior:contain; }
+.dialog-details .ticket { display:contents; }
+.dialog-details .ticket-main,.dialog-details .decision-status { grid-column:1/-1; }
+.dialog-details .ticket-stub { margin:4px 0 0; }
+.dialog-details .dialog-actions { margin:4px 0 0; align-self:end; }
+.dialog-details .ticket-stub a,.dialog-details .save-action { width:100%; }
+.dialog-details .decision-status:empty { display:none; }
+.ticket-dialog .ticket h2 { padding-right:20px; }
 .solo-photo { align-self:start; height:540px; }
 @media(max-width:800px) {
  .ticket-dialog:has(.dialog-photo) { grid-template-rows:auto minmax(0,1fr); }
- .dialog-photo { aspect-ratio:16/10; max-height:35svh; }
+ .dialog-photo img { object-position:center 20%; }
+ .dialog-photo { aspect-ratio:auto; height:min(var(--ticket-photo-height,220px),26svh); max-height:none; transition:height .5s var(--ease); }
+ .ticket-dialog:has(.other-dates[data-expanded=true]) .dialog-photo { height:min(120px,15svh); }
  .solo-photo { height:auto; }
 }
-@media(max-width:640px) { .ticket-dialog { height:100svh; min-height:0; } }
+@media(max-width:640px) {
+ .ticket-dialog { width:calc(100vw - 24px); max-height:calc(100svh - 24px); border-radius:20px; }
+ .dialog-details { padding:20px 18px; }
+ .ticket-dialog .ticket h2 { font-size:34px; margin:8px 0 12px; }
+ .ticket-dialog .ticket p { font-size:14px; line-height:1.4; margin-bottom:12px; }
+ .ticket-dialog .ticket .artist-hint { font-size:12px; }
+ .ticket-dialog .other-venues { gap:12px; }
+ .ticket-dialog .ticket .other-place { margin-bottom:2px; }
+ .ticket-dialog .ticket .other-venue { font-size:12px; margin-bottom:8px; }
+ .ticket-dialog .other-chips a { font-size:13px; padding:6px 10px; }
+ .ticket-dialog .other-dates { margin:8px 0 12px; }
+ .ticket-dialog .dialog-close { top:8px; right:8px; }
+}
+@media(prefers-reduced-motion:reduce) { .dialog-photo { transition:none; } }
 
 .hero-flap .split-flap-digit::before { content:none; display:none; }
 
 .poster-notice { position:fixed; z-index:44; bottom:20px; left:50%; transform:translateX(-50%); width:max-content; max-width:calc(100vw - 32px); padding:12px 18px; margin:0; border-radius:12px; background:var(--ink); color:var(--surface); font-size:14px; box-shadow:var(--shadow); }
 .hero-flap .split-flap-part.top.animated { opacity:1; }
+
+/* Readable photo captions follow their actual content height, including long Artist names. */
+.concerts-grid .concert-card:not(.solo) { display:flex; flex-direction:column; justify-content:flex-end; padding-top:76px; }
+.concerts-grid .concert-card:not(.solo) .card-body { position:relative; inset:auto; margin-top:auto; padding:44px 20px 18px; isolation:isolate; }
+.concerts-grid .concert-card:not(.solo) .card-body::before { content:""; position:absolute; inset:0; z-index:-1; background:linear-gradient(180deg,transparent,#0a1a15ed 32px); }
+.concerts-grid .card-meta,.concerts-grid .card-why,.concerts-grid .card-bill { opacity:1; color:#fff; }

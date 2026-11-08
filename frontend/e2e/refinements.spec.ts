@@ -77,6 +77,12 @@ test("photo bookmark and Ticket toggle the same saved Concert without opening or
   await expect(
     page.getByRole("button", { name: "Save Rhye", exact: true }),
   ).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".poster-notice")).toHaveText(
+    "Rhye removed from Saved Concerts.",
+  );
+  await expect(page.locator(".poster-notice")).toHaveCount(0, {
+    timeout: 6000,
+  });
   await page.reload();
   await page.goto("/saved");
   await expect(
@@ -84,7 +90,7 @@ test("photo bookmark and Ticket toggle the same saved Concert without opening or
   ).toBeVisible();
 });
 
-test("expanding eight dates keeps the Ticket and photo frame fixed while details scroll", async ({
+test("eight dates unfold within the viewport without enlarging the photo or scrolling the details", async ({
   page,
 }, info) => {
   const body = [
@@ -111,28 +117,72 @@ test("expanding eight dates keeps the Ticket and photo frame fixed while details
   await expect(sheet).toHaveAttribute("data-motion-phase", "open");
   const before = await sheet.boundingBox(),
     photo = await page.locator(".dialog-photo").boundingBox();
-  await sheet.getByText("8 more dates", { exact: true }).click();
+  await sheet
+    .getByRole("button", { name: "8 more dates", exact: true })
+    .click();
+  // Sample the actual frame on successive paints, rather than only its final geometry.
+  const heights = await sheet.evaluate(async (e) => {
+    const values: number[] = [];
+    const until = performance.now() + 700;
+    while (performance.now() < until) {
+      values.push(e.getBoundingClientRect().height);
+      await new Promise(requestAnimationFrame);
+    }
+    return values;
+  });
   const after = await sheet.boundingBox(),
     afterPhoto = await page.locator(".dialog-photo").boundingBox();
-  for (const key of ["x", "y", "width", "height"] as const) {
-    expect(Math.abs(before![key] - after![key])).toBeLessThanOrEqual(1);
-    expect(Math.abs(photo![key] - afterPhoto![key])).toBeLessThanOrEqual(1);
+  expect(afterPhoto!.width).toBeCloseTo(photo!.width, 0);
+  expect(afterPhoto!.height).toBeLessThanOrEqual(photo!.height + 1);
+  if (info.project.name === "desktop") {
+    expect(afterPhoto!.height).toBeCloseTo(photo!.height, 0);
+    expect(after!.height).toBeGreaterThan(before!.height + 40);
+    expect(
+      heights.some(
+        (height) => height > before!.height + 5 && height < after!.height - 5,
+      ),
+    ).toBe(true);
+    expect(
+      Math.max(
+        ...heights.slice(1).map((height, i) => Math.abs(height - heights[i])),
+      ),
+    ).toBeLessThan(70);
   }
   await expect(sheet.locator(".other-chips a")).toHaveCount(8);
-  await sheet.locator(".other-chips a").last().scrollIntoViewIfNeeded();
-  await expect(sheet.locator(".other-chips a").last()).toBeVisible();
+  await expect(sheet.locator(".other-chips a").last()).toBeInViewport();
+  await expect(
+    sheet.getByRole("button", { name: "Save", exact: true }),
+  ).toBeInViewport();
+  expect(
+    await sheet
+      .locator(".dialog-details")
+      .evaluate((e) => e.scrollHeight - e.clientHeight),
+  ).toBeLessThanOrEqual(1);
   await expect(
     sheet.getByRole("button", { name: "Close Ticket" }),
   ).toBeInViewport();
   await page.screenshot({ path: info.outputPath("expanded-dates.png") });
   await sheet
-    .getByText("8 more dates", { exact: true })
-    .scrollIntoViewIfNeeded();
-  await sheet.getByText("8 more dates", { exact: true }).click();
-  const collapsedAgain = await sheet.boundingBox();
-  expect(Math.abs(collapsedAgain!.height - before!.height)).toBeLessThanOrEqual(
-    1,
-  );
+    .getByRole("button", { name: "8 more dates", exact: true })
+    .click();
+  await expect
+    .poll(async () =>
+      Math.abs((await sheet.boundingBox())!.height - before!.height),
+    )
+    .toBeLessThanOrEqual(1);
+  await expect
+    .poll(
+      async () => (await sheet.locator(".other-content").boundingBox())!.height,
+    )
+    .toBeLessThan(1);
+  // A clipped descendant still has a DOM box; prove it is out of keyboard navigation.
+  await page.keyboard.press("Tab");
+  await expect(
+    sheet.getByRole("link", {
+      name: `Tickets for ${calvin.poster.recommendations[0].concert.name}`,
+      exact: true,
+    }),
+  ).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(sheet).toHaveCount(0);
 });

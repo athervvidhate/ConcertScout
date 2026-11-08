@@ -38,7 +38,9 @@ function fold(text: string): string {
 }
 
 function pattern(name: string): RegExp {
-  const words = fold(name).trim().split(/\s+/u).map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const words = fold(name).trim().split(/\s+/u).map((word) =>
+    /^(?:and|&)$/iu.test(word) ? "(?:and|&)" : word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+  );
   return new RegExp(`(?<![\\p{L}\\p{N}])(?:the\\s+)?${words.join("\\s+")}(?:['’]s)?(?![\\p{L}\\p{N}])`, "giu");
 }
 

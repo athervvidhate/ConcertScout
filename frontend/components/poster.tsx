@@ -93,6 +93,12 @@ export function Poster({
   const passed = candidates?.names.filter((n) => !picked.has(n)) ?? [];
 
   useEffect(() => {
+    if (!notice || pending.size) return;
+    const timer = setTimeout(() => setNotice(""), 4000);
+    return () => clearTimeout(timer);
+  }, [notice, pending.size]);
+
+  useEffect(() => {
     if (!hasPoster) return;
     const scope = new Choreography();
     void (async () => {
@@ -420,7 +426,11 @@ export function Poster({
                         <Dialog.Description className="sr-only">
                           Concert details and why it fits your Search.
                         </Dialog.Description>
-                        {photo(current, true)}
+                        {current.concert.image && (
+                          <div className="dialog-media">
+                            {photo(current, true)}
+                          </div>
+                        )}
                         <div className="dialog-details">
                           <Ticket
                             recommendation={current}

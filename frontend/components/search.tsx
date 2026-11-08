@@ -33,7 +33,7 @@ const TURNSTILE_SITE_KEY =
   process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "1x00000000000000000000AA";
 
 export function Search() {
-  const examples = useHomeExamples();
+  const { examples, loading: examplesLoading } = useHomeExamples();
   const reduced = useReducedMotion();
   const [activeExample, setActiveExample] = useState(0);
   const [returningHome, setReturningHome] = useState(false);
@@ -432,7 +432,7 @@ export function Search() {
           />
         )}
       <AnimatePresence initial={false}>
-        {home && (
+        {home && (!examplesLoading || spotify.connected) && (
           <motion.div
             key="guide"
             initial={{ opacity: 0, y: reduced ? 0 : 20 }}

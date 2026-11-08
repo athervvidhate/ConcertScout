@@ -15,17 +15,23 @@ export type HomeExample = {
 
 export function useHomeExamples() {
   const [examples, setExamples] = useState<HomeExample[]>([]);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
     const controller = new AbortController();
-    void fetch(`${API_URL}/examples`, { signal: controller.signal })
+    void fetch(`${API_URL}/examples`, {
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]),
+    })
       .then(async (response) =>
         response.ok ? response.json() : { examples: [] },
       )
       .then((data) => {
         if (!controller.signal.aborted) setExamples(data.examples ?? []);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
     return () => controller.abort();
   }, []);
-  return examples;
+  return { examples, loading };
 }

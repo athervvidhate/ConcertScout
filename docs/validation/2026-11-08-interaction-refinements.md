@@ -1,5 +1,7 @@
 # Interaction refinements — November 8, 2026
 
+The later [usability pass](2026-11-08-ui-usability.md) supersedes the fixed-sheet/scrolling dates choice below and records the caption, toast and hero paint corrections.
+
 The owner’s follow-up supersedes the earlier dialog-only Save decision and the rolling headline treatment. This update addresses the reported focus, bookmarks, walkthrough and expanded-date behavior without changing the Search pipeline or source-fact assembly.
 
 ## Reproduction and changes

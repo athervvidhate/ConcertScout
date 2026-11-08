@@ -34,6 +34,8 @@ test.each([
   ["Beyoncé World Tour 2027", ["Beyoncé"]],
   ["Soft Machine", ["Soft Machine."]],
   ["KING NO ONE", ["King No-One"]],
+  ["King Gizzard & The Lizard Wizard", ["King Gizzard and the Lizard Wizard"]],
+  ["King Gizzard and the Lizard Wizard", ["King Gizzard & The Lizard Wizard"]],
   ["Great Lake Swimmers w. Colleen Brown", ["Great Lake Swimmers", "Colleen Brown"]],
 ])("%s says nothing past the Artist", (name, artists) => {
   expect(title(name, artists)).toBeNull();
