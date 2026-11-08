@@ -51,9 +51,10 @@ Upstash holds the public cache, hashed limits, encrypted Spotify sessions and re
 1. Create a Supabase project in US East, near the API's `iad1` region, and apply the migrations with `npx supabase link` and `npx supabase db push` from `frontend/`, with `--workdir ..`. Keep the project on asymmetric JWT signing keys, which new projects use by default.
 2. Under Authentication, set the Site URL to `https://concertscout.app` and allow only the redirect `https://concertscout.app/auth/confirm`. Turn on email confirmation, an 8-character minimum password and secure password change.
 3. Paste `supabase/templates/confirmation.html` and `recovery.html` into the Confirm signup and Reset password email templates. Their links carry a token hash to the confirm page, so they work in any browser.
-4. Add custom SMTP before opening sign-up. Supabase's built-in mail only reaches the project team and sends two emails an hour. Resend works once a sending domain is verified.
+4. Send auth email through Resend before opening sign-up, because Supabase's built-in mail only reaches the project team and sends two emails an hour. Resend's free plan allows 100 emails a day and 3,000 a month. Verify `concertscout.app` in Resend by adding its DNS records in Vercel, create a separate sending-only API key, then under Authentication → SMTP set host `smtp.resend.com`, port `465`, user `resend`, the API key as the password, and a sender such as `Concert Scout <accounts@concertscout.app>`.
 5. For Google, create an OAuth web client in Google Cloud with the redirect `https://<project>.supabase.co/auth/v1/callback`, then enable Google in Supabase with its ID and secret. It needs identity scopes only.
-6. Accept by creating an account by email, signing in on a second device, signing in with Google, resetting a password and deleting a test account.
+6. The free plan pauses a project after a week without database activity, and a paused project stays down until the owner presses Resume in the dashboard. Requests do not wake it. The daily `/warm` cron makes one small database read to keep it active. Supabase also emails a warning about a week before pausing.
+7. Accept by creating an account by email, signing in on a second device, signing in with Google, resetting a password and deleting a test account.
 
 ## Reviewable rollout
 

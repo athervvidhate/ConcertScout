@@ -12,14 +12,19 @@ export type Decision = "saved" | "skipped";
 
 /**
  * Saved Concerts live on the device for a guest and in the account once signed in. The two never
- * mix: signed-in views read only the account, and signing out never copies it to the device.
+ * mix: signing in moves the device's saves into the account, signed-in views read only the
+ * account, and signing out never copies the account back to the device.
  * Skips always stay on the device.
  */
 export type SavedView = {
   where: "device" | "account";
   status: "loading" | "ready" | "failed";
   saved: Recommendation[];
+  // Guest saves this sign-in moved into the account, and those still left on the device.
+  moved?: Moved;
 };
+
+export type Moved = { added: number; left: number };
 
 type AccountSaves = SavedView & { owner: string };
 
@@ -45,11 +50,38 @@ function followAccount() {
   if (owner) void loadAccount(owner);
 }
 
+/**
+ * Signing in moves this device's guest saves into the account. Each one leaves the device only
+ * once the account holds it, so a failed or repeated move loses and duplicates nothing, and the
+ * next sign-in tries what is left.
+ */
+async function moveDeviceSaves(): Promise<Moved | undefined> {
+  const device = readList<Recommendation>(SAVED_KEY);
+  if (device.length === 0) return undefined;
+  try {
+    const saves = device.map(({ concert, reason }) => ({ concert_id: concert.id, reason }));
+    const response = await accountFetch("/saved/import", {
+      method: "POST",
+      body: JSON.stringify({ saves }),
+    });
+    const result: { saved: Recommendation[] } = await response.json();
+    const added = new Set(result.saved.map((r) => r.concert.id));
+    writeDevice(
+      readList<Recommendation>(SAVED_KEY).filter((r) => !added.has(r.concert.id)),
+      readList(SKIPPED_KEY),
+    );
+    return { added: added.size, left: device.length - added.size };
+  } catch {
+    return { added: 0, left: device.length };
+  }
+}
+
 async function loadAccount(owner: string) {
   try {
+    const moved = await moveDeviceSaves();
     const response = await accountFetch("/saved");
     const saved: Recommendation[] = await response.json();
-    if (account?.owner === owner) setAccount({ ...account, status: "ready", saved });
+    if (account?.owner === owner) setAccount({ ...account, status: "ready", saved, moved });
   } catch {
     if (account?.owner === owner) setAccount({ ...account, status: "failed" });
   }
@@ -160,40 +192,6 @@ export async function removeSaved(id: string): Promise<void> {
   }
 }
 
-export type Imported = { added: number; failed: Recommendation[] };
-
-/**
- * Adds this device's Saved Concerts to the account. Each one leaves the device only once the
- * account holds it, so a failed or repeated import loses and duplicates nothing.
- */
-export async function importDeviceSaves(): Promise<Imported> {
-  const signedIn = accountSaves();
-  if (!signedIn) throw new Error("Sign in first");
-  const { owner } = signedIn;
-  const device = readList<Recommendation>(SAVED_KEY);
-  const saves = device.map(({ concert, reason }) => ({ concert_id: concert.id, reason }));
-  const response = await accountFetch("/saved/import", {
-    method: "POST",
-    body: JSON.stringify({ saves }),
-  });
-  const result: { saved: Recommendation[]; failed: string[] } = await response.json();
-  const added = new Set(result.saved.map((r) => r.concert.id));
-  writeDevice(
-    readList<Recommendation>(SAVED_KEY).filter((r) => !added.has(r.concert.id)),
-    readList(SKIPPED_KEY),
-  );
-  if (account?.owner === owner) {
-    const kept = account.saved.filter((r) => !added.has(r.concert.id));
-    setAccount({ ...account, saved: [...kept, ...result.saved] });
-  }
-  return { added: added.size, failed: device.filter((r) => !added.has(r.concert.id)) };
-}
-
-/** Forgets this device's guest saves, for a shared device after signing in. */
-export function forgetDeviceSaves(): void {
-  writeDevice([], readList(SKIPPED_KEY));
-}
-
 function useStored(key: string): string {
   return useSyncExternalStore(
     subscribe,
@@ -215,8 +213,7 @@ function useAccountSaves(): AccountSaves | null | "unknown" {
   );
 }
 
-/** This device's guest saves, whoever is signed in. */
-export function useDeviceSaves(): Recommendation[] {
+function useDeviceSaves(): Recommendation[] {
   const raw = useStored(SAVED_KEY);
   return useMemo(() => parseList<Recommendation>(raw), [raw]);
 }

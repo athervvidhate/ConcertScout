@@ -6,4 +6,4 @@ The browser holds the Supabase session. FastAPI checks each access token against
 
 Accounts never gate Search, and guests still save on their device. Spotify remains a separate, device-bound connection (ADR 0003). Making it belong to an account is its own issue.
 
-Supabase's free plan pauses a project after a week without activity, and its paid plan costs more than this app's whole monthly budget. A paused project stops sign-in and synced saves, not Search.
+Supabase's free plan pauses a project after a week without activity, and its paid plan costs more than this app's whole monthly budget. A paused project stays down until its owner resumes it, which stops sign-in and synced saves but not Search, so the daily cron makes one small database read to keep the project active.

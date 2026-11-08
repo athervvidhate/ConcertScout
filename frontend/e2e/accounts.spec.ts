@@ -110,7 +110,7 @@ test("a new account confirms by email, and its saves follow it to another browse
   await elsewhere.context().close();
 });
 
-test("guest saves join an account only when asked, and signing out or switching shows none of them", async ({ page }) => {
+test("signing in moves guest saves into the account, and signing out or switching shows none of them", async ({ page }) => {
   const [first, second] = [await confirmedPerson(), await confirmedPerson()];
   await page.goto("/");
   await saveFirstConcert(page);
@@ -119,11 +119,8 @@ test("guest saves join an account only when asked, and signing out or switching 
   await page.goto("/saved");
   await expect(page.getByText("These saves stay on this device.")).toBeVisible();
   await signIn(page, first);
-  const offer = page.getByRole("region", { name: "This device's Saved Concerts" });
-  await expect(offer).toContainText("This device has 1 Saved Concert");
-  await expect(page.getByText("Nothing saved yet.")).toBeVisible();
-  await offer.getByRole("button", { name: "Add to my account" }).click();
-  await expect(page.getByText("Added 1 Concert to your account.")).toBeVisible();
+  await expect(page.getByText("Moved 1 Saved Concert from this device into your account.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Tickets for Contract Concert One" })).toBeVisible();
   expect(await savedNames(page)).toEqual(["Tickets for Contract Concert One"]);
   expect(await page.evaluate(() => localStorage.getItem("concert-scout-saved"))).toBe("[]");
 
@@ -134,7 +131,7 @@ test("guest saves join an account only when asked, and signing out or switching 
 
   await signIn(page, second);
   expect(await savedNames(page)).toEqual([]);
-  await expect(page.getByRole("region", { name: "This device's Saved Concerts" })).toHaveCount(0);
+  await expect(page.getByText(/Moved .* into your account/)).toHaveCount(0);
 });
 
 test("a forgotten password resets by email, and a deleted account cannot sign in", async ({ page }) => {

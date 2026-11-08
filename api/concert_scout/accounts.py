@@ -145,7 +145,7 @@ def router(
     async def import_saves(
         body: ImportRequest, account: Annotated[Account, Depends(current_account)]
     ) -> Imported:
-        """Adds a device's saves. Importing the same saves again changes nothing."""
+        """Moves a device's guest saves in at sign-in. Importing them again changes nothing."""
         gate = asyncio.Semaphore(IMPORT_CONCURRENCY)
         unique = {save.concert_id: save for save in body.saves}
 

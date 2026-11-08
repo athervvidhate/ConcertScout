@@ -17,6 +17,7 @@ from pydantic import SecretStr
 
 from concert_scout import accounts
 from concert_scout.app import create_app
+from concert_scout.sources import supabase
 from tests import supabase_stack as stack
 from tests.contracts import CONCERTS, contract_model, forbidden_http, install_sources, settings_with
 
@@ -170,3 +171,10 @@ async def test_deleting_an_account_needs_a_recent_sign_in_and_removes_its_saves(
         )
     assert rows.status_code == 200
     assert rows.json() == []
+
+
+async def test_the_daily_keep_awake_reaches_the_database() -> None:
+    async with supabase.make_client(stack.URL) as client:
+        await supabase.keep_awake(client, SecretStr(stack.secret_key()))
+        with pytest.raises(supabase.SupabaseError):
+            await supabase.keep_awake(client, SecretStr("sb_secret_not_this_project"))

@@ -38,7 +38,7 @@ export default function PrivacyPage() {
         <p>Access and refresh tokens are encrypted in Redis for at most seven days, and the Artist list for at most one day. The browser holds an opaque HttpOnly connection cookie. Disconnect Spotify inside Your Taste to delete the stored tokens, Artist list and cookie immediately. If you clear cookies first, the server entry expires on its own within seven days.</p>
         <h2>An optional account</h2>
         <p>You can create an account with Google or an email and password. Supabase stores your email, sign-in details and Saved Concerts. Google sign-in shares only your name, email and profile picture with Supabase. While you are signed in, each Saved Concert is stored in your account with its Ticketmaster facts and reason, and you can see it on any device you sign in on. Skips, imported Taste, your location and any Spotify connection still stay on each device.</p>
-        <p>Saves made before signing in stay on this device unless you choose to add them to your account. Deleting your account on the Account page removes your sign-in and every Saved Concert in it at once.</p>
+        <p>Signing in moves any Saved Concerts made on this device before signing in into your account. Deleting your account on the Account page removes your sign-in and every Saved Concert in it at once.</p>
         <h2>What stays and for how long</h2>
         <ul>
           <li>A signed-in account keeps its Saved Concerts until you remove them or delete the account. A guest’s Saved Concerts, skipped choices and imported Taste stay in this browser until you remove them or clear site storage. Past Saved Concerts are hidden from the Saved page.</li>

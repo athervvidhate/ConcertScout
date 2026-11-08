@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { AccountDialog } from "@/components/account-dialog";
-import { DeviceSavesOffer } from "@/components/device-saves-offer";
+import { MovedSaves } from "@/components/moved-saves";
 import { deleteAccount, signOut, useAccount } from "@/lib/account";
 import { SearchRefused } from "@/lib/search";
 
@@ -69,7 +69,7 @@ export function AccountSettings() {
         Your <Link href="/saved">Saved Concerts</Link> follow this account to every device you sign
         in on. Your Taste and any Spotify connection stay on each device for now.
       </p>
-      <DeviceSavesOffer />
+      <MovedSaves />
       <div className="account-actions">
         <button type="button" onClick={leave} disabled={busy}>
           Sign out

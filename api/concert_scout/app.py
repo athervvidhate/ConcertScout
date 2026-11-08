@@ -264,6 +264,11 @@ def create_app(
         ) -> list[warm.Warmed]:
             if not hmac.compare_digest(authorization.encode(), expected.encode()):
                 raise Refused(401, "not_scheduler", "Only the scheduler can warm the cache.")
+            if accounts_client and settings.supabase_secret_key:
+                try:
+                    await supabase.keep_awake(accounts_client, settings.supabase_secret_key)
+                except supabase.SupabaseError as exc:
+                    logger.warning("Supabase keep-awake failed: %s", exc)
             return await warm.warm(services, dt.datetime.now(dt.UTC))
 
     @app.get("/artist", response_model=ArtistProfiles, response_model_exclude_none=True)

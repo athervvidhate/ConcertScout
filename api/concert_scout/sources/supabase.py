@@ -183,3 +183,12 @@ async def delete_user(client: httpx.AsyncClient, secret_key: SecretStr, account:
         "DELETE", f"/auth/v1/admin/users/{account.id}", headers=_as_server(secret_key)
     )
     await _send(client, request)
+
+
+async def keep_awake(client: httpx.AsyncClient, secret_key: SecretStr) -> None:
+    """One small database read. A free project pauses after a week without database activity, and
+    a paused project stays down until its owner resumes it, so the daily cron makes this call."""
+    request = client.build_request(
+        "GET", TABLE, params={"select": "concert_id", "limit": 1}, headers=_as_server(secret_key)
+    )
+    await _send(client, request)

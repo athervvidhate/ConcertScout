@@ -249,7 +249,7 @@ body:has(.information)::before { animation:none; opacity:.35; }
 .account-page label { display:grid; gap:4px; font-weight:600; }
 .account-page input { box-sizing:border-box; width:100%; min-height:48px; padding:8px 12px; border:2px solid #10291F; border-radius:8px; background:#fff; color:#10291F; font:inherit; }
 .account-page form button { justify-self:start; min-height:48px; padding:0 18px; border:0; border-radius:8px; background:#10291F; color:#FFD3E4; font:700 18px var(--font-body),sans-serif; cursor:pointer; }
-.account-page .account-offer { margin:0 0 18px; }
+.account-page .account-note { margin:0 0 18px; }
 .account-page [role=alert] { font-weight:700; }
 .information-date { font-size:14px; margin-top:28px; }
 @media(max-width:560px) { .information article { font-size:17px; } }

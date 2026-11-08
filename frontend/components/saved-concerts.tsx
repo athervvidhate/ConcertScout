@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 
 import { AccountDialog } from "@/components/account-dialog";
-import { DeviceSavesOffer } from "@/components/device-saves-offer";
+import { MovedSaves } from "@/components/moved-saves";
 import { Ticket } from "@/components/ticket";
 import { useAccount } from "@/lib/account";
 import { removeSaved, upcoming, useSavedConcerts } from "@/lib/saved";
@@ -20,7 +20,7 @@ function SignInPrompt() {
   if (dismissed) return null;
   return (
     <section className="account-offer" aria-label="Sync your Saved Concerts">
-      <p>These saves stay on this device. Sign in to keep your Saved Concerts on every device.</p>
+      <p>These saves stay on this device. Sign in to move them into an account and keep them on every device.</p>
       <div className="account-actions">
         <button type="button" onClick={() => setOpen(true)}>
           Sign in
@@ -79,7 +79,7 @@ export function SavedConcerts() {
   return (
     <>
       {account.status === "guest" && <SignInPrompt />}
-      <DeviceSavesOffer />
+      <MovedSaves />
       {error && (
         <p className="account-note" role="alert">
           {error}
