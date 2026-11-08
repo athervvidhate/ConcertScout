@@ -1,0 +1,395 @@
+{
+  "events": [
+    {
+      "id": "2001937089726",
+      "name": {
+        "text": "Diwali Fest : Indian Food & Music Festival | Nov 07 | Los Angeles",
+        "html": "Diwali Fest : Indian Food &amp; Music Festival | Nov 07 | Los Angeles"
+      },
+      "url": "https://www.eventbrite.com/e/diwali-fest-indian-food-music-festival-nov-07-los-angeles-tickets-2001937089726",
+      "start": {
+        "timezone": "America/Los_Angeles",
+        "utc": "2026-11-08T02:00:00Z",
+        "local": "2026-11-07T18:00:00"
+      },
+      "end": {
+        "timezone": "America/Los_Angeles",
+        "utc": "2026-11-08T07:00:00Z",
+        "local": "2026-11-07T23:00:00"
+      },
+      "hide_start_date": false,
+      "hide_end_date": false,
+      "listed": true,
+      "shareable": true,
+      "online_event": false,
+      "is_series_parent": false,
+      "status": "started",
+      "category_id": "103",
+      "category": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/categories/103/",
+        "id": "103",
+        "name": "Music",
+        "name_localized": "Music",
+        "short_name": "Music",
+        "short_name_localized": "Music"
+      },
+      "format": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/formats/11/",
+        "id": "11",
+        "name": "Party or Social Gathering",
+        "name_localized": "Party or Social Gathering",
+        "short_name": "Party",
+        "short_name_localized": "Party"
+      },
+      "venue": {
+        "address": {
+          "address_1": "6021 Hollywood Boulevard",
+          "address_2": "",
+          "city": "Los Angeles",
+          "region": "CA",
+          "postal_code": "90028",
+          "country": "US",
+          "latitude": "34.1019004",
+          "longitude": "-118.320922",
+          "localized_address_display": "6021 Hollywood Boulevard, Los Angeles, CA 90028",
+          "localized_area_display": "Los Angeles, CA",
+          "localized_multi_line_address_display": [
+            "6021 Hollywood Boulevard",
+            "Los Angeles, CA 90028"
+          ]
+        },
+        "resource_uri": "https://www.eventbriteapi.com/v3/venues/299526628/",
+        "id": "299526628",
+        "age_restriction": null,
+        "capacity": null,
+        "name": "Academy LA",
+        "latitude": "34.1019004",
+        "longitude": "-118.320922"
+      },
+      "logo": {
+        "original": {
+          "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1194070711%2F638997145813%2F1%2Foriginal.20260922-031830?auto=format%2Ccompress&q=75&sharp=10&s=adc71b0c053065a0cbbfb5ba60316f05",
+          "width": 1920,
+          "height": 1080
+        },
+        "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1194070711%2F638997145813%2F1%2Foriginal.20260922-031830?crop=focalpoint&fit=crop&h=200&w=450&auto=format%2Ccompress&q=75&sharp=10&fp-x=0.5&fp-y=0.5&s=956814eff237299fe8f87d5e096e2d1e"
+      },
+      "ticket_availability": {
+        "has_available_tickets": false,
+        "minimum_ticket_price": {
+          "currency": "USD",
+          "value": 1251,
+          "major_value": "12.51",
+          "display": "12.51 USD"
+        },
+        "maximum_ticket_price": {
+          "currency": "USD",
+          "value": 10855,
+          "major_value": "108.55",
+          "display": "108.55 USD"
+        },
+        "is_sold_out": true,
+        "start_sales_date": null,
+        "waitlist_available": false
+      },
+      "organizer_id": "36278734843"
+    },
+    {
+      "id": "2003530258938",
+      "name": {
+        "text": "Karan Aujla P-POP Culture Unofficial Afterparty Los Angeles @33 Taps, LA",
+        "html": "Karan Aujla P-POP Culture Unofficial Afterparty Los Angeles @33 Taps, LA"
+      },
+      "url": "https://www.eventbrite.com/e/karan-aujla-p-pop-culture-unofficial-afterparty-los-angeles-33-taps-la-tickets-2003530258938",
+      "start": {
+        "timezone": "America/Los_Angeles",
+        "utc": "2026-11-10T06:00:00Z",
+        "local": "2026-11-09T22:00:00"
+      },
+      "end": {
+        "timezone": "America/Los_Angeles",
+        "utc": "2026-11-10T10:00:00Z",
+        "local": "2026-11-10T02:00:00"
+      },
+      "hide_start_date": false,
+      "hide_end_date": false,
+      "listed": true,
+      "shareable": true,
+      "online_event": false,
+      "is_series_parent": false,
+      "status": "live",
+      "category_id": "103",
+      "category": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/categories/103/",
+        "id": "103",
+        "name": "Music",
+        "name_localized": "Music",
+        "short_name": "Music",
+        "short_name_localized": "Music"
+      },
+      "format": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/formats/11/",
+        "id": "11",
+        "name": "Party or Social Gathering",
+        "name_localized": "Party or Social Gathering",
+        "short_name": "Party",
+        "short_name_localized": "Party"
+      },
+      "venue": {
+        "address": {
+          "address_1": "1240 South Figueroa Street",
+          "address_2": "",
+          "city": "Los Angeles",
+          "region": "CA",
+          "postal_code": "90015",
+          "country": "US",
+          "latitude": "34.0410796",
+          "longitude": "-118.2670979",
+          "localized_address_display": "1240 South Figueroa Street, Los Angeles, CA 90015",
+          "localized_area_display": "Los Angeles, CA",
+          "localized_multi_line_address_display": [
+            "1240 South Figueroa Street",
+            "Los Angeles, CA 90015"
+          ]
+        },
+        "resource_uri": "https://www.eventbriteapi.com/v3/venues/299882474/",
+        "id": "299882474",
+        "age_restriction": null,
+        "capacity": null,
+        "name": "33 Taps DTLA",
+        "latitude": "34.0410796",
+        "longitude": "-118.2670979"
+      },
+      "logo": {
+        "original": {
+          "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1195980176%2F638997145813%2F1%2Foriginal.20261016-224216?auto=format%2Ccompress&q=75&sharp=10&s=bf8ba339e83ce9375743d1e5a550a4d2",
+          "width": 1920,
+          "height": 1080
+        },
+        "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1195980176%2F638997145813%2F1%2Foriginal.20261016-224216?crop=focalpoint&fit=crop&h=200&w=450&auto=format%2Ccompress&q=75&sharp=10&fp-x=0.5&fp-y=0.5&s=06c6a30b3ff85babfa683153b6b32589"
+      },
+      "ticket_availability": {
+        "has_available_tickets": false,
+        "minimum_ticket_price": {
+          "currency": "USD",
+          "value": 1464,
+          "major_value": "14.64",
+          "display": "14.64 USD"
+        },
+        "maximum_ticket_price": {
+          "currency": "USD",
+          "value": 10855,
+          "major_value": "108.55",
+          "display": "108.55 USD"
+        },
+        "is_sold_out": true,
+        "start_sales_date": null,
+        "waitlist_available": false
+      },
+      "organizer_id": "36278734843"
+    },
+    {
+      "id": "2003634586986",
+      "name": {
+        "text": "Karan Aujla P-POP Culture Unofficial Afterparty W. DC @The Mayflower",
+        "html": "Karan Aujla P-POP Culture Unofficial Afterparty W. DC @The Mayflower"
+      },
+      "url": "https://www.eventbrite.com/e/karan-aujla-p-pop-culture-unofficial-afterparty-w-dc-the-mayflower-tickets-2003634586986",
+      "start": {
+        "timezone": "America/New_York",
+        "utc": "2026-11-21T03:00:00Z",
+        "local": "2026-11-20T22:00:00"
+      },
+      "end": {
+        "timezone": "America/New_York",
+        "utc": "2026-11-21T08:00:00Z",
+        "local": "2026-11-21T03:00:00"
+      },
+      "hide_start_date": false,
+      "hide_end_date": false,
+      "listed": true,
+      "shareable": true,
+      "online_event": false,
+      "is_series_parent": false,
+      "status": "live",
+      "category_id": "103",
+      "category": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/categories/103/",
+        "id": "103",
+        "name": "Music",
+        "name_localized": "Music",
+        "short_name": "Music",
+        "short_name_localized": "Music"
+      },
+      "format": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/formats/11/",
+        "id": "11",
+        "name": "Party or Social Gathering",
+        "name_localized": "Party or Social Gathering",
+        "short_name": "Party",
+        "short_name_localized": "Party"
+      },
+      "venue": {
+        "address": {
+          "address_1": "1127 Connecticut Avenue Northwest",
+          "address_2": "",
+          "city": "Washington",
+          "region": "DC",
+          "postal_code": "20036",
+          "country": "US",
+          "latitude": "38.9046238",
+          "longitude": "-77.03989949999999",
+          "localized_address_display": "1127 Connecticut Avenue Northwest, Washington, DC 20036",
+          "localized_area_display": "Washington, DC",
+          "localized_multi_line_address_display": [
+            "1127 Connecticut Avenue Northwest",
+            "Washington, DC 20036"
+          ]
+        },
+        "resource_uri": "https://www.eventbriteapi.com/v3/venues/299913307/",
+        "id": "299913307",
+        "age_restriction": null,
+        "capacity": null,
+        "name": "The Mayflower Hotel, Autograph Collection",
+        "latitude": "38.9046238",
+        "longitude": "-77.03989949999999"
+      },
+      "logo": {
+        "original": {
+          "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1196142994%2F638997145813%2F1%2Foriginal.20261019-225039?auto=format%2Ccompress&q=75&sharp=10&s=a7089a3d376f07dd5c52c684bcd906a1",
+          "width": 1774,
+          "height": 887
+        },
+        "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1196142994%2F638997145813%2F1%2Foriginal.20261019-225039?crop=focalpoint&fit=crop&h=200&w=450&auto=format%2Ccompress&q=75&sharp=10&fp-x=0.5&fp-y=0.5&s=ddf7a3dd7ddc0cc87f95152878a8562a"
+      },
+      "ticket_availability": {
+        "has_available_tickets": true,
+        "minimum_ticket_price": {
+          "currency": "USD",
+          "value": 1552,
+          "major_value": "15.52",
+          "display": "15.52 USD"
+        },
+        "maximum_ticket_price": {
+          "currency": "USD",
+          "value": 11506,
+          "major_value": "115.06",
+          "display": "115.06 USD"
+        },
+        "is_sold_out": false,
+        "start_sales_date": {
+          "timezone": "America/New_York",
+          "utc": "2026-10-12T12:00:00Z",
+          "local": "2026-10-12T08:00:00"
+        },
+        "waitlist_available": false
+      },
+      "organizer_id": "36278734843"
+    },
+    {
+      "id": "2004504132821",
+      "name": {
+        "text": "Bollywood Blackout: Bollywood Party Ft. Prabh @Believe Hall ATL | Nov 21",
+        "html": "Bollywood Blackout: Bollywood Party Ft. Prabh @Believe Hall ATL | Nov 21"
+      },
+      "url": "https://www.eventbrite.com/e/bollywood-blackout-bollywood-party-ft-prabh-believe-hall-atl-nov-21-tickets-2004504132821",
+      "start": {
+        "timezone": "America/New_York",
+        "utc": "2026-11-22T03:00:00Z",
+        "local": "2026-11-21T22:00:00"
+      },
+      "end": {
+        "timezone": "America/New_York",
+        "utc": "2026-11-22T07:00:00Z",
+        "local": "2026-11-22T02:00:00"
+      },
+      "hide_start_date": false,
+      "hide_end_date": false,
+      "listed": true,
+      "shareable": true,
+      "online_event": false,
+      "is_series_parent": false,
+      "status": "live",
+      "category_id": "105",
+      "category": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/categories/105/",
+        "id": "105",
+        "name": "Performing & Visual Arts",
+        "name_localized": "Performing & Visual Arts",
+        "short_name": "Arts",
+        "short_name_localized": "Arts"
+      },
+      "format": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/formats/11/",
+        "id": "11",
+        "name": "Party or Social Gathering",
+        "name_localized": "Party or Social Gathering",
+        "short_name": "Party",
+        "short_name_localized": "Party"
+      },
+      "venue": {
+        "address": {
+          "address_1": "181 Ralph David Abernathy Boulevard",
+          "address_2": "",
+          "city": "Atlanta",
+          "region": "GA",
+          "postal_code": "30312",
+          "country": "US",
+          "latitude": "33.73704560000001",
+          "longitude": "-84.3937318",
+          "localized_address_display": "181 Ralph David Abernathy Boulevard, Atlanta, GA 30312",
+          "localized_area_display": "Atlanta, GA",
+          "localized_multi_line_address_display": [
+            "181 Ralph David Abernathy Boulevard",
+            "Atlanta, GA 30312"
+          ]
+        },
+        "resource_uri": "https://www.eventbriteapi.com/v3/venues/299140594/",
+        "id": "299140594",
+        "age_restriction": null,
+        "capacity": null,
+        "name": "Believe Music Hall",
+        "latitude": "33.73704560000001",
+        "longitude": "-84.3937318"
+      },
+      "logo": {
+        "original": {
+          "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1197467207%2F638997145813%2F1%2Foriginal.20261106-232211?auto=format%2Ccompress&q=75&sharp=10&s=b50426b737d8e43141d986a49ce865b7",
+          "width": 1920,
+          "height": 1080
+        },
+        "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1197467207%2F638997145813%2F1%2Foriginal.20261106-232211?crop=focalpoint&fit=crop&h=200&w=450&auto=format%2Ccompress&q=75&sharp=10&fp-x=0.515&fp-y=0.103&s=3c002c29ff72b01d077c0b1f652ac64f"
+      },
+      "ticket_availability": {
+        "has_available_tickets": true,
+        "minimum_ticket_price": {
+          "currency": "USD",
+          "value": 1944,
+          "major_value": "19.44",
+          "display": "19.44 USD"
+        },
+        "maximum_ticket_price": {
+          "currency": "USD",
+          "value": 11821,
+          "major_value": "118.21",
+          "display": "118.21 USD"
+        },
+        "is_sold_out": false,
+        "start_sales_date": {
+          "timezone": "America/New_York",
+          "utc": "2026-10-05T23:00:00Z",
+          "local": "2026-10-05T19:00:00"
+        },
+        "waitlist_available": false
+      },
+      "organizer_id": "36278734843"
+    }
+  ],
+  "pagination": {
+    "object_count": 4,
+    "page_number": 1,
+    "page_size": 50,
+    "page_count": 1,
+    "has_more_items": false
+  }
+}
