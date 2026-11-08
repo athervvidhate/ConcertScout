@@ -17,18 +17,8 @@ class Settings(BaseSettings):
     typesafe_api_key: SecretStr
     lastfm_key: SecretStr | None = None
     jbd_api_key: SecretStr | None = None
-    jambase_regions: list[str] = ["US-CA"]
-    jambase_days: int = Field(default=30, ge=1, le=180)
-
-    @field_validator("jambase_regions")
-    @classmethod
-    def us_regions(cls, values: list[str]) -> list[str]:
-        if any(
-            len(v) != 5 or not v.startswith("US-") or not v[3:].isalpha() or v != v.upper()
-            for v in values
-        ):
-            raise ValueError("JamBase regions must use US state codes such as US-CA")
-        return list(dict.fromkeys(values))
+    # How far ahead the national JamBase catalog reaches. The Developer plan allows 180.
+    jambase_days: int = Field(default=90, ge=1, le=180)
 
     redis_url: str = "redis://127.0.0.1:6379/0"
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]

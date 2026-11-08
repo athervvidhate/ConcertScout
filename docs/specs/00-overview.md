@@ -30,7 +30,7 @@ Terms follow [GLOSSARY.md](../../GLOSSARY.md). Choices with lasting trade-offs l
 | Models | Claude Haiku 5.5 (`claude-haiku-5-5`) reads the Search and writes reasons. Typesafe Jev (`jev-1.14.0`) grades the shortlist |
 | Agent library | Pydantic AI, with Pydantic Evals and OpenTelemetry |
 | Model calls per Search | Three: the interpreter, Jev grades and Haiku reasons |
-| Concert data | Ticketmaster Discovery, plus a daily JamBase catalog for configured US states |
+| Concert data | Ticketmaster Discovery, plus a national JamBase catalog synced daily |
 | Accounts | None in this rebuild. Saved Concerts live in the browser |
 | Streaming | SSE directly from the browser to FastAPI |
 | Money | $10-15 a month in total, no affiliate links, no ads |

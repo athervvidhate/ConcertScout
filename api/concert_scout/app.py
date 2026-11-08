@@ -16,7 +16,7 @@ from pydantic_ai.models import Model
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from concert_scout import cache, feedback, interpreter, limits, security, spotify, warm
+from concert_scout import cache, feedback, interpreter, limits, security, spotify, sync, warm
 from concert_scout.config import Settings
 from concert_scout.models import ArtistProfiles, ImportedTaste, Place, SearchError
 from concert_scout.pipeline import (
@@ -102,7 +102,6 @@ def make_services(
         jambase=jambase.make_client(settings.jbd_api_key.get_secret_value(), transport)
         if settings.jbd_api_key
         else None,
-        jambase_regions=tuple(settings.jambase_regions) if settings.jbd_api_key else (),
         jambase_days=settings.jambase_days,
     )
 
@@ -258,6 +257,15 @@ def create_app(
             if not hmac.compare_digest(authorization.encode(), expected.encode()):
                 raise Refused(401, "not_scheduler", "Only the scheduler can warm the cache.")
             return await warm.warm(services, dt.datetime.now(dt.UTC))
+
+        # Vercel's scheduler, once a day: the JamBase catalog, then MusicBrainz IDs.
+        @app.get("/sync", include_in_schema=False)
+        async def sync_catalog(
+            authorization: Annotated[str, Header()] = "",
+        ) -> list[sync.Step]:
+            if not hmac.compare_digest(authorization.encode(), expected.encode()):
+                raise Refused(401, "not_scheduler", "Only the scheduler can sync the catalog.")
+            return await sync.run(services, dt.datetime.now(dt.UTC))
 
     @app.get("/artist", response_model=ArtistProfiles, response_model_exclude_none=True)
     async def artist(

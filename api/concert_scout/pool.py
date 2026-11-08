@@ -7,10 +7,10 @@ import httpx
 from pydantic import BaseModel
 from redis.asyncio import Redis
 
-from concert_scout import cache, clock
+from concert_scout import cache, catalog, clock
 from concert_scout.models import Concert, Place
 from concert_scout.names import normalize
-from concert_scout.sources import jambase, ticketmaster
+from concert_scout.sources import ticketmaster
 
 CACHE_TTL = dt.timedelta(hours=6)
 ELSEWHERE_SIZE = 12
@@ -47,8 +47,6 @@ async def find_concerts(
     end: dt.date | None,
     now: dt.datetime,
     on_found: ticketmaster.OnPage | None = None,
-    *,
-    jambase_regions: Sequence[str] = (),
 ) -> list[Concert]:
     """Every Concert for the Search, seed Artists first, then the pool soonest first.
 
@@ -91,7 +89,8 @@ async def find_concerts(
     from_seeds = [c for group in seeds for c in group if _ahead(c, start, seed_last, now)]
     from_pool = [c for group in chunks for c in group if _ahead(c, start, last, now)]
     primary = list({c.id: c for c in [*from_seeds, *from_pool]}.values())
-    extra = await jambase.cached_concerts(redis, jambase_regions, place, artists, start, end, now)
+    # The JamBase catalog is local, so this never waits on JamBase.
+    extra = await catalog.concerts_near(redis, place, start, end, now) if place else []
     merged = merge_sources(primary, extra)
     if on_found and (added := merged[len(primary) :]):
         on_found(added)

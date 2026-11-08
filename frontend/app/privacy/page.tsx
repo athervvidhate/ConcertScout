@@ -40,7 +40,7 @@ export default function PrivacyPage() {
         <h2>What stays and for how long</h2>
         <ul>
           <li>Saved Concerts, skipped choices and imported Taste stay in this browser until you remove them or clear site storage. Past Saved Concerts are hidden from the Saved page.</li>
-          <li>Ticketmaster Concert data is cached for six hours, JamBase Concert data for up to four days, Artist metadata and similarity for seven days, and place lookups for thirty days.</li>
+          <li>Ticketmaster Concert data is cached for six hours, JamBase Concert data until the Concert has passed, refreshed daily, Artist metadata and similarity for seven days, and place lookups for thirty days.</li>
           <li>Hourly limits use a hash of the client address, not a raw address in Redis. Spend counters hold numeric totals.</li>
           <li>App traces record step times, token counts and cost. They omit Search text, Taste, exception contents and Spotify account data.</li>
         </ul>

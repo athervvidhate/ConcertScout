@@ -76,8 +76,7 @@ class Services:
     model: Model
     turnstile: httpx.AsyncClient
     jambase: httpx.AsyncClient | None = None
-    jambase_regions: tuple[str, ...] = ()
-    jambase_days: int = 30
+    jambase_days: int = 90
 
 
 async def find_artist_profile(name: str, services: Services) -> ArtistProfile:
@@ -315,7 +314,6 @@ async def _steps(
                 interpretation.end,
                 now,
                 on_found=tag_fetch.add if wants_tags else None,
-                jambase_regions=services.jambase_regions,
             )
 
     # Tags only score a Taste, so a place-only Search never asks for them.
