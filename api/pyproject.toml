@@ -10,6 +10,7 @@ dependencies = [
     "httpx>=0.28.1",
     "httpx-retries>=0.6.0",
     "httpx2>=2.16.0",
+    "joserfc>=1.8.0",
     "opentelemetry-sdk>=1.45.2",
     "pydantic-ai-slim[anthropic]>=2.66.0",
     "pydantic-settings>=2.16.2",
@@ -45,8 +46,11 @@ venv = ".venv"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-addopts = "-m 'not live'"
-markers = ["live: opt-in checks against real external providers, requiring local keys"]
+addopts = "-m 'not live and not supabase'"
+markers = [
+    "live: opt-in checks against real external providers, requiring local keys",
+    "supabase: account checks against the local Supabase stack, started with `make supabase`",
+]
 
 [dependency-groups]
 dev = [

@@ -31,7 +31,7 @@ Terms follow [GLOSSARY.md](../../GLOSSARY.md). Choices with lasting trade-offs l
 | Agent library | Pydantic AI, with Pydantic Evals and OpenTelemetry |
 | Model calls per Search | Three: the interpreter, Jev grades and Haiku reasons |
 | Concert data | Ticketmaster Discovery only |
-| Accounts | None in this rebuild. Saved Concerts live in the browser |
+| Accounts | Optional, on Supabase, with Google or email and password. They sync Saved Concerts ([ADR 0004](../adr/0004-optional-accounts-on-supabase.md)). Guests save in the browser |
 | Streaming | SSE directly from the browser to FastAPI |
 | Money | $10-15 a month in total, no affiliate links, no ads |
 | Development | Local, run like a production server |
@@ -50,11 +50,16 @@ FastAPI service
    |-- Artist matching: MusicBrainz, ListenBrainz, Last.fm
    |-- ranker: Jev grades each ID, Haiku explains the Poster
    `-- code fills in facts from the source record
+
+Browser (Next.js) --sign-in--> Supabase Auth
+   |  /account, with the Supabase access token
+   v
+FastAPI service --> Supabase Postgres (Saved Concerts, row-level security)
 ```
 
 ## Out of scope
 
-Accounts, chat, other Concert sources, buying tickets inside the app, ads, and any paid tier.
+Chat, other Concert sources, buying tickets inside the app, ads, and any paid tier.
 
 ## Open items
 

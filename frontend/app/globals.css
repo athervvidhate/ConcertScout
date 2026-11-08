@@ -230,6 +230,27 @@ body:has(.information)::before { animation:none; opacity:.35; }
 .information p { margin:0 0 18px; }
 .information a { color:inherit; text-underline-offset:3px; }
 .information li { margin-bottom:10px; }
+
+.account-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.account-actions button { min-height:48px; padding:0 18px; border:2px solid currentColor; border-radius:8px; background:transparent; color:inherit; font:700 18px var(--font-body),sans-serif; cursor:pointer; }
+.account-actions button:first-child { background:#10291F; border-color:#10291F; color:#FFD3E4; }
+.account-actions button:hover:not(:disabled) { background:#FFD3E4; border-color:#10291F; color:#10291F; }
+.account-actions button:disabled { opacity:.5; cursor:default; }
+.account-actions .account-danger,.account-actions .account-danger:hover:not(:disabled) { background:#8C1D18; border-color:#8C1D18; color:#fff; }
+.account-panel .account-actions button:first-child { background:#FFD3E4; border-color:#FFD3E4; color:#10291F; }
+.account-panel .account-actions button:hover:not(:disabled) { background:#fff; border-color:#fff; }
+.account-or { font-size:16px; opacity:.8; }
+.account-switch { display:flex; flex-wrap:wrap; gap:4px 18px; margin-top:auto; }
+.account-switch button { min-height:44px; padding:0; border:0; background:none; color:inherit; font:600 17px var(--font-body),sans-serif; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+.account-offer { display:grid; gap:12px; max-width:940px; margin:0 auto 24px; padding:16px 18px; border:3px solid #10291F; border-radius:12px; text-align:left; font:500 18px/1.45 var(--font-body),sans-serif; }
+.account-offer p { margin:0; }
+.account-note { max-width:940px; margin:0 auto 20px; text-align:left; font:600 18px/1.45 var(--font-body),sans-serif; }
+.account-page form { display:grid; gap:14px; max-width:420px; margin-bottom:18px; }
+.account-page label { display:grid; gap:4px; font-weight:600; }
+.account-page input { box-sizing:border-box; width:100%; min-height:48px; padding:8px 12px; border:2px solid #10291F; border-radius:8px; background:#fff; color:#10291F; font:inherit; }
+.account-page form button { justify-self:start; min-height:48px; padding:0 18px; border:0; border-radius:8px; background:#10291F; color:#FFD3E4; font:700 18px var(--font-body),sans-serif; cursor:pointer; }
+.account-page .account-offer { margin:0 0 18px; }
+.account-page [role=alert] { font-weight:700; }
 .information-date { font-size:14px; margin-top:28px; }
 @media(max-width:560px) { .information article { font-size:17px; } }
 

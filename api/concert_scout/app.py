@@ -16,7 +16,7 @@ from pydantic_ai.models import Model
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from concert_scout import cache, feedback, interpreter, limits, security, spotify, warm
+from concert_scout import accounts, cache, feedback, interpreter, limits, security, spotify, warm
 from concert_scout.config import Settings
 from concert_scout.models import ArtistProfiles, ImportedTaste, Place, SearchError
 from concert_scout.pipeline import (
@@ -33,6 +33,7 @@ from concert_scout.sources import (
     listenbrainz,
     musicbrainz,
     spotify_catalog,
+    supabase,
     ticketmaster,
 )
 from concert_scout.sources.spotify import SpotifyError
@@ -136,6 +137,11 @@ def create_app(
 ) -> FastAPI:
     settings = settings or Settings()  # pyright: ignore[reportCallIssue]
     services = make_services(settings, transport, redis, model)
+    accounts_client = (
+        supabase.make_client(settings.supabase_url, transport)
+        if settings.supabase_url and settings.accounts_enabled
+        else None
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -151,15 +157,17 @@ def create_app(
             await services.spotify_catalog.aclose()
         await services.turnstile.aclose()
         await services.redis.aclose()
+        if accounts_client:
+            await accounts_client.aclose()
 
     app = FastAPI(title="Concert Scout", lifespan=lifespan)
     app.add_middleware(SecurityHeaders)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_credentials=True,
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "Authorization"],
     )
 
     async def limit_visitor(request: Request, bucket: str, limit: int) -> None:
@@ -212,6 +220,9 @@ def create_app(
             return _failure(422, SearchError(code="invalid_search", message=ASK_FOR_A_SEARCH))
         if request.url.path == "/artist":
             return _failure(422, SearchError(code="invalid_artist", message="Choose an Artist."))
+        if request.url.path.startswith(accounts.PREFIX):
+            message = "That is not a Concert you can save."
+            return _failure(422, SearchError(code="invalid_save", message=message))
         if request.url.path.startswith("/taste/"):
             return _failure(422, SearchError(code="invalid_username", message="Enter a username."))
         return _failure(422, SearchError(code="invalid_place", message="Choose a place."))
@@ -234,6 +245,10 @@ def create_app(
         spotify.router(settings, services.redis, services.ticketmaster, services.geocoder)
     )
     app.include_router(feedback.router(settings, services.redis, transport))
+    if accounts_client:
+        app.include_router(
+            accounts.router(settings, accounts_client, services.redis, services.ticketmaster)
+        )
 
     @app.get("/health")
     async def health() -> dict[str, str]:

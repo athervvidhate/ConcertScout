@@ -21,6 +21,16 @@ class CachedConcerts(BaseModel):
     concerts: list[Concert]
 
 
+async def find_concert(client: httpx.AsyncClient, redis: Redis, concert_id: str) -> Concert:
+    """One Concert's facts by its source ID, for a Concert saved away from its Poster."""
+    key = f"concert:{concert_id}"
+    if cached := await cache.read(redis, key, Concert):
+        return cached
+    concert = await ticketmaster.find_concert(client, redis, concert_id)
+    await cache.write(redis, key, concert, CACHE_TTL)
+    return concert
+
+
 def date_window(
     start: dt.date | None, end: dt.date | None, today: dt.date
 ) -> tuple[dt.date, dt.date]:

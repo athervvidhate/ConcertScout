@@ -9,7 +9,7 @@ import { nameOf, Ticket } from "@/components/ticket";
 import { dismissArtistHint, useArtistHint } from "@/lib/artist-hint";
 import { flyIn } from "@/lib/fly-in";
 import { EASE_OUT, flyDuration, MAX_CANDIDATE_NAMES, namesDuration, PICK_READ_MS } from "@/lib/poster-timing";
-import { type Decision, saveConcert, skipConcert, useDecisions } from "@/lib/saved";
+import { type Decision, type Saving, saveConcert, skipConcert, useDecisions } from "@/lib/saved";
 import type { Candidates, Recommendation } from "@/lib/search";
 import { swipeDecision } from "@/lib/swipe";
 
@@ -135,16 +135,22 @@ export function Poster(props: Props) {
 
   function decide(decision: Decision) {
     if (!current) return;
+    const name = nameOf(current);
+    let saving: Saving | null = null;
     try {
-      if (decision === "saved") saveConcert(current);
+      if (decision === "saved") saving = saveConcert(current);
       else skipConcert(current.concert.id);
     } catch {
       setNotice("This browser could not keep that choice. Allow local storage and try again.");
       return;
     }
     dismissArtistHint();
-    const done = decision === "saved" ? "saved on this device" : "skipped";
-    setNotice(`${nameOf(current)} ${done}.`);
+    if (!saving) setNotice(`${name} skipped.`);
+    else if (saving.where === "device") setNotice(`${name} saved on this device.`);
+    else {
+      setNotice(`${name} saved to your account.`);
+      saving.done.catch(() => setNotice(`${name} could not be saved to your account. Try again.`));
+    }
     setThrown(({ count }) => ({ count: count + 1, direction: decision === "saved" ? 1 : -1 }));
     const after = [...recommendations.slice(selected + 1), ...recommendations.slice(0, selected)];
     const next = after.find((r) => !decisions[r.concert.id]);

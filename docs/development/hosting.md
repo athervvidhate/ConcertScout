@@ -37,11 +37,23 @@ Set secrets through the hosting dashboard or private CLI input. Never put values
 | API | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Optional official invite-only app credentials |
 | API | `SPOTIFY_ENCRYPTION_KEY` | Stable private Fernet key, separately generated for production |
 | API | `SPOTIFY_REDIRECT_URI` | Exact `https://api.concertscout.app/auth/spotify/callback`, also registered in Spotify |
+| API | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | Optional accounts: the project's URL and publishable key |
+| API | `SUPABASE_SECRET_KEY` | The project's secret key. Server only |
+| Frontend | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | The same URL and publishable key; set before building |
 | API | `CRON_SECRET` | Random string of at least 32 characters. Vercel's daily cron sends it to `/warm`; unset, the route does not exist |
 
 The public entrypoint refuses to start with unencrypted or unauthenticated Redis, non-HTTPS or wildcard origins, published Turnstile test secrets, a missing trusted IP header, or a configured Spotify client using HTTP. Local `make dev` still uses the normal factory and local settings. Test environments can use Cloudflare's published test keys; public deployments must not.
 
 Upstash holds the public cache, hashed limits, encrypted Spotify sessions and recorded spend. Keep its TLS connection private, select a region near the function and use the free tier or a deliberate budget cap. A stopped/reset database loses spend history; do not reset it as a way to clear a visitor limit. API spend guards use recorded usage, not a hard reservation against concurrent calls. Use the Anthropic and Typesafe accounts' spend controls as well.
+
+## Accounts on Supabase
+
+1. Create a Supabase project in US East, near the API's `iad1` region, and apply the migrations with `npx supabase link` and `npx supabase db push` from `frontend/`, with `--workdir ..`. Keep the project on asymmetric JWT signing keys, which new projects use by default.
+2. Under Authentication, set the Site URL to `https://concertscout.app` and allow only the redirect `https://concertscout.app/auth/confirm`. Turn on email confirmation, an 8-character minimum password and secure password change.
+3. Paste `supabase/templates/confirmation.html` and `recovery.html` into the Confirm signup and Reset password email templates. Their links carry a token hash to the confirm page, so they work in any browser.
+4. Add custom SMTP before opening sign-up. Supabase's built-in mail only reaches the project team and sends two emails an hour. Resend works once a sending domain is verified.
+5. For Google, create an OAuth web client in Google Cloud with the redirect `https://<project>.supabase.co/auth/v1/callback`, then enable Google in Supabase with its ID and secret. It needs identity scopes only.
+6. Accept by creating an account by email, signing in on a second device, signing in with Google, resetting a password and deleting a test account.
 
 ## Reviewable rollout
 

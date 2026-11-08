@@ -510,7 +510,9 @@ test("the resting home page says Concert Scout once, and the menu holds the link
   await expect(page.getByRole("link", {name: "Concert Scout", exact: true})).toBeVisible();
   await openMenuItem(page, "Saved Concerts");
   await expect(page).toHaveURL(/\/saved$/);
-  await expect(page.getByRole("button", {name: "Menu", exact: true})).toHaveCount(0);
+  await page.getByRole("button", {name: "Menu", exact: true}).click();
+  await expect(page.getByRole("menuitem", {name: "Sign in"})).toBeVisible();
+  await expect(page.getByRole("menuitem", {name: "Saved Concerts"})).toHaveCount(0);
 });
 
 test("the wordmark stays on one line at every width", async ({page}) => {

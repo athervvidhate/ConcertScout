@@ -30,10 +30,21 @@ class Settings(BaseSettings):
     resend_api_key: SecretStr | None = None
     feedback_email: str | None = None
 
+    # Optional accounts. Leave these blank to keep sign-in off; Search never needs them.
+    supabase_url: str | None = None
+    supabase_publishable_key: str | None = None
+    supabase_secret_key: SecretStr | None = None
+
     spotify_client_id: str | None = None
     spotify_client_secret: SecretStr | None = None
     spotify_encryption_key: SecretStr | None = None
     spotify_redirect_uri: str = "http://127.0.0.1:8000/auth/spotify/callback"
+
+    @property
+    def accounts_enabled(self) -> bool:
+        return bool(
+            self.supabase_url and self.supabase_publishable_key and self.supabase_secret_key
+        )
 
     @field_validator("spotify_redirect_uri")
     @classmethod

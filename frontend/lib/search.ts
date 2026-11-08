@@ -64,10 +64,12 @@ export const NEEDS_A_NEW_SEARCH = ["needs_taste_or_place", "needs_place", "place
 // The API refused this Search before it started. Waiting or changing nothing will not help
 // when it says when to come back, or when Search is off.
 export class SearchRefused extends Error {
+  readonly code: string;
   readonly retryable: boolean;
 
   constructor({ code, message, retry_after }: SearchError) {
     super(message);
+    this.code = code;
     this.retryable = retry_after === undefined && code !== "search_off";
   }
 }

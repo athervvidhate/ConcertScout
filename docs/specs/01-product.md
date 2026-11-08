@@ -42,7 +42,9 @@ The visitor can Save or Skip with buttons, or by dragging the Ticket right or le
 
 ## Saved Concerts
 
-Saved Concerts live in `localStorage`, so they need no account and stay on one device. A Saved Concert stores its source ID and the facts needed to show it, and a page lists them with past Concerts removed. Accounts may come later, and they are not part of this rebuild.
+A guest's Saved Concerts live in `localStorage` and stay on one device. A Saved Concert stores its source ID and the facts needed to show it, and a page lists them with past Concerts removed.
+
+An optional account keeps Saved Concerts on every device. Sign in from the menu with Google, or with an email and password after confirming the email. While signed in, a Save goes to the account, and the API reads the Concert's facts from Ticketmaster before storing it. Saves made as a guest stay on the device until the person chooses to add them to the account, keep them, or remove them, because a shared browser can hold someone else's saves. Skips stay on the device. Signing out shows none of the account's saves. The Account page offers sign-out and account deletion, which needs a sign-in from the last 10 minutes.
 
 ## Spotify shelf
 

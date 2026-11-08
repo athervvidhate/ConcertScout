@@ -22,6 +22,8 @@ MUSICBRAINZ_GAP = dt.timedelta(seconds=1)
 SEARCHES_PER_HOUR = 10
 TASTE_PER_HOUR = 30
 ARTIST_PER_HOUR = 120
+# Each save or import looks its Concerts up on Ticketmaster.
+SAVES_PER_HOUR = 120
 FEEDBACK_PER_HOUR = 5
 FEEDBACK_EVERYONE_PER_HOUR = 20
 HOUR_SECONDS = 3600
