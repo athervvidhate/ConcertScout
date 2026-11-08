@@ -11,7 +11,7 @@ export default function PrivacyPage() {
       <article>
         <p>Concert Scout finds live music from a Taste and a place. You can Search without an account. This page describes what the app sends, keeps, and lets you remove.</p>
         <h2>Searches and imported Taste</h2>
-        <p>Your Search text and imported Artist names go to the API. Anthropic processes Search text to read your request, and Taste with a shortlist to rank Concerts. Public Artist information comes from MusicBrainz, ListenBrainz, Last.fm and Ticketmaster. Place names go to Geoapify.</p>
+        <p>Your Search text and imported Artist names go to the API. Anthropic processes Search text to read your request, and Taste with a shortlist to rank Concerts. Public Artist information comes from MusicBrainz, ListenBrainz, Last.fm, Ticketmaster and JamBase. Place names go to Geoapify.</p>
         <p>A Last.fm or ListenBrainz username is sent to that service when you import it. The app does not keep the username. The imported Artist list stays in your browser and accompanies later Searches until you remove it.</p>
         <p>History files, including Spotify history, are read on your device. The file contents are not uploaded. Only the resulting Artist list leaves the browser with a Search. A pasted list works the same way.</p>
         <h2>Your location</h2>
@@ -22,6 +22,7 @@ export default function PrivacyPage() {
         <p>
           Concert and Artist data comes from{" "}
           <a href="https://www.ticketmaster.com" target="_blank" rel="noopener noreferrer">Ticketmaster</a>,{" "}
+          <a href="https://www.jambase.com" target="_blank" rel="nofollow noopener noreferrer">JamBase</a>,{" "}
           <a href="https://musicbrainz.org" target="_blank" rel="noopener noreferrer">MusicBrainz</a>,{" "}
           <a href="https://listenbrainz.org" target="_blank" rel="noopener noreferrer">ListenBrainz</a>,{" "}
           <a href="https://www.last.fm" target="_blank" rel="noopener noreferrer">Last.fm</a>,{" "}
@@ -30,7 +31,7 @@ export default function PrivacyPage() {
           <a href="https://open.spotify.com" target="_blank" rel="noopener noreferrer">Spotify</a>.
         </p>
         <h2>Images</h2>
-        <p>Ticket photos load directly from Ticketmaster, so Ticketmaster sees your IP address when they appear.</p>
+        <p>Ticket photos load directly from Ticketmaster, so Ticketmaster sees your IP address when they appear. JamBase photos pass through this site’s image cache; your browser does not request them directly from JamBase.</p>
         <h2>Reports about a Search</h2>
         <p>If you press Tell us and send a report, your Search, your note, how the app read the Search, any error and the results on screen go to the owner by email through Resend. Your location coordinates and connected Spotify data are not included. If you imported Taste, the Artists that Search used can appear in the report.</p>
         <h2>A connected Spotify account</h2>
@@ -39,7 +40,7 @@ export default function PrivacyPage() {
         <h2>What stays and for how long</h2>
         <ul>
           <li>Saved Concerts, skipped choices and imported Taste stay in this browser until you remove them or clear site storage. Past Saved Concerts are hidden from the Saved page.</li>
-          <li>Public Concert data is cached for six hours, Artist metadata and similarity for seven days, and place lookups for thirty days.</li>
+          <li>Ticketmaster Concert data is cached for six hours, JamBase Concert data for up to four days, Artist metadata and similarity for seven days, and place lookups for thirty days.</li>
           <li>Hourly limits use a hash of the client address, not a raw address in Redis. Spend counters hold numeric totals.</li>
           <li>App traces record step times, token counts and cost. They omit Search text, Taste, exception contents and Spotify account data.</li>
         </ul>
@@ -49,7 +50,7 @@ export default function PrivacyPage() {
         <h2>Your controls</h2>
         <p>Remove a Saved Concert on the Saved page. Remove imported Taste inside Your Taste. Press the location button again, labelled Forget my location, to delete the stored location. Disconnect Spotify before clearing cookies. Browser site settings can clear all remaining local choices.</p>
         <p>For questions, contact <a href="https://atherv.com" target="_blank" rel="noopener noreferrer">Atherv Vidhate through the portfolio</a>.</p>
-        <p className="information-date">Updated November 6, 2026.</p>
+        <p className="information-date">Updated November 7, 2026.</p>
       </article>
     </main>
   );

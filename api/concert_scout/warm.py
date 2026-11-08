@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from concert_scout import limits, pool
 from concert_scout.pipeline import Services
-from concert_scout.sources import geocoder, listenbrainz, ticketmaster
+from concert_scout.sources import geocoder, jambase, listenbrainz, ticketmaster
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,17 @@ async def warm(services: Services, now: dt.datetime) -> list[Warmed]:
     Today's Ticketmaster allowance belongs to visitors first, so reaching it stops the run.
     """
     warmed: list[Warmed] = []
+    if services.jambase:
+        reports = await jambase.refresh(
+            services.jambase,
+            services.redis,
+            services.jambase_regions,
+            services.jambase_days,
+            now,
+        )
+        warmed.extend(
+            Warmed(f"JamBase {r.region}", r.concerts, 0, r.seconds, r.error) for r in reports
+        )
     for name in PLACES:
         try:
             warmed.append(await _warm_place(services, name, now))

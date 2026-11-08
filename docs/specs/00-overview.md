@@ -30,7 +30,7 @@ Terms follow [GLOSSARY.md](../../GLOSSARY.md). Choices with lasting trade-offs l
 | Models | Claude Haiku 5.5 (`claude-haiku-5-5`) reads the Search and writes reasons. Typesafe Jev (`jev-1.14.0`) grades the shortlist |
 | Agent library | Pydantic AI, with Pydantic Evals and OpenTelemetry |
 | Model calls per Search | Three: the interpreter, Jev grades and Haiku reasons |
-| Concert data | Ticketmaster Discovery only |
+| Concert data | Ticketmaster Discovery, plus a daily JamBase catalog for configured US states |
 | Accounts | None in this rebuild. Saved Concerts live in the browser |
 | Streaming | SSE directly from the browser to FastAPI |
 | Money | $10-15 a month in total, no affiliate links, no ads |
@@ -46,7 +46,7 @@ Browser (Next.js)
 FastAPI service
    |-- interpreter (Haiku): Search text to structured request
    |-- geocoder
-   |-- Concert pool: Ticketmaster, cached in Redis
+   |-- Concert pool: Ticketmaster and the JamBase catalog, cached in Redis
    |-- Artist matching: MusicBrainz, ListenBrainz, Last.fm
    |-- ranker: Jev grades each ID, Haiku explains the Poster
    `-- code fills in facts from the source record

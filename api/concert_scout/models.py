@@ -1,4 +1,5 @@
 import datetime as dt
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -17,6 +18,8 @@ class Artist(BaseModel):
 
     name: str
     mbid: str | None = None
+    # A public catalog identity when the source does not expose a MusicBrainz ID.
+    source_id: str | None = None
     genre: str | None = None
     subgenre: str | None = None
 
@@ -34,6 +37,7 @@ class Concert(BaseModel):
     name: str
     url: str
     artists: list[Artist]
+    source: Literal["ticketmaster", "jambase"] = "ticketmaster"
     date: dt.date | None = None
     time: dt.time | None = None
     # The venue's IANA zone. `date` and `time` already read in it.
@@ -48,7 +52,7 @@ class Concert(BaseModel):
 
 
 class Recommendation(BaseModel):
-    """One Artist on a Poster. `also` holds the same Artist's other dates, from the same source."""
+    """One Artist on a Poster. `also` holds the same Artist's other source-backed dates."""
 
     concert: Concert
     reason: str

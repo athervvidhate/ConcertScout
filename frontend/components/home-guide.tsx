@@ -7,7 +7,7 @@ const STEPS = [
   },
   {
     title: "We check the listings",
-    text: "Real Concerts from Ticketmaster are matched to Artists who sound like what you asked for.",
+    text: "Real Concert listings are matched to Artists who sound like what you asked for.",
   },
   {
     title: "Keep the good ones",

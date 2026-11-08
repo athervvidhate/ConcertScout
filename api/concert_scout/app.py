@@ -28,6 +28,7 @@ from concert_scout.pipeline import (
 from concert_scout.security import Refused, SecurityHeaders
 from concert_scout.sources import (
     geocoder,
+    jambase,
     jev,
     lastfm,
     listenbrainz,
@@ -98,6 +99,11 @@ def make_services(
         redis=redis or cache.make_client(settings.redis_url),
         model=model or interpreter.make_model(settings.anthropic_api_key.get_secret_value()),
         turnstile=security.make_turnstile_client(transport),
+        jambase=jambase.make_client(settings.jbd_api_key.get_secret_value(), transport)
+        if settings.jbd_api_key
+        else None,
+        jambase_regions=tuple(settings.jambase_regions) if settings.jbd_api_key else (),
+        jambase_days=settings.jambase_days,
     )
 
 
@@ -141,6 +147,8 @@ def create_app(
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         yield
         await services.ticketmaster.aclose()
+        if services.jambase:
+            await services.jambase.aclose()
         await services.geocoder.aclose()
         await services.musicbrainz.aclose()
         await services.listenbrainz.aclose()

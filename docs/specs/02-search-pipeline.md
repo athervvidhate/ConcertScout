@@ -44,7 +44,7 @@ A pool holds every Concert for a place and date window. A Geoapify state result 
 - Split the window into 30-day chunks to get past the 1,000-result cap.
 - With no dates, use the next 6 months. That covers 85-96% of listed Concerts and costs about 7-8 calls for Chicago.
 - Cache each chunk for 6 hours, keyed by rounded coordinates and month, so Searches share them.
-- Once a day, at 23:00 UTC so the pools stay fresh through the US evening, Vercel's cron calls `GET /warm`. It runs the pool and tag lookups for a fixed list of busy cities (`warm.PLACES`, written the way the interpreter writes places so they geocode to the same point), one city at a time. Tags last 7 days, so a daily run keeps them warm; a pool lasts 6 hours. It calls no model and stops at the Ticketmaster daily limit.
+- Once a day, at 23:00 UTC so the pools stay fresh through the US evening, Vercel's cron calls `GET /warm`. It runs the pool and tag lookups for a fixed list of busy cities (`warm.PLACES`, written the way the interpreter writes places so they geocode to the same point), one city at a time. Tags last 7 days, so a daily run keeps them warm; a pool lasts 6 hours. It calls no model and stops at the Ticketmaster daily limit. It first refreshes the JamBase catalog.
 - A Concert is over when its date has passed at its own venue, using the time zone Ticketmaster reports. The pool asks for one day earlier than the visitor's today, because a venue further west can still be on that day.
 - Always look up seed Artists directly, so a seed's Concert is never lost to paging.
 - A seed Artist's direct lookup covers every date Ticketmaster lists. Unless the Search sets an end date, all of them stay, so a tour past the 6-month pool still appears at no extra cost.
@@ -52,6 +52,18 @@ A pool holds every Concert for a place and date window. A Geoapify state result 
 With no place, skip the pool. Look up the seeds and the top 15 similar Artists by name. This costs about 16 calls.
 
 Stay under Ticketmaster's 5 requests per second and 5,000 a day, with a shared limiter in Redis. All HTTP is async through `httpx`.
+
+### JamBase catalog
+
+JamBase lists clubs and small rooms that Ticketmaster misses. With `JBD_API_KEY` set, the same `/warm` run collects it, and a Search never calls JamBase.
+
+- `/warm` fetches every event for each `JAMBASE_REGIONS` state (default `US-CA`) over the next `JAMBASE_DAYS` days (default 30), 100 per page, at most one request a second.
+- A catalog is refreshed every second day: a run skips it while it is under 44 hours old. A 30-day California catalog was 2,377 Concerts in 25 pages on November 7, 2026. It is published to Redis whole, only when every listed event arrived, and kept 96 hours, so one failed run changes nothing visible. A failed or partial run leaves the previous catalog in place.
+- One Redis lock allows a single writer. Before any catalog request, `/v3/quota` must leave headroom under 750 calls a month, so the Developer plan's 1,000 included calls never overflow. A run makes at most 40 requests.
+- Reading and filtering the California catalog adds about 15 ms to a Search (p95 under 26 ms on a local Redis).
+- A Search reads the catalogs for its state, filtered by distance from the place, or by seed name with no place. Cancelled and postponed events are dropped. A midnight start is not a known time.
+- A JamBase Concert is dropped as a duplicate when a Ticketmaster Concert on the same date has its headliner anywhere in the Lineup, shares a distinctive venue word, and starts within 90 minutes or has no known time. The sources spell venues and cities differently ("The Belasco" and "Belasco Theater", Hollywood and Los Angeles), so exact matching let a quarter of the catalog through twice. Ticketmaster's price and presales stay. Other rooms and early or late sets stay separate. On November 7, 2026, JamBase added 176 Concerts to the 216 Ticketmaster listed within 50 miles of Los Angeles for the coming week.
+- JamBase has no price or presale. Its image is used only from JamBase's own uploads, never a default, and passes through the Next.js image cache. The footer and Privacy page credit JamBase, and its links carry `rel="nofollow"`.
 
 ## 4. Match
 
@@ -176,4 +188,4 @@ api/concert_scout/
 
 Jev grades poor fits below 2 and assembly leaves them out. If grading fails, only matches with a score strictly greater than 0.3 qualify; genre-only and unmatched Concerts do not fill a Poster. Neutral fallback reasons describe the actual match signal. These thresholds are initial values for evaluation.
 
-For a place-only Search, use Concerts whose headliner has a MusicBrainz ID in Ticketmaster as a practical proxy for notability. Keep the first Concert per headliner, soonest first, up to eight. This proxy may omit notable Artists without linked IDs.
+For a place-only Search, use Concerts whose headliner has a MusicBrainz ID in Ticketmaster, or a JamBase Artist ID, as a practical proxy for notability. Keep the first Concert per headliner, soonest first, up to eight. This proxy may omit notable Artists without linked IDs.

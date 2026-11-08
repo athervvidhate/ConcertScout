@@ -29,7 +29,7 @@ export function Listing({ concert, artist, href, note, anywhere = false }: Props
         <span />
       )}
       <div className="listing-what">
-        <a className="listing-artist" href={href ?? concert.url} target="_blank" rel="noopener noreferrer">
+        <a className="listing-artist" href={href ?? concert.url} target="_blank" rel="nofollow noopener noreferrer">
           {name}
         </a>
         {title && <p>{title}</p>}
@@ -44,7 +44,7 @@ export function Listing({ concert, artist, href, note, anywhere = false }: Props
         className="listing-tickets"
         href={concert.url}
         target="_blank"
-        rel="noopener noreferrer"
+        rel="nofollow noopener noreferrer"
         aria-label={`Tickets for ${concert.name}`}
       >
         Tickets

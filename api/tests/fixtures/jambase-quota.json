@@ -1,0 +1,8 @@
+{
+  "plan": "developer",
+  "quota": 1000,
+  "usedCalls": 4,
+  "remainingCalls": 996,
+  "overageCalls": 0,
+  "blocksAtQuota": false
+}

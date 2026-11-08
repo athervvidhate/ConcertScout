@@ -355,7 +355,14 @@ def router(
             )
         try:
             concerts = await pool.find_concerts(
-                ticketmaster, redis, where, [], start, end, clock.now_in(time_zone)
+                ticketmaster,
+                redis,
+                where,
+                [],
+                start,
+                end,
+                clock.now_in(time_zone),
+                jambase_regions=settings.jambase_regions if settings.jbd_api_key else (),
             )
         except tm.TicketmasterError:
             raise Refused(

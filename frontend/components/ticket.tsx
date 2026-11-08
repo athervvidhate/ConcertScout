@@ -1,6 +1,6 @@
 import { Pointer } from "lucide-react";
 import Image from "next/image";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 
 import { ArtistPanel } from "@/components/artist-panel";
 import { byVenue, formatDate, formatDayShort, formatMonthDay, formatConcertTime, formatPrice, presaleLine } from "@/lib/format";
@@ -47,7 +47,7 @@ function OtherDates({ concerts }: { concerts: Concert[] }) {
                     <a
                       href={concert.url}
                       target="_blank"
-                      rel="noopener noreferrer"
+                      rel="nofollow noopener noreferrer"
                       aria-label={`Tickets for ${[concert.date && formatDate(concert.date), placeOf(concert)].filter(Boolean).join(", ")}`}
                     >
                       {concert.date
@@ -75,6 +75,7 @@ type TicketProps = {
 
 export function Ticket({ recommendation, rank, artistHint, onArtistOpen }: TicketProps) {
   const { concert, reason, also = [] } = recommendation;
+  const [failedImage, setFailedImage] = useState<string>();
   const details = [
     placeOf(concert),
     concert.date && formatDayShort(concert.date),
@@ -84,10 +85,11 @@ export function Ticket({ recommendation, rank, artistHint, onArtistOpen }: Ticke
 
   return (
     <article className="ticket" data-color={rank % 5}>
-      {concert.image && (
+      {concert.image && failedImage !== concert.image && (
         <div className="ticket-photo">
-          {/* Ticketmaster already sizes these, so nothing is resized here. */}
-          <Image src={concert.image} alt="" fill unoptimized draggable={false} />
+          <Image src={concert.image} alt="" fill sizes="(max-width: 600px) 100vw, 800px"
+            unoptimized={concert.source !== "jambase"} draggable={false}
+            onError={() => setFailedImage(concert.image)} />
         </div>
       )}
       <div className="ticket-main">
@@ -116,7 +118,7 @@ export function Ticket({ recommendation, rank, artistHint, onArtistOpen }: Ticke
         <a
           href={concert.url}
           target="_blank"
-          rel="noopener noreferrer"
+          rel="nofollow noopener noreferrer"
           aria-label={`Tickets for ${concert.name}`}
         >
           Tickets

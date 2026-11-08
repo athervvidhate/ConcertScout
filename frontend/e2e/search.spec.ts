@@ -555,7 +555,7 @@ test("a Ticket shows the source photo only when there is one", async ({page}) =>
   await page.goto("/");
   await search(page);
   await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
-  await expect(page.locator(".ticket-photo img")).toHaveAttribute("src", "/spotify-logo-white.svg");
+  await expect(page.locator(".ticket-photo img")).toHaveAttribute("src", /\/spotify-logo-white\.svg$/);
   await noOverflow(page);
   await page.getByRole("button", {name: "Skip", exact: true}).click();
   await expect(page.getByRole("link", {name: "Tickets for Contract Concert Two"})).toBeVisible();
