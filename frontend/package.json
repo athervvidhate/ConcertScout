@@ -23,7 +23,8 @@
     "next": "16.4.5",
     "papaparse": "^5.7.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "react-split-flap": "0.2.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

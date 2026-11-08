@@ -1,5 +1,7 @@
 # Approved motion fidelity — November 8, 2026
 
+The later [interaction refinements](2026-11-08-interaction-refinements.md) supersede this pass’s dialog-only Save, rolling hero and Khruangbin demo decisions.
+
 The November 7 implementation preserved the application's functions but reduced the study's motion to shared-layout fades. The owner rejected that loss. This follow-up uses the actual approved `docs/mocks/fluid-search/` app, run locally, as the source for choreography and timings. It adds no animation dependency or paid request.
 
 ## Reference-to-implementation audit

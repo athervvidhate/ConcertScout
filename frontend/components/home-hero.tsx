@@ -1,11 +1,37 @@
 "use client";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import { motion, useReducedMotion } from "motion/react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 const LINES = [
   { lead: "Tame Impala in ", accent: "London" },
   { lead: "Jazz in ", accent: "New Orleans" },
   { lead: "Dreamy bands in ", accent: "SoCal" },
 ];
+// LongFlap supplies the two-stage, clipped 3D mechanics; the page supplies its own type and palette.
+const FLAPS = LINES.map((item, id) => ({
+  id,
+  component: (
+    <span className="hero-phrase">
+      {item.lead}
+      <b>{item.accent}</b>
+    </span>
+  ),
+}));
+const HeroFlap = dynamic(
+  () => import("react-split-flap").then((module) => module.LongFlap),
+  {
+    ssr: false,
+    loading: () => (
+      <span className="hero-phrase">
+        {LINES[0].lead}
+        <b>{LINES[0].accent}</b>
+      </span>
+    ),
+  },
+);
+const subscribeHydration = () => () => {};
+const clientHydration = () => true;
+const serverHydration = () => false;
 export function HomeHero({
   onCycle,
   returning,
@@ -13,7 +39,11 @@ export function HomeHero({
   onCycle: (index: number) => void;
   returning: boolean;
 }) {
-  const [cycled, setCycled] = useState(false);
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    clientHydration,
+    serverHydration,
+  );
   const [line, setLine] = useState(0),
     reduced = useReducedMotion();
   useEffect(() => {
@@ -21,7 +51,6 @@ export function HomeHero({
     let index = 0;
     const timer = setInterval(() => {
       index = (index + 1) % LINES.length;
-      setCycled(true);
       setLine(index);
       onCycle(index);
     }, 3600);
@@ -57,35 +86,30 @@ export function HomeHero({
       >
         Find a night of
       </motion.span>{" "}
-      <span className="roll" aria-live="off">
-        <AnimatePresence initial={!returning}>
-          <motion.span
-            className="hero-line"
-            key={line}
-            initial={{ y: reduced ? 0 : "100%", opacity: reduced ? 1 : 0 }}
-            animate={{
-              y: 0,
-              opacity: 1,
-              transition: {
-                duration: reduced ? 0 : returning || cycled ? 0.8 : 1,
-                delay: reduced ? 0 : returning || cycled ? 0.18 : 0.12,
-                ease: [0.16, 1, 0.3, 1],
-              },
-            }}
-            exit={{
-              y: reduced ? 0 : "-100%",
-              opacity: 0,
-              transition: {
-                duration: reduced ? 0 : 0.5,
-                ease: [0.7, 0, 0.84, 0],
-              },
-            }}
-          >
-            {LINES[line].lead}
-            <b>{LINES[line].accent}</b>
-          </motion.span>
-        </AnimatePresence>
+      <span className="sr-only">
+        {LINES[line].lead}
+        {LINES[line].accent}
       </span>
+      <div className="roll hero-flap" aria-hidden="true" data-hero-index={line}>
+        {!hydrated || reduced ? (
+          <span className="hero-phrase">
+            {LINES[0].lead}
+            <b>{LINES[0].accent}</b>
+          </span>
+        ) : (
+          <HeroFlap
+            flaps={FLAPS}
+            displayId={line}
+            animateOnMount={false}
+            digitHeight={0}
+            duration={640}
+            timing={80}
+            hinge={false}
+            background="var(--bg)"
+            fontColor="var(--ink)"
+          />
+        )}
+      </div>
     </motion.h1>
   );
 }

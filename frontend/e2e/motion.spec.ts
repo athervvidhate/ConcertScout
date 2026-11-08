@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { HOW_EXAMPLE } from "../lib/how-example";
+import { RECORDED_SEARCH } from "./fixtures/khruangbin";
 
 test.use({ video: "on" });
 
@@ -44,6 +45,21 @@ test("How replays typed words, staggered names, narrowing and a coordinated rese
         ),
     )
     .toBe(true);
+  await page.waitForFunction(
+    () =>
+      document.querySelector(".how")?.getAttribute("data-phase") === "picks" &&
+      [...document.querySelectorAll(".demo-pick")].some(
+        (e) => Number(getComputedStyle(e).opacity) > 0,
+      ),
+  );
+  await expect(page.locator("[data-count]")).toHaveText(
+    String(HOW_EXAMPLE.candidates!.total),
+  );
+  await expect(page.locator(".demo-names .name:not(.pick)").first()).toHaveCSS(
+    "opacity",
+    "0.25",
+    { timeout: 100 },
+  );
   await expect(page.locator(".how")).toHaveAttribute("data-phase", "hold");
   await expect(page.locator(".demo-names .name.pick")).toHaveCount(3);
   await expect(page.locator(".demo-names .name:not(.pick)").first()).toHaveCSS(
@@ -65,6 +81,13 @@ test("How replays typed words, staggered names, narrowing and a coordinated rese
         ),
     )
     .toBe(true);
+  expect(
+    await page
+      .locator("[data-how-panel]")
+      .evaluateAll((els) =>
+        els.every((e) => getComputedStyle(e).opacity === "1"),
+      ),
+  ).toBe(true);
   await expect(page.locator(".how")).toHaveAttribute("data-phase", "typing");
   expect(await panelSizes(page)).toEqual(initial);
   await page.evaluate(() => scrollTo(0, 0));
@@ -76,6 +99,8 @@ test("How replays typed words, staggered names, narrowing and a coordinated rese
 test("reduced motion shows the complete How replay without typing or looping", async ({
   page,
 }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await page.locator(".how").scrollIntoViewIfNeeded();
@@ -85,14 +110,16 @@ test("reduced motion shows the complete How replay without typing or looping", a
   await expect(page.locator(".demo-pick")).toHaveCount(3);
   await page.waitForTimeout(1100);
   await expect(page.locator(".how")).toHaveAttribute("data-phase", "hold");
+  await expect(page.locator(".hero-flap .split-flap-display")).toHaveCount(0);
+  expect(errors).toEqual([]);
 });
 
 async function recordedSearch(page: Page) {
   const body = [
     ["status", { step: "rank", message: "Choosing the closest Concerts" }],
-    ["interpreted", HOW_EXAMPLE.interpreted],
-    ["candidates", HOW_EXAMPLE.candidates],
-    ["poster", HOW_EXAMPLE.poster],
+    ["interpreted", RECORDED_SEARCH.interpreted],
+    ["candidates", RECORDED_SEARCH.candidates],
+    ["poster", RECORDED_SEARCH.poster],
     ["done", {}],
   ]
     .map(
@@ -105,7 +132,7 @@ async function recordedSearch(page: Page) {
   await page.goto("/");
   await page
     .getByRole("textbox", { name: "Search", exact: true })
-    .fill(HOW_EXAMPLE.text);
+    .fill(RECORDED_SEARCH.text);
   await page.getByRole("button", { name: "Search", exact: true }).click();
 }
 
@@ -141,12 +168,12 @@ test("picks travel as complete pills into revealed cards; Ticket opens and folds
   );
   await expect(page.locator(".photo-flight")).toHaveCount(0);
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.locator(".save-action")).toHaveAttribute(
+  await expect(page.locator(".ticket-dialog .save-action")).toHaveAttribute(
     "aria-pressed",
     "true",
   );
   await expect(page.locator(".nav-saved .saved-count")).toHaveText("1");
-  await expect(page.locator(".save-fill")).toHaveCSS(
+  await expect(page.locator(".ticket-dialog .save-fill")).toHaveCSS(
     "clip-path",
     /circle\(150%/,
   );
@@ -215,11 +242,11 @@ test("Ticket interruption restores photos and focus; view arrows persist and the
     .toBe("list");
   await page.getByRole("button", { name: "Grid view" }).click();
   const one = {
-    ...HOW_EXAMPLE.poster,
-    recommendations: HOW_EXAMPLE.poster.recommendations.slice(0, 1),
+    ...RECORDED_SEARCH.poster,
+    recommendations: RECORDED_SEARCH.poster.recommendations.slice(0, 1),
   };
   const body = [
-    ["candidates", HOW_EXAMPLE.candidates],
+    ["candidates", RECORDED_SEARCH.candidates],
     ["poster", one],
     ["done", {}],
   ]
@@ -243,7 +270,7 @@ test("Ticket interruption restores photos and focus; view arrows persist and the
   await expect(page.locator(".photo-flight,.name-flight")).toHaveCount(0);
 });
 
-test("home enters in stages and the roller overlaps outgoing and incoming Searches", async ({
+test("home enters in stages and library flaps replace the hero within clipped halves", async ({
   page,
 }, info) => {
   await page.route("**/examples", (route) =>
@@ -269,13 +296,33 @@ test("home enters in stages and the roller overlaps outgoing and incoming Search
     )
     .toBe(true);
   await expect(page.locator(".search-bar")).toHaveCSS("opacity", "1");
-  await page.waitForFunction(() => {
-    const els = [...document.querySelectorAll(".hero-line")];
-    const ys = els.map(
-      (e) => new DOMMatrixReadOnly(getComputedStyle(e).transform).m42,
-    );
-    return els.length === 2 && ys.some((y) => y < 0) && ys.some((y) => y > 0);
-  });
-  await page.screenshot({ path: info.outputPath("home-rolling.png") });
-  await expect(page.locator(".hero-line")).toHaveCount(1);
+  await expect(page.locator(".hero-flap")).toHaveAttribute(
+    "data-hero-index",
+    "1",
+  );
+  await page.waitForFunction(() =>
+    [
+      ...document.querySelectorAll(
+        ".hero-flap .split-flap-part.final:not(.idle)",
+      ),
+    ].some((el) =>
+      el
+        .getAnimations()
+        .some(
+          (a) =>
+            typeof a.currentTime === "number" &&
+            a.currentTime > 80 &&
+            a.currentTime < 300,
+        ),
+    ),
+  );
+  await expect(page.locator(".hero-line")).toHaveCount(0);
+  expect(
+    await page
+      .locator(".hero-flap .split-flap-part")
+      .evaluateAll((els) =>
+        els.every((e) => getComputedStyle(e).overflow === "hidden"),
+      ),
+  ).toBe(true);
+  await page.screenshot({ path: info.outputPath("hero-flapping.png") });
 });

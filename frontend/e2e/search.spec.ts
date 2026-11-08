@@ -84,14 +84,13 @@ test("examples rotate without changing input, and reduced motion stays static", 
   const first = await input.getAttribute("placeholder");
   await expect.poll(() => input.getAttribute("placeholder")).not.toBe(first);
   await input.focus();
-  const focused = await input.getAttribute("placeholder");
+  await expect(input).not.toHaveAttribute("placeholder",/.+/);
   await page.waitForTimeout(350);
-  await expect(input).toHaveAttribute("placeholder",focused!);
+  await expect(input).not.toHaveAttribute("placeholder",/.+/);
   await input.fill("My own Search");
-  const frozen = await input.getAttribute("placeholder");
   await page.waitForTimeout(350);
   await expect(input).toHaveValue("My own Search");
-  await expect(input).toHaveAttribute("placeholder", frozen!);
+  await expect(input).not.toHaveAttribute("placeholder",/.+/);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.reload();
   const staticText = await input.getAttribute("placeholder");
@@ -350,7 +349,7 @@ test("the brand returns to the home page, and the Artist panel opens from a Tick
   await expect(panel.getByRole("link", {name: "Search on Spotify"})).toHaveAttribute("href", /open\.spotify\.com\/search\/Contract%20Artist/);
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);
-  await expect(page.locator(".card-saved")).toHaveCount(0);
+  await expect(page.locator('.card-save[aria-pressed="true"]')).toHaveCount(0);
   await page.getByRole("button", {name:"Close Ticket"}).click();
   await page.getByRole("link", {name: "Concert Scout", exact: true}).click();
   await expect(page.getByRole("heading", {name: "How a Search works"})).toBeVisible();

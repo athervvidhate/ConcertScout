@@ -73,11 +73,11 @@ test("Save persists across views, navigation and reload; a missing photo stays a
   await page.getByRole("button",{name:"Search",exact:true}).click();
   await page.locator(".card-open").first().click();
   await page.getByRole("button",{name:"Save",exact:true}).click();
-  await expect(page.getByRole("button",{name:"Saved",exact:true})).toBeDisabled();
+  await expect(page.getByRole("button",{name:"Unsave",exact:true})).toBeEnabled();
   await page.keyboard.press("Escape");
-  await expect(page.locator(".card-saved")).toHaveText("Saved");
+  await expect(page.locator('.card-save[aria-pressed="true"]')).toHaveCount(1);
   await page.getByRole("button",{name:"List view"}).click();
-  await expect(page.locator(".card-saved")).toHaveText("Saved");
+  await expect(page.locator('.card-save[aria-pressed="true"]')).toHaveCount(1);
   await page.goto("/saved");
   await page.reload();
   await expect(page.getByRole("link",{name:"Tickets for Source Concert 1"})).toBeVisible();

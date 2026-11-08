@@ -1,7 +1,7 @@
 "use client";
 
 import { Dialog } from "@base-ui/react/dialog";
-import { LayoutGrid, List, X, Check } from "lucide-react";
+import { LayoutGrid, List, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import Image from "next/image";
 import {
@@ -25,7 +25,7 @@ import {
 } from "@/lib/poster-choreography";
 import { useTicketMotion } from "@/lib/use-ticket-motion";
 import { formatDate, formatConcertTime } from "@/lib/format";
-import { saveConcert, useDecisions } from "@/lib/saved";
+import { removeSaved, saveConcert, useDecisions } from "@/lib/saved";
 import type { Candidates, Recommendation } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
 
@@ -72,6 +72,7 @@ export function Poster({
     [open, setOpen] = useState(false),
     [expanded, setExpanded] = useState(false),
     [notice, setNotice] = useState("");
+  const [pending, setPending] = useState<Set<string>>(() => new Set());
   const decisions = useDecisions(),
     hint = useArtistHint();
   const current = recommendations[selected];
@@ -125,25 +126,53 @@ export function Poster({
     );
   }, [results, stage, view, reduced]);
 
-  function save(r = current) {
-    if (!r) return;
+  async function toggleSave(r = current) {
+    if (!r || pending.has(r.concert.id)) return;
+    const id = r.concert.id,
+      removing = decisions[id] === "saved";
+    setPending((before) => new Set(before).add(id));
     try {
-      const result = saveConcert(r);
-      dismissArtistHint();
-      setNotice(
-        `${nameOf(r)} saved ${result.where === "device" ? "on this device" : "to your account"}.`,
-      );
-      if (result.where === "account")
-        result.done.catch(() =>
-          setNotice(
-            `${nameOf(r)} could not be saved to your account. Try again.`,
-          ),
+      if (removing) {
+        await removeSaved(id);
+        setNotice(`${nameOf(r)} removed from Saved Concerts.`);
+      } else {
+        const result = saveConcert(r);
+        dismissArtistHint();
+        if (result.where === "account") {
+          setNotice(`Saving ${nameOf(r)} to your account…`);
+          await result.done;
+        }
+        setNotice(
+          `${nameOf(r)} saved ${result.where === "device" ? "on this device" : "to your account"}.`,
         );
-    } catch {
-      setNotice(
-        "This browser could not keep that choice. Allow local storage and try again.",
-      );
+      }
+    } catch (error) {
+      if (error instanceof DOMException)
+        setNotice(
+          "This browser could not keep that choice. Allow local storage and try again.",
+        );
+      else
+        setNotice(
+          `${nameOf(r)} could not be ${removing ? "removed from Saved Concerts" : "saved"}. Try again.`,
+        );
+    } finally {
+      setPending((before) => {
+        const next = new Set(before);
+        next.delete(id);
+        return next;
+      });
     }
+  }
+  function bookmark(r: Recommendation) {
+    return (
+      <SaveButton
+        compact
+        name={nameOf(r)}
+        saved={decisions[r.concert.id] === "saved"}
+        pending={pending.has(r.concert.id)}
+        onToggle={() => void toggleSave(r)}
+      />
+    );
   }
   function photo(r: Recommendation, inDialog = false) {
     return r.concert.image ? (
@@ -311,7 +340,10 @@ export function Poster({
                             className="solo concert-card"
                             key={concert.id}
                           >
-                            <div className="solo-photo">{photo(r)}</div>
+                            <div className="solo-photo">
+                              {photo(r)}
+                              {bookmark(r)}
+                            </div>
                             <div className="solo-body">
                               <Ticket
                                 recommendation={r}
@@ -323,7 +355,8 @@ export function Poster({
                               <div className="solo-actions">
                                 <SaveButton
                                   saved={decisions[concert.id] === "saved"}
-                                  onSave={() => save(r)}
+                                  pending={pending.has(concert.id)}
+                                  onToggle={() => void toggleSave(r)}
                                 />
                                 <Dialog.Trigger
                                   className="quiet"
@@ -355,11 +388,7 @@ export function Poster({
                               {date}
                             </time>
                           )}
-                          {decisions[concert.id] === "saved" && (
-                            <span className="card-saved">
-                              <Check aria-hidden size={16} /> Saved
-                            </span>
-                          )}
+                          {bookmark(r)}
                           <div className="card-body">
                             <h3 className="card-name">{name}</h3>
                             {showTitle(concert, name) && (
@@ -403,7 +432,8 @@ export function Poster({
                           <div className="dialog-actions">
                             <SaveButton
                               saved={decisions[current.concert.id] === "saved"}
-                              onSave={() => save()}
+                              pending={pending.has(current.concert.id)}
+                              onToggle={() => void toggleSave()}
                             />
                           </div>
                           <p className="decision-status" role="status">
@@ -502,6 +532,11 @@ export function Poster({
             </motion.section>
           )}
         </>
+      )}
+      {notice && !open && (view === "list" || recommendations.length !== 1) && (
+        <p className="poster-notice" role="status">
+          {notice}
+        </p>
       )}
     </section>
   );

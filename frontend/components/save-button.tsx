@@ -2,16 +2,27 @@
 import { Bookmark, Check } from "lucide-react";
 export function SaveButton({
   saved,
-  onSave,
+  onToggle,
+  pending = false,
+  compact = false,
+  name,
 }: {
   saved: boolean;
-  onSave: () => void;
+  onToggle: () => void;
+  pending?: boolean;
+  compact?: boolean;
+  name?: string;
 }) {
+  const label = saved ? "Unsave" : "Save";
   return (
     <button
-      className="save-action"
+      type="button"
+      className={`save-action${compact ? " card-save" : ""}`}
+      aria-label={compact ? `${label} ${name}` : undefined}
+      title={compact ? `${label} ${name}` : undefined}
       aria-pressed={saved}
-      disabled={saved}
+      aria-busy={pending}
+      disabled={pending}
       onClick={(event) => {
         const button = event.currentTarget,
           r = button.getBoundingClientRect();
@@ -23,18 +34,24 @@ export function SaveButton({
           "--save-y",
           `${event.clientY ? event.clientY - r.top : r.height / 2}px`,
         );
-        onSave();
+        onToggle();
       }}
     >
       <span className="save-fill" aria-hidden />
       <span className={saved ? "save-symbol saved" : "save-symbol"}>
-        {saved ? (
+        {compact ? (
+          <Bookmark
+            aria-hidden
+            size={19}
+            style={{ fill: saved ? "currentColor" : "none" }}
+          />
+        ) : saved ? (
           <Check aria-hidden size={19} />
         ) : (
           <Bookmark aria-hidden size={19} />
         )}
       </span>
-      <span>{saved ? "Saved" : "Save"}</span>
+      {!compact && <span>{label}</span>}
     </button>
   );
 }

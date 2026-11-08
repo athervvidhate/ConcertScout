@@ -183,13 +183,21 @@ export function HowSearchWorks() {
         );
         await scope.wait(1700);
         if (!scope.live) return;
-        mark(2);
+        section.dataset.phase = "narrowing";
+        const narrowing: Promise<void>[] = [];
         names.forEach((el) => {
           const selected = picked.has(el.textContent ?? "");
           el.classList.toggle("pick", selected);
           if (!selected)
-            void scope.animate(el, [{ opacity: 1 }, { opacity: 0.25 }], 500);
+            narrowing.push(
+              scope.animate(el, [{ opacity: 1 }, { opacity: 0.25 }], 500),
+            );
         });
+        await Promise.all(narrowing);
+        if (!scope.live) return;
+        await scope.wait(200);
+        if (!scope.live) return;
+        mark(2);
         rows.forEach(
           (el, i) =>
             void scope.animate(
@@ -266,8 +274,8 @@ export function HowSearchWorks() {
             <p>Concerts in the shortlist, from real Ticketmaster listings.</p>
             <div className="how-demo demo-pool" data-how-panel>
               <div className="demo-count" data-demo-part>
-                <b data-count>{candidates.total}</b>Concerts considered near
-                Chicago
+                <b data-count>{candidates.total}</b>Concerts considered near{" "}
+                {example.interpreted?.region ?? example.interpreted?.place}
               </div>
               <div className="demo-names" data-demo-part>
                 {sample.map((name) => (
@@ -287,36 +295,38 @@ export function HowSearchWorks() {
             <span className="how-num">3</span>
             <h3>You get the ones that fit</h3>
             <p>Each pick says why. Save it or go get tickets.</p>
-            <div className="how-demo demo-picks" data-how-panel data-demo-part>
-              {picks.map((r) => (
-                <div className="demo-pick" key={r.concert.id}>
-                  {r.concert.image && (
-                    <Image
-                      src={r.concert.image}
-                      alt=""
-                      width={64}
-                      height={48}
-                      unoptimized
-                      loading="lazy"
-                    />
-                  )}
-                  <div>
-                    <b>{nameOf(r)}</b>
-                    <span>
-                      {[
-                        r.concert.date &&
-                          `${formatDayShort(r.concert.date)}, ${formatMonthDay(r.concert.date)}`,
-                        r.concert.venue,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
+            <div className="how-demo" data-how-panel>
+              <div className="demo-picks" data-demo-part>
+                {picks.map((r) => (
+                  <div className="demo-pick" key={r.concert.id}>
+                    {r.concert.image && (
+                      <Image
+                        src={r.concert.image}
+                        alt=""
+                        width={64}
+                        height={48}
+                        unoptimized
+                        loading="lazy"
+                      />
+                    )}
+                    <div>
+                      <b>{nameOf(r)}</b>
+                      <span>
+                        {[
+                          r.concert.date &&
+                            `${formatDayShort(r.concert.date)}, ${formatMonthDay(r.concert.date)}`,
+                          r.concert.venue,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
-              <p className="demo-why">
-                <b>Why {nameOf(picks[0])}:</b> {picks[0].reason}
-              </p>
+                ))}
+                <p className="demo-why">
+                  <b>Why {nameOf(picks[0])}:</b> {picks[0].reason}
+                </p>
+              </div>
             </div>
           </li>
         </ol>

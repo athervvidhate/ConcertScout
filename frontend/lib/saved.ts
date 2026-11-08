@@ -44,7 +44,9 @@ function followAccount() {
   const state = currentAccount();
   const owner = state.status === "signed-in" ? state.id : null;
   if ((account?.owner ?? null) === owner) return;
-  setAccount(owner ? { owner, where: "account", status: "loading", saved: [] } : null);
+  setAccount(
+    owner ? { owner, where: "account", status: "loading", saved: [] } : null,
+  );
   if (owner) void loadAccount(owner);
 }
 
@@ -57,7 +59,10 @@ async function moveDeviceSaves(): Promise<Moved | undefined> {
   const device = readList<Recommendation>(SAVED_KEY);
   if (device.length === 0) return undefined;
   try {
-    const saves = device.map(({ concert, reason }) => ({ concert_id: concert.id, reason }));
+    const saves = device.map(({ concert, reason }) => ({
+      concert_id: concert.id,
+      reason,
+    }));
     const response = await accountFetch("/saved/import", {
       method: "POST",
       body: JSON.stringify({ saves }),
@@ -65,7 +70,9 @@ async function moveDeviceSaves(): Promise<Moved | undefined> {
     const result: { saved: Recommendation[] } = await response.json();
     const added = new Set(result.saved.map((r) => r.concert.id));
     writeDevice(
-      readList<Recommendation>(SAVED_KEY).filter((r) => !added.has(r.concert.id)),
+      readList<Recommendation>(SAVED_KEY).filter(
+        (r) => !added.has(r.concert.id),
+      ),
     );
     return { added: added.size, left: device.length - added.size };
   } catch {
@@ -78,7 +85,8 @@ async function loadAccount(owner: string) {
     const moved = await moveDeviceSaves();
     const response = await accountFetch("/saved");
     const saved: Recommendation[] = await response.json();
-    if (account?.owner === owner) setAccount({ ...account, status: "ready", saved, moved });
+    if (account?.owner === owner)
+      setAccount({ ...account, status: "ready", saved, moved });
   } catch {
     if (account?.owner === owner) setAccount({ ...account, status: "failed" });
   }
@@ -120,7 +128,8 @@ function accountSaves(): AccountSaves | null {
   return currentAccount().status === "signed-in" ? account : null;
 }
 
-export type Saving = { where: "device" } | { where: "account"; done: Promise<void> };
+export type Saving =
+  { where: "device" } | { where: "account"; done: Promise<void> };
 
 /**
  * A device save throws at once when the browser refuses storage. An account save shows at once
@@ -130,13 +139,19 @@ export function saveConcert(recommendation: Recommendation): Saving {
   const id = recommendation.concert.id;
   const signedIn = accountSaves();
   if (!signedIn) {
-    const others = readList<Recommendation>(SAVED_KEY).filter((r) => r.concert.id !== id);
+    const others = readList<Recommendation>(SAVED_KEY).filter(
+      (r) => r.concert.id !== id,
+    );
     writeDevice([...others, recommendation]);
     return { where: "device" };
   }
   const { owner } = signedIn;
-  const without = (list: Recommendation[]) => list.filter((r) => r.concert.id !== id);
-  setAccount({ ...signedIn, saved: [...without(signedIn.saved), recommendation] });
+  const without = (list: Recommendation[]) =>
+    list.filter((r) => r.concert.id !== id);
+  setAccount({
+    ...signedIn,
+    saved: [...without(signedIn.saved), recommendation],
+  });
   const done = (async () => {
     try {
       const response = await accountFetch(`/saved/${encodeURIComponent(id)}`, {
@@ -145,10 +160,14 @@ export function saveConcert(recommendation: Recommendation): Saving {
       });
       const kept: Recommendation = await response.json();
       if (account?.owner === owner) {
-        setAccount({ ...account, saved: account.saved.map((r) => (r.concert.id === id ? kept : r)) });
+        setAccount({
+          ...account,
+          saved: account.saved.map((r) => (r.concert.id === id ? kept : r)),
+        });
       }
     } catch (caught) {
-      if (account?.owner === owner) setAccount({ ...account, saved: without(account.saved) });
+      if (account?.owner === owner)
+        setAccount({ ...account, saved: without(account.saved) });
       throw caught;
     }
   })();
@@ -159,16 +178,34 @@ export function saveConcert(recommendation: Recommendation): Saving {
 export async function removeSaved(id: string): Promise<void> {
   const signedIn = accountSaves();
   if (!signedIn) {
-    const saved = readList<Recommendation>(SAVED_KEY).filter((r) => r.concert.id !== id);
+    const saved = readList<Recommendation>(SAVED_KEY).filter(
+      (r) => r.concert.id !== id,
+    );
     writeDevice(saved);
     return;
   }
   const { owner, saved: before } = signedIn;
   setAccount({ ...signedIn, saved: before.filter((r) => r.concert.id !== id) });
   try {
-    await accountFetch(`/saved/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await accountFetch(`/saved/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
   } catch (caught) {
-    if (account?.owner === owner) setAccount({ ...account, saved: before });
+    if (
+      account?.owner === owner &&
+      !account.saved.some((r) => r.concert.id === id)
+    ) {
+      const removed = before.find((r) => r.concert.id === id);
+      if (removed) {
+        const saved = [...account.saved];
+        saved.splice(
+          Math.min(before.indexOf(removed), saved.length),
+          0,
+          removed,
+        );
+        setAccount({ ...account, saved });
+      }
+    }
     throw caught;
   }
 }
@@ -212,10 +249,18 @@ export function useSavedConcerts(): SavedView {
 
 export function useDecisions(): Record<string, Decision> {
   const { saved } = useSavedConcerts();
-  return useMemo(() => Object.fromEntries(saved.map(r => [r.concert.id, "saved" as const])), [saved]);
+  return useMemo(
+    () =>
+      Object.fromEntries(saved.map((r) => [r.concert.id, "saved" as const])),
+    [saved],
+  );
 }
 
 /** A Concert with no known date stays, because it may still be ahead. */
 export function upcoming(saved: Recommendation[], now: Date): Recommendation[] {
-  return saved.filter(({ concert }) => !concert.date || concert.date >= dateIn(concert.time_zone ?? viewerZone(), now));
+  return saved.filter(
+    ({ concert }) =>
+      !concert.date ||
+      concert.date >= dateIn(concert.time_zone ?? viewerZone(), now),
+  );
 }

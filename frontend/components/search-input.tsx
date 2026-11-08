@@ -25,7 +25,7 @@ export function SearchInput({
       onChange={(event) => onText(event.target.value)}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      placeholder={home ? example : undefined}
+      placeholder={home && !focused && !text ? example : undefined}
       required
       maxLength={500}
     />
