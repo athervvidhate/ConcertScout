@@ -132,17 +132,23 @@ test("live API stream keeps source facts, missing values and the Poster through 
   await expect(page.locator(".concert-card")).toHaveCount(2);
 });
 
-test("Poster presentation stays under one second after its response and records frame timing",async({page},info)=>{
+test("Poster starts revealing after the approved narrowing hold and records frame timing",async({page},info)=>{
   await page.emulateMedia({reducedMotion:"no-preference"});
   await page.addInitScript(()=>{
-    const timing={received:0,usable:0,gaps:[] as number[]};
+    const timing={received:0,reveal:0,usable:0,gaps:[] as number[]};
     Object.assign(window,{posterTiming:timing});
     let previous=0;
     function frame(now:number) {
       if(timing.received && !timing.usable) {
         if(previous) timing.gaps.push(now-previous);
         const trigger=document.querySelector<HTMLElement>('.card-open');
-        if(trigger && trigger.getBoundingClientRect().height>0 && Number(getComputedStyle(trigger.parentElement!).opacity)>=.99) timing.usable=performance.now();
+        const card=trigger?.closest<HTMLElement>('.concert-card');
+        if(card && card.getBoundingClientRect().height>0) {
+          const style=getComputedStyle(card);
+          if(!timing.reveal) timing.reveal=performance.now();
+          if(style.clipPath === 'none' && Number(style.opacity)>=.99 && Number(getComputedStyle(card.querySelector('.card-name')!).opacity)>=.99)
+            timing.usable=performance.now();
+        }
       }
       previous=now;
       if(!timing.usable)requestAnimationFrame(frame);
@@ -157,9 +163,12 @@ test("Poster presentation stays under one second after its response and records 
   await page.getByRole("textbox",{name:"Search",exact:true}).fill("UKG in SF");
   await page.getByRole("button",{name:"Search",exact:true}).click();
   await expect.poll(()=>page.evaluate(()=>(window as unknown as {posterTiming:{usable:number}}).posterTiming.usable)).toBeGreaterThan(0);
-  const timing=await page.evaluate(()=>(window as unknown as {posterTiming:{received:number;usable:number;gaps:number[]}}).posterTiming);
-  expect(timing.usable-timing.received).toBeLessThan(1000);
-  const metrics=JSON.stringify({responseToUsableMs:timing.usable-timing.received,frames:timing.gaps.length,maxFrameGapMs:Math.max(...timing.gaps)});
+  const timing=await page.evaluate(()=>(window as unknown as {posterTiming:{received:number;reveal:number;usable:number;gaps:number[]}}).posterTiming);
+  expect(timing.reveal-timing.received).toBeGreaterThanOrEqual(900);
+  expect(timing.reveal-timing.received).toBeLessThan(1600);
+  expect(timing.usable-timing.received).toBeGreaterThanOrEqual(1900);
+  expect(timing.usable-timing.received).toBeLessThan(2800);
+  const metrics=JSON.stringify({responseToRevealStartMs:timing.reveal-timing.received,responseToFirstCompleteCardMs:timing.usable-timing.received,frames:timing.gaps.length,maxFrameGapMs:Math.max(...timing.gaps)});
   await writeFile(info.outputPath("presentation-timing.json"),metrics);
   await info.attach("presentation-timing",{body:metrics,contentType:"application/json"});
 });

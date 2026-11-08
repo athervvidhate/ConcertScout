@@ -4,7 +4,15 @@ export const THEME_BOOT = `(function(){try{var m=localStorage.getItem('concert-s
 export function toggleTheme() {
   const mode =
     document.documentElement.dataset.mode === "dark" ? "light" : "dark";
-  document.documentElement.dataset.mode = mode;
+  const apply = () => {
+    document.documentElement.dataset.mode = mode;
+  };
+  if (
+    !matchMedia("(prefers-reduced-motion: reduce)").matches &&
+    document.startViewTransition
+  )
+    document.startViewTransition(apply);
+  else apply();
   try {
     localStorage.setItem("concert-scout-mode", mode);
   } catch {

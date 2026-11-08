@@ -6,7 +6,12 @@ async function locate(page: Page) {
 }
 
 async function search(page: Page, text = "UKG in SF", openTicket = true) {
-  if (await page.getByRole("button", {name:"Close Ticket"}).isVisible()) await page.getByRole("button", {name:"Close Ticket"}).click();
+  const ticket = page.locator(".ticket-dialog");
+  if (await ticket.count()) {
+    if (await ticket.getAttribute("data-motion-phase") !== "closing")
+      await page.getByRole("button", {name:"Close Ticket"}).click();
+    await expect(ticket).toHaveCount(0);
+  }
   await page.getByRole("textbox", { name: "Search", exact:true }).fill(text);
   await expect(page.getByRole("button", { name: "Search", exact:true })).toBeEnabled();
   await page.getByRole("button", { name: "Search", exact:true }).click();
@@ -18,7 +23,12 @@ async function search(page: Page, text = "UKG in SF", openTicket = true) {
 }
 
 async function openMenuItem(page: Page, name: string | RegExp) {
-  if (await page.getByRole("button", {name:"Close Ticket"}).isVisible()) await page.getByRole("button", {name:"Close Ticket"}).click();
+  const ticket = page.locator(".ticket-dialog");
+  if (await ticket.count()) {
+    if (await ticket.getAttribute("data-motion-phase") !== "closing")
+      await page.getByRole("button", {name:"Close Ticket"}).click();
+    await expect(ticket).toHaveCount(0);
+  }
   await page.getByRole("button", {name: "Menu", exact: true}).click();
   await page.getByRole("menuitem", {name}).click();
 }
@@ -257,11 +267,11 @@ test("Spotify access denial explains the invite list and keeps no session", asyn
 
 
 
-test("the header keeps the brand and the menu holds the links", async ({page}) => {
+test("the header keeps the brand and Saved Concerts alongside the menu", async ({page}) => {
   await page.goto("/");
   await expect(page.getByRole("heading", {level:1})).toBeVisible();
   await expect(page.getByRole("link", {name: "Concert Scout", exact: true})).toBeVisible();
-  await expect(page.getByRole("link", {name: "Saved Concerts", exact: true})).toHaveCount(0);
+  await expect(page.getByRole("link", {name: "Saved Concerts", exact: true})).toBeVisible();
   await openMenuItem(page, /^Your Taste/);
   await expect(page.getByRole("dialog", {name: "Your Taste"})).toBeVisible();
   await page.getByRole("button", {name: "Close"}).click();

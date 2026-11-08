@@ -18,6 +18,7 @@ export type SearchState = {
   run: number;
   searched: string;
   status: string | null;
+  step: string | null;
   interpreted: Interpreted | null;
   candidates: Candidates | null;
   recommendations: Recommendation[];
@@ -32,6 +33,7 @@ const IDLE: SearchState = {
   run: 0,
   searched: "",
   status: null,
+  step: null,
   interpreted: null,
   candidates: null,
   recommendations: [],
@@ -78,7 +80,11 @@ export function useSearch() {
           controller.signal,
         )) {
           if (event === "status") {
-            setState((state) => ({ ...state, status: data.message }));
+            setState((state) => ({
+              ...state,
+              status: data.message,
+              step: data.step,
+            }));
           } else if (event === "interpreted") {
             setState((state) => ({ ...state, interpreted: data }));
           } else if (event === "candidates") {
@@ -112,6 +118,7 @@ export function useSearch() {
         ...state,
         phase: "finished",
         status: null,
+        step: null,
         error,
         retryable,
       }));

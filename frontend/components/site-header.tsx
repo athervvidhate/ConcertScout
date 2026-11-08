@@ -1,11 +1,12 @@
 "use client";
 
 import { Menu } from "@base-ui/react/menu";
-import { Menu as MenuIcon } from "lucide-react";
+import { Menu as MenuIcon, Bookmark } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { SavedCount } from "@/components/animated-count";
 import { Brand } from "@/components/brand";
 import { useSavedConcerts } from "@/lib/saved";
 import { toggleTheme } from "@/lib/theme";
@@ -52,52 +53,56 @@ export function SiteHeader({ onHome, hideBrand, onTaste, tasteLabel }: Props) {
           <Brand />
         </Link>
       )}
-      {(onTaste || showSaved || showSignIn || showAccount) && (
-        <Menu.Root modal={false}>
-          <Menu.Trigger className="site-menu" aria-label="Menu">
-            <MenuIcon aria-hidden size={26} />
-          </Menu.Trigger>
-          <Menu.Portal>
-            <Menu.Positioner
-              className="site-menu-position"
-              align="end"
-              sideOffset={4}
-            >
-              <Menu.Popup className="site-menu-popup">
-                <Menu.Item onClick={toggleTheme}>
-                  Switch light / dark mode
-                </Menu.Item>
-                {showSaved && (
-                  <Menu.LinkItem render={<Link href="/saved" />} closeOnClick>
-                    Saved Concerts{" "}
-                    {saved.length > 0 && (
-                      <span
-                        className="saved-count"
-                        aria-label={`${saved.length} saved`}
-                      >
-                        {saved.length}
-                      </span>
-                    )}
-                  </Menu.LinkItem>
-                )}
-                {onTaste && (
-                  <Menu.Item onClick={onTaste}>{tasteLabel}</Menu.Item>
-                )}
-                {showSignIn && (
-                  <Menu.Item onClick={() => setSigningIn(true)}>
-                    Sign in
+      <div className="header-actions">
+        {showSaved && (
+          <Link className="nav-saved" href="/saved" aria-label="Saved Concerts">
+            <Bookmark aria-hidden size={20} />
+            <span className="nav-saved-label">Saved Concerts</span>
+            <SavedCount value={saved.length} />
+          </Link>
+        )}
+        {(onTaste || showSaved || showSignIn || showAccount) && (
+          <Menu.Root modal={false}>
+            <Menu.Trigger className="site-menu" aria-label="Menu">
+              <MenuIcon aria-hidden size={26} />
+            </Menu.Trigger>
+            <Menu.Portal>
+              <Menu.Positioner
+                className="site-menu-position"
+                align="end"
+                sideOffset={4}
+              >
+                <Menu.Popup className="site-menu-popup">
+                  <Menu.Item onClick={toggleTheme}>
+                    Switch light / dark mode
                   </Menu.Item>
-                )}
-                {showAccount && (
-                  <Menu.LinkItem render={<Link href="/account" />} closeOnClick>
-                    Account
-                  </Menu.LinkItem>
-                )}
-              </Menu.Popup>
-            </Menu.Positioner>
-          </Menu.Portal>
-        </Menu.Root>
-      )}
+                  {showSaved && (
+                    <Menu.LinkItem render={<Link href="/saved" />} closeOnClick>
+                      Saved Concerts <SavedCount value={saved.length} />
+                    </Menu.LinkItem>
+                  )}
+                  {onTaste && (
+                    <Menu.Item onClick={onTaste}>{tasteLabel}</Menu.Item>
+                  )}
+                  {showSignIn && (
+                    <Menu.Item onClick={() => setSigningIn(true)}>
+                      Sign in
+                    </Menu.Item>
+                  )}
+                  {showAccount && (
+                    <Menu.LinkItem
+                      render={<Link href="/account" />}
+                      closeOnClick
+                    >
+                      Account
+                    </Menu.LinkItem>
+                  )}
+                </Menu.Popup>
+              </Menu.Positioner>
+            </Menu.Portal>
+          </Menu.Root>
+        )}
+      </div>
       {account.status !== "off" && (
         <AccountDialog open={signingIn} onOpenChange={setSigningIn} />
       )}

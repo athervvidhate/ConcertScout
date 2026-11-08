@@ -2,10 +2,11 @@
 
 import { Button } from "@base-ui/react/button";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
-import { motion, useReducedMotion } from "motion/react";
-import { LocateFixed } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { ArrowRight, LocateFixed } from "lucide-react";
 import { type SubmitEvent, useEffect, useRef, useState } from "react";
 
+import { SearchChips } from "@/components/search-chips";
 import { SearchInput } from "@/components/search-input";
 import { HomeHero } from "@/components/home-hero";
 import { HomeStrip } from "@/components/home-strip";
@@ -35,6 +36,7 @@ export function Search() {
   const examples = useHomeExamples();
   const reduced = useReducedMotion();
   const [activeExample, setActiveExample] = useState(0);
+  const [returningHome, setReturningHome] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const [exampleNotice, setExampleNotice] = useState("");
   const [text, setText] = useState("");
@@ -51,6 +53,7 @@ export function Search() {
     run: searchRun,
     searched,
     status,
+    step,
     interpreted,
     candidates,
     recommendations,
@@ -113,9 +116,14 @@ export function Search() {
     botCheck.current?.reset();
     // A typed place wins on the server, so a shared location only fills the gap.
     search(query, token, taste?.artists ?? [], near);
+    input.current?.blur();
+    window.scrollTo({ top: 0, behavior: reduced ? "instant" : "smooth" });
   }
 
   function goHome() {
+    setReturningHome(true);
+    window.scrollTo({ top: 0, behavior: "instant" });
+    setActiveExample(0);
     setText("");
     setExampleNotice("");
     clear();
@@ -126,6 +134,8 @@ export function Search() {
     const cached = examples.find((item) => item.text === example);
     if (cached) {
       showExample(cached);
+      input.current?.blur();
+      window.scrollTo({ top: 0, behavior: reduced ? "instant" : "smooth" });
       setExampleNotice("");
     } else
       setExampleNotice(
@@ -154,18 +164,42 @@ export function Search() {
         onOpenChange={setTasteOpen}
       />
 
-      {home ? (
-        <HomeHero onCycle={setActiveExample} />
-      ) : (
-        <h1 className="sr-only">Concert Scout</h1>
-      )}
+      <AnimatePresence>
+        {home && (
+          <HomeHero
+            key="hero"
+            onCycle={setActiveExample}
+            returning={returningHome}
+          />
+        )}
+      </AnimatePresence>
+      {!home && <h1 className="sr-only">Concert Scout</h1>}
 
       <motion.form
         layout="position"
-        transition={{ duration: reduced ? 0 : 0.35 }}
+        initial={{ opacity: reduced ? 1 : 0, y: reduced ? 0 : 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          layout: { duration: reduced ? 0 : 0.8, ease: [0.87, 0, 0.13, 1] },
+          opacity: { duration: reduced ? 0 : 1, delay: reduced ? 0 : 0.25 },
+          y: {
+            duration: reduced ? 0 : 1,
+            delay: reduced ? 0 : 0.25,
+            ease: [0.16, 1, 0.3, 1],
+          },
+        }}
         onSubmit={submit}
-        className={`search-bar ${text.trim() ? "ready" : ""}`}
+        className={`search-bar ${text.trim() ? "ready" : ""} ${home ? "" : "compact"}`}
       >
+        <label htmlFor="search" className="sr-only">
+          Search
+        </label>
+        <SearchInput
+          text={text}
+          onText={setText}
+          home={home}
+          inputRef={input}
+        />
         <Button
           type="button"
           className="locate"
@@ -176,17 +210,14 @@ export function Search() {
         >
           <LocateFixed aria-hidden size={26} />
         </Button>
-        <label htmlFor="search" className="sr-only">
-          Search
-        </label>
-        <SearchInput
-          text={text}
-          onText={setText}
-          home={home}
-          inputRef={input}
-        />
-        <Button type="submit" disabled={!canSearch}>
-          Search
+        <Button
+          type="submit"
+          className="search-send"
+          aria-label="Search"
+          disabled={!canSearch}
+        >
+          <span className="send-label">Search</span>
+          <ArrowRight aria-hidden size={22} />
         </Button>
       </motion.form>
 
@@ -217,23 +248,55 @@ export function Search() {
         </p>
       )}
 
-      {home && (
-        <>
-          <p className="pitch">
-            An Artist, a sound, a place. We find the Concerts worth going out
-            for.
-          </p>
-          <SearchExamples onExample={tryExample} ready />
-          {exampleNotice && <p role="status">{exampleNotice}</p>}
-          {!spotify.connected && (
-            <HomeStrip
-              active={activeExample}
-              examples={examples}
-              onExample={tryExample}
-            />
-          )}
-        </>
-      )}
+      <AnimatePresence>
+        {home && (
+          <motion.div
+            key="home-intro"
+            initial={
+              returningHome ? { opacity: 0, y: reduced ? 0 : 20 } : false
+            }
+            animate={{ opacity: 1, y: 0 }}
+            exit={{
+              opacity: 0,
+              y: reduced ? 0 : -14,
+              transition: { duration: reduced ? 0 : 0.28 },
+            }}
+            transition={{
+              duration: reduced ? 0 : 0.8,
+              delay: reduced ? 0 : 0.38,
+              ease: [0.16, 1, 0.3, 1],
+            }}
+          >
+            <motion.p
+              className="pitch"
+              initial={
+                returningHome
+                  ? false
+                  : { opacity: reduced ? 1 : 0, y: reduced ? 0 : 24 }
+              }
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: reduced ? 0 : 1,
+                delay: reduced ? 0 : 0.33,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+            >
+              An Artist, a sound, a place. We find the Concerts worth going out
+              for.
+            </motion.p>
+            <SearchExamples onExample={tryExample} ready />
+            {exampleNotice && <p role="status">{exampleNotice}</p>}
+            {!spotify.connected && (
+              <HomeStrip
+                active={activeExample}
+                entering={!returningHome}
+                examples={examples}
+                onExample={tryExample}
+              />
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div aria-live="polite" className="search-context">
         {searchedFor && (
@@ -241,13 +304,19 @@ export function Search() {
             <p title={formatInterpreted(searchedFor)}>
               {formatPosterHeading(searchedFor)}
             </p>
-            <div className="understood" aria-label="How we read your Search">
-              {[...searchedFor.artists, ...searchedFor.genres].map((name) => (
-                <span className="chip" key={name}>
-                  {name}
-                </span>
-              ))}
-            </div>
+            <motion.div
+              key={JSON.stringify(searchedFor)}
+              className="understood"
+              aria-label="How we read your Search"
+              initial="hidden"
+              animate="shown"
+              variants={{
+                hidden: {},
+                shown: { transition: { staggerChildren: reduced ? 0 : 0.08 } },
+              }}
+            >
+              <SearchChips interpreted={searchedFor} />
+            </motion.div>
           </>
         )}
       </div>
@@ -267,55 +336,62 @@ export function Search() {
         </div>
       )}
 
-      {showPoster && (
-        <Poster
-          key={searchRun}
-          candidates={candidates}
-          recommendations={recommendations}
-          searching={phase === "searching"}
-          hasPoster={hasPoster}
-          status={status}
-          onChange={() => {
-            input.current?.focus();
-            input.current?.select();
-          }}
-          onWiderDates={
-            canSearch && searchedFor
-              ? () => {
-                  const words = [
-                    ...searchedFor.artists,
-                    ...searchedFor.genres,
-                    searchedFor.region ?? searchedFor.place,
-                  ]
-                    .filter(Boolean)
-                    .join(" ");
-                  const wider = `${words} in the next three months`;
-                  setText(wider);
-                  run(wider);
-                }
-              : undefined
-          }
-          onAnywhere={
-            elsewhere
-              ? () =>
-                  document
-                    .getElementById("elsewhere")
-                    ?.scrollIntoView({
-                      behavior: reduced ? "instant" : "smooth",
-                    })
-              : canSearch && interpreted && interpreted.artists.length > 0
-                ? () => {
-                    const anywhere = [
-                      ...interpreted.artists,
-                      ...interpreted.genres,
-                    ].join(" ");
-                    setText(anywhere);
-                    run(anywhere, null);
-                  }
-                : undefined
-          }
-        />
-      )}
+      <AnimatePresence mode="popLayout" initial={false}>
+        {showPoster && (
+          <motion.div
+            key={searchRun}
+            exit={{ opacity: 0, y: reduced ? 0 : -8 }}
+            transition={{ duration: reduced ? 0 : 0.25 }}
+          >
+            <Poster
+              key={searchRun}
+              candidates={candidates}
+              recommendations={recommendations}
+              searching={phase === "searching"}
+              hasPoster={hasPoster}
+              status={status}
+              step={step}
+              onChange={() => {
+                input.current?.focus();
+                input.current?.select();
+              }}
+              onWiderDates={
+                canSearch && searchedFor
+                  ? () => {
+                      const words = [
+                        ...searchedFor.artists,
+                        ...searchedFor.genres,
+                        searchedFor.region ?? searchedFor.place,
+                      ]
+                        .filter(Boolean)
+                        .join(" ");
+                      const wider = `${words} in the next three months`;
+                      setText(wider);
+                      run(wider);
+                    }
+                  : undefined
+              }
+              onAnywhere={
+                elsewhere
+                  ? () =>
+                      document.getElementById("elsewhere")?.scrollIntoView({
+                        behavior: reduced ? "instant" : "smooth",
+                      })
+                  : canSearch && interpreted && interpreted.artists.length > 0
+                    ? () => {
+                        const anywhere = [
+                          ...interpreted.artists,
+                          ...interpreted.genres,
+                        ].join(" ");
+                        setText(anywhere);
+                        run(anywhere, null);
+                      }
+                    : undefined
+              }
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
       {elsewhere && phase === "finished" && (
         <div id="elsewhere">
           <Board
@@ -355,15 +431,32 @@ export function Search() {
             genres={interpreted?.genres}
           />
         )}
-      {home && (
-        <HomeGuide
-          example={examples.find((e) => e.poster.recommendations.length > 0)}
-          personal={!spotify.connected}
-          locationLabel={locationLabel}
-          onLocation={toggleLocation}
-          onTaste={() => setTasteOpen(true)}
-        />
-      )}
+      <AnimatePresence initial={false}>
+        {home && (
+          <motion.div
+            key="guide"
+            initial={{ opacity: 0, y: reduced ? 0 : 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{
+              opacity: 0,
+              y: reduced ? 0 : -14,
+              transition: { duration: reduced ? 0 : 0.28 },
+            }}
+            transition={{
+              duration: reduced ? 0 : 0.8,
+              delay: reduced ? 0 : 0.46,
+              ease: [0.16, 1, 0.3, 1],
+            }}
+          >
+            <HomeGuide
+              personal={!spotify.connected}
+              locationLabel={locationLabel}
+              onLocation={toggleLocation}
+              onTaste={() => setTasteOpen(true)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
