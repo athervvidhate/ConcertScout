@@ -18,11 +18,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from redis.asyncio import Redis
 
 from concert_scout import limits
-from concert_scout.models import Concert
+from concert_scout.models import Artist, Concert
 from concert_scout.names import normalize
 from concert_scout.sources import http, ticketmaster
 
-Provider = Literal["ticketmaster", "ticketfairy"]
+Provider = Literal["ticketmaster", "ticketfairy", "jambase"]
 DEFAULT_REFERENCES = Path(__file__).with_name("coverage-references.json")
 CAPTURES = Path(__file__).parent / "snapshots" / "coverage"
 
@@ -79,11 +79,22 @@ class Lookup(BaseModel):
     payloads: list[dict[str, Any]] = []
 
 
+class JamBaseQuota(BaseModel):
+    plan: str
+    quota: int
+    usedCalls: int
+    remainingCalls: int
+    overageCalls: int
+    blocksAtQuota: bool
+
+
 class Capture(BaseModel):
     captured_at: dt.datetime
     references: References
     lookups: list[Lookup]
     seconds: float
+    control_requests: int = 0
+    jambase_quota: JamBaseQuota | None = None
 
 
 class Finding(BaseModel):
@@ -154,9 +165,11 @@ def compare(capture: Capture, provider: Provider) -> list[Finding]:
                 )
             )
             continue
-        keys = (
-            ["California"] if provider == "ticketfairy" else [reference.venue, *reference.keywords]
-        )
+        keys = [reference.venue]
+        if provider == "ticketfairy":
+            keys = ["California"]
+        elif provider == "ticketmaster":
+            keys += reference.keywords
         complete = all(key in lookups and lookups[key].complete for key in keys)
         # Same venue/date but different title may be an unrecognized alias; review it.
         uncertain = any(
@@ -215,6 +228,31 @@ def parse_candidates(provider: Provider, body: dict[str, Any]) -> tuple[list[Can
             )
             for row in body.get("_embedded", {}).get("events", [])
         ]
+    elif provider == "jambase":
+        if body.get("success") is not True:
+            raise ValueError("unsuccessful response")
+        total = int(body["pagination"]["totalItems"])
+        rows = []
+        for row in body["events"]:
+            location: dict[str, Any] = row.get("location") or {}
+            address: dict[str, Any] = location.get("address") or {}
+            region: dict[str, Any] = address.get("addressRegion") or {}
+            local_start: str = row.get("startDate") or ""
+            rows.append(
+                Candidate(
+                    concert=Concert(
+                        id=row["identifier"],
+                        name=row["name"],
+                        url=row["url"],
+                        artists=[Artist(name=p["name"]) for p in row.get("performer", [])],
+                        date=dt.date.fromisoformat(local_start[:10]) if local_start else None,
+                        venue=location.get("name"),
+                        city=address.get("addressLocality"),
+                        region=region.get("alternateName"),
+                    ),
+                    status=row.get("eventStatus", "unknown"),
+                )
+            )
     else:
         if body.get("success") is not True:
             raise ValueError("unsuccessful response")
@@ -238,14 +276,25 @@ def parse_candidates(provider: Provider, body: dict[str, Any]) -> tuple[list[Can
                 )
             )
     for candidate in rows:
-        candidate.concert.id = f"{provider}:{candidate.concert.id}"
+        if not candidate.concert.id.startswith(f"{provider}:"):
+            candidate.concert.id = f"{provider}:{candidate.concert.id}"
     return rows, total
 
 
 class AuditSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-    tm_key: SecretStr
+    tm_key: SecretStr | None = None
+    jbd_api_key: SecretStr | None = None
     redis_url: str = "redis://127.0.0.1:6379/0"
+
+
+async def read_jambase_quota(client: httpx.AsyncClient, key: str) -> JamBaseQuota:
+    response = await client.get(
+        "https://api.data.jambase.com/v3/quota",
+        headers={"Authorization": f"Bearer {key}"},
+    )
+    response.raise_for_status()
+    return JamBaseQuota.model_validate(response.json())
 
 
 async def capture_sources(
@@ -259,10 +308,16 @@ async def capture_sources(
     now = dt.datetime.now(dt.UTC)
     lookups: list[Lookup] = []
     used = 0
+    control_requests = 0
+    quota: JamBaseQuota | None = None
+    quota_error: str | None = None
+    jambase_remaining = 0
+    tm_key = settings.tm_key.get_secret_value() if settings.tm_key else None
+    jbd_key = settings.jbd_api_key.get_secret_value() if settings.jbd_api_key else None
     redis = Redis.from_url(  # pyright: ignore[reportUnknownMemberType]
         settings.redis_url, socket_connect_timeout=1, socket_timeout=1
     )
-    secrets = [settings.tm_key.get_secret_value()]
+    secrets = [key for key in [tm_key, jbd_key] if key]
     async with httpx.AsyncClient(
         headers={"User-Agent": http.USER_AGENT},
         timeout=15,
@@ -270,9 +325,19 @@ async def capture_sources(
     ) as client:
         try:
             for provider in providers:
+                if provider == "jambase" and jbd_key and used < max_requests:
+                    used += 1
+                    control_requests += 1
+                    try:
+                        quota = await read_jambase_quota(client, jbd_key)
+                        jambase_remaining = quota.remainingCalls
+                    except (httpx.HTTPError, ValueError) as exc:
+                        quota_error = type(exc).__name__
                 keywords = (
                     ["California"]
                     if provider == "ticketfairy"
+                    else sorted({r.venue for r in references.references})
+                    if provider == "jambase"
                     else sorted(
                         {
                             keyword
@@ -284,6 +349,16 @@ async def capture_sources(
                 for keyword in keywords:
                     lookup = Lookup(provider=provider, keyword=keyword)
                     lookups.append(lookup)
+                    if (provider == "ticketmaster" and not tm_key) or (
+                        provider == "jambase" and not jbd_key
+                    ):
+                        lookup.error = "provider key not configured"
+                        continue
+                    if provider == "jambase" and quota is None:
+                        lookup.error = (
+                            f"included quota not verified: {quota_error or 'budget exhausted'}"
+                        )
+                        continue
                     if provider == "ticketfairy" and (
                         references.country != "US" or references.state != "CA"
                     ):
@@ -295,6 +370,7 @@ async def capture_sources(
                         if used >= max_requests:
                             lookup.error = "request budget exhausted"
                             break
+                        headers: dict[str, str] = {}
                         if provider == "ticketmaster":
                             try:
                                 await limits.ticketmaster_call(redis)
@@ -304,7 +380,7 @@ async def capture_sources(
                                 break
                             url = f"{ticketmaster.BASE_URL}/events.json"
                             params: dict[str, str | int] = {
-                                "apikey": secrets[0],
+                                "apikey": tm_key or "",
                                 "keyword": keyword,
                                 "size": 200,
                                 "page": page,
@@ -314,6 +390,21 @@ async def capture_sources(
                                 "localStartDateTime": (
                                     f"{references.start}T00:00:00,{references.end}T23:59:59"
                                 ),
+                            }
+                        elif provider == "jambase":
+                            if quota is None or jambase_remaining <= 0:
+                                lookup.error = "included JamBase quota exhausted; overage disabled"
+                                break
+                            url = "https://api.data.jambase.com/v3/events"
+                            headers = {"Authorization": f"Bearer {jbd_key}"}
+                            params = {
+                                "venueName": keyword,
+                                "geoCountryIso2": references.country,
+                                "eventDateFrom": str(references.start),
+                                # Include the full last local date regardless of endpoint boundary.
+                                "eventDateTo": str(references.end + dt.timedelta(days=1)),
+                                "perPage": 100,
+                                "page": page + 1,
                             }
                         else:
                             url = "https://www.ticketfairy.com/api/v1/events/listing"
@@ -332,8 +423,10 @@ async def capture_sources(
                         used += 1
                         lookup.requests += 1
                         try:
-                            response = await client.get(url, params=params)
+                            response = await client.get(url, params=params, headers=headers)
                             response.raise_for_status()
+                            if provider == "jambase" and quota:
+                                jambase_remaining -= 1
                             # Never persist a response echoing a credential.
                             body = response.text
                             for secret in secrets:
@@ -350,6 +443,8 @@ async def capture_sources(
                             page += 1
                             if provider == "ticketmaster":
                                 done = page * 200 >= total
+                            elif provider == "jambase":
+                                done = page >= payload["pagination"]["totalPages"]
                             else:
                                 done = page >= payload["data"]["pagination"]["totalPages"]
                             if done:
@@ -357,7 +452,7 @@ async def capture_sources(
                                 if not lookup.complete:
                                     lookup.error = "response count differs from published total"
                                 break
-                            if not rows or page * 200 >= 1000:
+                            if not rows or page * (100 if provider == "jambase" else 200) >= 1000:
                                 lookup.error = "paging truncated; absence is not established"
                                 break
                         except httpx.HTTPStatusError as exc:
@@ -374,6 +469,8 @@ async def capture_sources(
         references=references,
         lookups=lookups,
         seconds=round(time.perf_counter() - started, 3),
+        control_requests=control_requests,
+        jambase_quota=quota,
     )
 
 
@@ -385,6 +482,8 @@ def report(capture: Capture) -> dict[str, Any]:
         "unit": "hand-reviewed venue dates, not distinct sets or nationwide recall",
         "references": len(capture.references.references),
         "capture_seconds": capture.seconds,
+        "control_requests": capture.control_requests,
+        "jambase_quota": capture.jambase_quota.model_dump() if capture.jambase_quota else None,
         "providers": {
             p: {
                 "states": dict(Counter(f.state for f in findings if f.provider == p)),
@@ -409,6 +508,26 @@ def report(capture: Capture) -> dict[str, Any]:
     }
 
 
+def incremental(baseline: Capture, addition: Capture, provider: Provider) -> dict[str, Any]:
+    if baseline.references != addition.references:
+        raise ValueError("captures must use the same frozen references and date window")
+    before = {f.reference_id: f.state for f in compare(baseline, "ticketmaster")}
+    added = {f.reference_id for f in compare(addition, provider) if f.state == "present"}
+    present = {id for id, state in before.items() if state == "present"}
+    return {
+        "baseline_provider": "ticketmaster",
+        "addition_provider": provider,
+        "references": len(before),
+        "baseline_present": len(present),
+        "addition_present": len(added),
+        "overlap": len(present & added),
+        "confirmed_additions": sorted(id for id in added if before[id] == "missing"),
+        "newly_resolved": sorted(id for id in added if before[id] == "unresolved"),
+        "combined_present": len(present | added),
+        "unconfirmed": len(before) - len(present | added),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -416,16 +535,30 @@ def main() -> None:
     live.add_argument("--references", type=Path, default=DEFAULT_REFERENCES)
     live.add_argument("--output", type=Path, default=CAPTURES / "capture.json")
     live.add_argument("--env-file", type=Path, default=Path(".env"))
+    live.add_argument(
+        "--jambase-key-file", type=Path, help="private secret-file input; never logged"
+    )
     live.add_argument("--max-requests", type=int, default=50)
     live.add_argument(
         "--providers",
         nargs="+",
-        choices=["ticketmaster", "ticketfairy"],
+        choices=["ticketmaster", "ticketfairy", "jambase"],
         default=["ticketmaster", "ticketfairy"],
     )
     offline = commands.add_parser("replay", help="local captured records only; no keys or network")
     offline.add_argument("capture", type=Path)
+    comparison = commands.add_parser(
+        "compare", help="incremental coverage against a frozen baseline"
+    )
+    comparison.add_argument("baseline", type=Path)
+    comparison.add_argument("addition", type=Path)
+    comparison.add_argument("--provider", choices=["jambase", "ticketfairy"], required=True)
     args = parser.parse_args()
+    if args.command == "compare":
+        before = Capture.model_validate_json(args.baseline.read_text())
+        added = Capture.model_validate_json(args.addition.read_text())
+        print(json.dumps(incremental(before, added, args.provider), indent=2))
+        return
     if args.command == "capture":
         if not 1 <= args.max_requests <= 100:
             parser.error("max-requests must be between 1 and 100")
@@ -433,6 +566,8 @@ def main() -> None:
             parser.error("output already exists; choose a new path to preserve evidence")
         references = References.model_validate_json(args.references.read_text())
         settings = AuditSettings(_env_file=args.env_file)  # pyright: ignore[reportCallIssue]
+        if args.jambase_key_file:
+            settings.jbd_api_key = SecretStr(args.jambase_key_file.read_text().strip())
         capture = asyncio.run(
             capture_sources(
                 references,

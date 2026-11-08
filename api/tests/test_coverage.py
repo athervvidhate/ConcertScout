@@ -16,11 +16,13 @@ from evals.coverage import (
     AuditSettings,
     Candidate,
     Capture,
+    JamBaseQuota,
     Lookup,
     Reference,
     References,
     capture_sources,
     compare,
+    incremental,
     main,
     parse_candidates,
     report,
@@ -238,3 +240,79 @@ def test_replay_cli_never_opens_a_client_or_loads_credentials(
     main()
     result = json.loads(capsys.readouterr().out)
     assert result["providers"]["ticketmaster"]["states"] == {"present": 1}
+
+
+def jambase_fields() -> dict[str, Any]:
+    return json.loads(
+        Path(__file__).with_name("fixtures").joinpath("coverage-jambase.json").read_text()
+    )
+
+
+def test_jambase_real_fields_preserve_identity_and_lineup_without_double_prefix() -> None:
+    rows, total = parse_candidates("jambase", jambase_fields()["payload"])
+    assert total == 8  # selected first record; not a complete page
+    concert = rows[0].concert
+    assert concert.id == "jambase:17324221"
+    assert concert.date == DAY
+    assert concert.venue == "Lodge Room"
+    assert [a.name for a in concert.artists] == [
+        "Hit the Lights",
+        "Forever Came Calling",
+        "Fox Royale",
+    ]
+    assert concert.url == "https://www.jambase.com/show/hit-the-lights-lodge-room-20261108"
+    assert concert.time is None and concert.price is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remaining", [0, 1])
+async def test_jambase_cannot_spend_overage_or_require_a_ticketmaster_key(
+    remaining: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def quota(_: httpx.AsyncClient, key: str) -> JamBaseQuota:
+        assert key == "private-test-key"
+        # Inject an app-owned typed quota; do not invent vendor response fields.
+        return JamBaseQuota.model_validate(jambase_fields()["quota"]).model_copy(
+            update={"remainingCalls": remaining}
+        )
+
+    monkeypatch.setattr("evals.coverage.read_jambase_quota", quota)
+    calls: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Authorization"] == "Bearer private-test-key"
+        assert "apikey" not in request.url.params
+        calls.append(request)
+        return httpx.Response(200, json=jambase_fields()["payload"])
+
+    result = await capture_sources(
+        capture().references,
+        AuditSettings(jbd_api_key=SecretStr("private-test-key")),
+        10,
+        ["jambase"],
+        httpx.MockTransport(respond),
+    )
+    assert len(calls) == remaining
+    assert result.control_requests == 1
+    assert "private-test-key" not in result.model_dump_json()
+    if remaining == 0:
+        assert "overage disabled" in (result.lookups[0].error or "")
+    else:
+        assert "count differs" in (result.lookups[0].error or "")
+    assert compare(result, "jambase")[0].state == "unresolved"
+
+
+def test_incremental_gains_distinguish_missing_from_unresolved_and_reject_changed_scope() -> None:
+    addition = capture(candidate("jambase:one"))
+    for lookup in addition.lookups:
+        lookup.provider = "jambase"
+    result = incremental(capture(), addition, "jambase")
+    assert result["confirmed_additions"] == ["venue:one"]
+    assert result["combined_present"] == 1
+    result = incremental(capture(complete=False), addition, "jambase")
+    assert result["confirmed_additions"] == []
+    assert result["newly_resolved"] == ["venue:one"]
+    addition.references.references[0].date += dt.timedelta(days=1)
+    with pytest.raises(ValueError, match="same frozen references"):
+        incremental(capture(), addition, "jambase")

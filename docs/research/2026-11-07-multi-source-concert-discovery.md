@@ -4,6 +4,8 @@ Research date: November 7, 2026. This supersedes the prioritization in [the earl
 
 Research and live read-only probes only. No app, hosting, credentials or product specs were changed. No accounts, subscriptions, feed applications or outreach were initiated.
 
+Subsequent work implemented the [coverage audit](../validation/2026-11-07-coverage-audit.md). After the owner supplied a key privately, JamBase's actual Developer API recovered seven additional venue dates in the frozen sample without overage. See that evidence for the current measured recommendation; this note preserves the earlier access research.
+
 ## Recommended implementation
 
 Build a shared Concert pool from **broad APIs plus venue and scene sources**, refreshed outside the Search request. Retain Ticketmaster, evaluate JamBase as the first broad additional feed, and add a small number of venue adapters selected by measured omissions. Pursue See Tickets' documented marketplace feed alongside that work. Use Artist tour calendars to discover additional venue/seller combinations rather than assuming every Artist uses one seller everywhere.

@@ -2,9 +2,27 @@
 
 ## Decision
 
-The coverage gap is substantial in this deliberately selected venue sample. **Test JamBase's API next; do not add Ticket Fairy to the live Search on the strength of this audit.** JamBase's public Lodge Room calendar contains the seven missing Lodge Room dates, making a bounded API trial worthwhile. Its public Baked Potato calendar has no upcoming Concerts, so it is not evidence that JamBase solves every venue gap. Targeted venue ingestion remains a useful later priority.
+The coverage gap is substantial in this deliberately selected venue sample. **JamBase's API recovered seven missing venue dates on the owner's Developer plan; a cached production adapter is justified as the next slice.** Keep Ticketmaster as well: JamBase missed one SOMA date that Ticketmaster returned. Ticket Fairy recovered no reference dates and is deferred. The Baked Potato gap remains, so targeted venue ingestion remains a useful later priority.
 
 This is an offline developer tool and evidence, not a production multi-source integration. The app's Ticketmaster-only source scope is unchanged. No accounts, paid plans, affiliate links, partner applications, outreach or recurring scrapers were created.
+
+## JamBase API follow-up with the owner's key
+
+After the initial audit, the owner supplied a key privately. Authentication and a free quota check verified the Developer plan with 1,000 included calls and no prior use. One exploratory Lodge Room request established the actual response schema. The audit then captured all three venue queries at **00:31:02 UTC, November 8** (November 7 in California), using the same frozen reference manifest and local date window as the Ticketmaster baseline.
+
+| Source combination | Confirmed reference dates | New dates beyond Ticketmaster | Unconfirmed reference dates |
+|---|---:|---:|---:|
+| Ticketmaster baseline | 3 | — | 16 |
+| JamBase alone | 9 | 7 | 10 |
+| **Ticketmaster + JamBase** | **10** | **7** | **9** |
+
+The two providers overlap on Underoath and JSTJR at SOMA. JamBase missed Father Of Peace, which Ticketmaster returned. All seven Lodge Room reference dates were present in the JamBase API and matched exact venue/city/date plus published Lineup aliases. The Baked Potato query returned no records; all nine reference dates remain unconfirmed. These are venue-name queries with reviewed location matching, not proof of absence from every JamBase access path.
+
+JamBase returned eight Lodge Room records (the seven reviewed dates plus the excluded family tribute program), two SOMA records and no Baked Potato records. All three queries completed in one page, with no errors. The actual Developer response included local dates, Lineups, genres, venue information, statuses and links. It did not establish reliable ticket prices or external Artist identity mappings for this task; the audit does not invent those fields. Some primary ticket offers lead to a venue homepage with JamBase tracking, so a future Ticket must preserve source attribution and avoid implying a precise checkout URL when none is provided.
+
+**Measured cost:** the capture used three catalog requests plus one free preflight quota request in **2.533 seconds**, including setup and the quota check; summed catalog lookup time was **2.096 seconds**. No model calls. A separate post-run quota check verified **4 used, 996 remaining, 0 overage calls**: the one exploratory request plus the three audited requests. Quota checks do not consume catalog calls. No payment or plan upgrade was made. These times measure background collection, not production Search latency. A nightly refresh of only these three venues would require about 90 catalog calls per 30 days if every query still fits one page; that is a planning assumption, not a national coverage/cost estimate.
+
+Private capture: `api/evals/snapshots/coverage/jambase-2026-11-07.json`, 89,376 bytes, mode `0600`, SHA-256 `afd94b2f8eb3147e89bf190e980ddb21e7604b74d521788ac4b3da037afa495c`. The `compare` command reproduces seven confirmed additions and two overlaps against the original Ticketmaster capture, rejecting differing manifests/date windows. Replay reproduced the saved report exactly. A compact real-field fixture supports parser contracts. Follow-up validation: **258 API contracts, including 16 audit contracts**, strict pyright and ruff lint/format passed. Quota preflight, no-overage and credential-free offline replay are tested. The private key remains in the secret delivery file, not the repository or logs; scans found none of its value or URL encodings in the JamBase captures, fixture or audit source.
 
 ## Method and limits
 
@@ -32,9 +50,9 @@ The [chart](2026-11-07-coverage-audit.html) shows the same venue-date counts. Re
 - **The Baked Potato:** all nine reviewed dates were absent from the completed venue and Artist/title lookups. The calendar describes multiple inside sets and separate patio video tickets; the audit does not invent missing set times or equate patio tickets with inside seats.
 - **Ticket Fairy:** the API returned seven California records in the window, including Lotus and Desert Dwellers in Northern California, but none agreed with the reference venue dates. This does not establish that Ticket Fairy adds no value in other Regions, dates or genres.
 
-### JamBase feasibility, separated from API results
+### Initial JamBase feasibility, before the key was supplied
 
-No JamBase key is configured. Its [official API onboarding](https://data.jambase.com/api/docs/getting-started) requires one, so no authenticated API capture or adapter was attempted. No API recall/cost claim is made.
+At the initial capture, no JamBase key was configured. Its [official API onboarding](https://data.jambase.com/api/docs/getting-started) requires one, so that initial pass contained only public-page observations. The authenticated follow-up above supersedes this access limitation.
 
 Read-only inspection of [JamBase's Lodge Room calendar](https://www.jambase.com/venue/lodge-room) found all seven reference dates and matching Artists. Its [Baked Potato calendar](https://www.jambase.com/venue/the-baked-potato) says there are no upcoming Concerts. These public-site observations justify testing whether the API and intended plan expose the same useful dates. They are not counted as seven proven API additions. Earlier research details the non-commercial plan and access constraints; see [multi-source discovery](../research/2026-11-07-multi-source-concert-discovery.md).
 
@@ -63,7 +81,7 @@ Contracts cover external checkout, repeated-query ID deduplication, multiple set
 
 ## Follow-up order
 
-1. Obtain a JamBase key through the owner's chosen free trial/Developer account, then run the same reference window or a newly verified window against the API under a small request ceiling. Confirm the seven Lodge Room dates and actual plan fields before writing a production adapter. Current evidence supports this modest next experiment, not a subscription upgrade.
-2. If the API adds those dates, implement one source adapter and source-aware caching, deduplication and status handling. Test both source-pool coverage and whether named-Artist Searches can surface the added dates. Keep ingestion off the visitor's request path.
+1. Completed: authenticated Developer-plan trial on the same frozen reference window, recovering the seven Lodge Room dates without overage. No subscription upgrade is warranted by this sample.
+2. Implement one source adapter and source-aware caching, deduplication and status handling. Test both source-pool coverage and whether named-Artist Searches can surface the added dates. Keep ingestion off the visitor's request path. Developer-plan Artist identity fields may require the existing name-based matching route rather than relying on external IDs; place-only selection currently depends on MusicBrainz IDs and needs explicit treatment.
 3. If jazz-room gaps remain, evaluate a permitted venue/ThunderTix feed rather than expecting a second broad API to fix it. Extend the reference sample to other US metros, independent rooms, orchestras and additional sellers before claiming broad US gains.
 4. Pursue See Tickets display-feed access and scene-specific feeds once their incremental coverage and terms justify the maintenance. Ticket Fairy is deferred for this sample; its accessible endpoint alone is not a reason to change production.
