@@ -504,3 +504,29 @@ test("a reload during a Search offers a retry of the same words", async ({page})
   expect((await request).postDataJSON().text).toBe("UKG in SF");
   await expect(page.locator(".card-open").first()).toBeVisible();
 });
+
+test("a Ticket for a Concert with no Lineup shows its title and offers no Artist panel", async ({page}) => {
+  const concert = {id: "unbilled", name: "JEFF CROSBY'S ANNUAL HOMECOMING RUN", artists: [], date: "2027-05-15", venue: "Neurolux", city: "Boise", url: "https://tickets.example/unbilled"};
+  const events = [
+    ["interpreted", {place: "Boise", artists: [], genres: []}],
+    ["poster", {recommendations: [{concert, reason: "A source-backed recommendation."}]}],
+    ["done", {}],
+  ];
+  let artistRequests = 0;
+  page.on("request", request => { if (request.url().includes("/artist?")) artistRequests++; });
+  await page.route("**/search", route => route.fulfill({
+    contentType: "text/event-stream",
+    body: events.map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join(""),
+  }));
+  await page.goto("/");
+  await page.getByRole("textbox", {name: "Search", exact: true}).fill("music in Boise");
+  await page.getByRole("button", {name: "Search", exact: true}).click();
+  // One pick shows its Ticket right on the Poster.
+  const ticket = page.locator(".ticket");
+  await expect(ticket.getByRole("heading", {name: concert.name})).toBeVisible();
+  await expect(ticket.locator(".artist-name")).toHaveCount(0);
+  await expect(ticket.getByRole("button", {name: concert.name})).toHaveCount(0);
+  await expect(ticket.getByText("Tap the name for more")).toHaveCount(0);
+  await expect(ticket.getByRole("link", {name: `Tickets for ${concert.name}`})).toHaveAttribute("href", concert.url);
+  expect(artistRequests).toBe(0);
+});

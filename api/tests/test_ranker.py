@@ -185,3 +185,22 @@ async def test_failed_reasons_are_a_ranker_error() -> None:
     )
     with pytest.raises(ranker.RankerError):
         await ranker.explain(EMPTY, shown, reasons_model(RuntimeError("down")))
+
+
+def unbilled(id: str, title: str = "Everything All The Time Tour") -> Candidate:
+    """A Concert whose source gave no Lineup, and whose title MusicBrainz confirmed nobody in."""
+    return Candidate(concert=Concert(id=id, name=title, url="https://tickets.example", artists=[]))
+
+
+def test_the_ranker_sees_a_concert_with_no_lineup_as_an_unknown_lineup_never_its_title() -> None:
+    found = ranker.rows([unbilled("a"), unbilled("b")], {})
+    assert found["a"].artist is None and found["b"].artist is None
+    assert "Tour" not in ranker.reasons_prompt(EMPTY, list(found.values()))
+
+
+def test_concerts_with_no_lineup_are_not_one_artist_in_assemble() -> None:
+    twins = [unbilled("a"), unbilled("b")]
+    named = candidate("named", 0.5, "one_hop", artist="Everything All The Time Tour")
+    poster = assemble.from_levels({"a": 3, "b": 3, "named": 2}, [*twins, named])
+    assert [r.concert.id for r in poster] == ["a", "b", "named"]
+    assert all(not r.also for r in poster)

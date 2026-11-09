@@ -283,7 +283,13 @@ def create_app(
         return _failure(exc.status, SearchError(code=exc.code, message=exc.message))
 
     app.include_router(
-        spotify.router(settings, services.redis, services.ticketmaster, services.geocoder)
+        spotify.router(
+            settings,
+            services.redis,
+            services.ticketmaster,
+            services.musicbrainz,
+            services.geocoder,
+        )
     )
     app.include_router(feedback.router(settings, services.redis, transport))
     if accounts_client:

@@ -14,7 +14,7 @@ from concert_scout import assemble, catalog, matching, pool, sync, warm
 from concert_scout.app import make_services
 from concert_scout.models import Artist, Concert, Place
 from concert_scout.sources import jambase, musicbrainz, ticketmaster
-from tests.contracts import forbidden_http, settings_with
+from tests.contracts import forbidden_http, idle_musicbrainz, settings_with
 
 FIXTURES = Path(__file__).parent / "fixtures"
 MOMENT = dt.datetime(2026, 11, 7, 20, tzinfo=dt.UTC)
@@ -78,7 +78,9 @@ async def test_search_reads_nearby_cells_and_state_without_provider_http(
     first = concerts[0]
     monkeypatch.setattr(ticketmaster, "find_concerts", AsyncMock(return_value=[]))
     async with ticketmaster.make_client("unused", httpx.MockTransport(forbidden_http)) as client:
-        found = await pool.find_concerts(client, redis, LA, [], first.date, first.date, MOMENT)
+        found = await pool.find_concerts(
+            client, idle_musicbrainz(), redis, LA, [], first.date, first.date, MOMENT
+        )
     assert found == [first]
     # A JamBase Artist ID admits place-only Concerts without MusicBrainz links.
     assert matching.notable(found)[0].concert == first

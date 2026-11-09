@@ -222,15 +222,18 @@ async def _recommend(
     poster = assemble.from_levels(levels, shortlist)
     candidates = {candidate.concert.id: candidate for candidate in shortlist}
     shown = [ranker.row(candidates[r.concert.id], artist_tags) for r in poster]
+    # A Concert with no Lineup has no Artist to describe, so it keeps its neutral reason.
+    named = [n for n, row in enumerate(shown) if row.artist]
     try:
-        reasons = await _explained(interpretation, shown, services)
+        written = await _explained(interpretation, [shown[n] for n in named], services)
     except RankerError as exc:
         # The grades still stand. Each Concert keeps the neutral reason its match gave it.
         logger.warning("Reasons failed: %s", exc)
         return poster
+    reasons = dict(zip(named, written, strict=True))
     return [
-        r.model_copy(update={"reason": reason}) if reason else r
-        for r, reason in zip(poster, reasons, strict=True)
+        r.model_copy(update={"reason": reasons[n]}) if reasons.get(n) else r
+        for n, r in enumerate(poster)
     ]
 
 
@@ -307,6 +310,7 @@ async def _steps(
         with telemetry.step("pool"):
             return await pool.find_concerts(
                 services.ticketmaster,
+                services.musicbrainz,
                 services.redis,
                 place,
                 lookups,

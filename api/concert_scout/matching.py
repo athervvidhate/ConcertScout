@@ -158,14 +158,11 @@ def notable(concerts: Sequence[Concert]) -> list[Candidate]:
 
 
 def candidate_names(candidates: Sequence[Candidate]) -> list[str]:
-    """Who the shortlist is about, once each, falling back on the Concert's own name."""
+    """Who the shortlist is about, once each. A Concert with no Lineup is about no Artist."""
     names = (
-        c.match.artist
-        if c.match
-        else c.concert.artists[0].name
-        if c.concert.artists
-        else c.concert.name
+        c.match.artist if c.match else c.concert.artists[0].name
         for c in candidates
+        if c.match or c.concert.artists
     )
     return list(dict.fromkeys(names))
 

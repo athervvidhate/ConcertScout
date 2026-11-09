@@ -32,7 +32,8 @@ def upcoming(recommendations: Sequence[Recommendation], today: dt.date) -> list[
 
 
 def _headliner(concert: Concert) -> str:
-    return normalize(concert.artists[0].name if concert.artists else concert.name)
+    """The key that stacks one Artist's dates. A Concert with no Lineup stands alone."""
+    return normalize(concert.artists[0].name) if concert.artists else f"concert:{concert.id}"
 
 
 def _stacked(

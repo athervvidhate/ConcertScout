@@ -38,7 +38,8 @@ class RankerError(Exception):
 class Row(BaseModel):
     """What a model sees of a Concert: short fields only, and never a URL, date or price."""
 
-    artist: str
+    # None for a Concert whose Lineup is unknown. Its title is never passed off as an Artist.
+    artist: str | None
     genre: str | None
     tags: list[str]
     signal: str | None
@@ -95,7 +96,7 @@ def row(candidate: Candidate, artist_tags: Mapping[str, Sequence[str]]) -> Row:
     artist = next((a for a in artists if match and a.name == match.artist), first)
     tags = usable_tags(artist_tags.get(artist.mbid or "", [])) if artist else set[str]()
     return Row(
-        artist=_short(artist.name if artist else candidate.concert.name),
+        artist=_short(artist.name) if artist else None,
         genre=artist and artist.subgenre or artist and artist.genre,
         tags=[_short(tag) for tag in sorted(tags)[:MAX_TAGS]],
         signal=match and match.signal,
@@ -111,7 +112,8 @@ def rows(
     by_artist: dict[str, tuple[str, Row]] = {}
     for candidate in shortlist:
         found = row(candidate, artist_tags)
-        by_artist.setdefault(found.artist.casefold(), (candidate.concert.id, found))
+        key = found.artist.casefold() if found.artist else candidate.concert.id
+        by_artist.setdefault(key, (candidate.concert.id, found))
     return dict(by_artist.values())
 
 
