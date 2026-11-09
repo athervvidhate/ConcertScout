@@ -54,7 +54,7 @@ export function ShareButton({ link, title, label = "Share", iconOnly }: Props) {
         {done ? <Check aria-hidden size={19} /> : <Share2 aria-hidden size={19} />}
         {!iconOnly && <span>{done ?? label}</span>}
       </button>
-      <span role="status" className="sr-only">
+      <span aria-live="polite" className="sr-only">
         {done}
       </span>
       {error && (
