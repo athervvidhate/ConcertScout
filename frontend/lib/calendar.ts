@@ -150,7 +150,7 @@ export function downloadCalendar(concert: Concert): boolean {
   document.body.append(link);
   link.click();
   link.remove();
-  // Some browsers read the blob after the click, so release it afterwards.
-  setTimeout(() => URL.revokeObjectURL(link.href), 0);
+  // Safari can read the blob well after the click, so it is released later, as FileSaver.js does.
+  setTimeout(() => URL.revokeObjectURL(link.href), 40_000);
   return true;
 }
