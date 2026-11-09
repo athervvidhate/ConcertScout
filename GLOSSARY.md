@@ -16,6 +16,10 @@ _Avoid_: Preferences, profile, playlist info
 A real-world live music event, as reported by its source. A festival is a Concert with a lineup.
 _Avoid_: Event, show, gig
 
+**Catalog**:
+The local copy of JamBase's US Concerts that a daily sync keeps in Redis. A Search reads it and never calls JamBase.
+_Avoid_: Feed, dump, mirror
+
 **Artist**:
 A performer who plays at Concerts. A Concert has one or more Artists.
 _Avoid_: Attraction, act, band

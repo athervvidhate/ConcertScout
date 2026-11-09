@@ -7,7 +7,7 @@ import httpx
 from pydantic import BaseModel
 from redis.asyncio import Redis
 
-from concert_scout import cache, clock
+from concert_scout import cache, catalog, clock
 from concert_scout.models import Concert, Place
 from concert_scout.names import normalize
 from concert_scout.sources import ticketmaster
@@ -98,7 +98,62 @@ async def find_concerts(
         )
     from_seeds = [c for group in seeds for c in group if _ahead(c, start, seed_last, now)]
     from_pool = [c for group in chunks for c in group if _ahead(c, start, last, now)]
-    return list({c.id: c for c in [*from_seeds, *from_pool]}.values())
+    primary = list({c.id: c for c in [*from_seeds, *from_pool]}.values())
+    # The JamBase catalog is local, so this never waits on JamBase.
+    extra = await catalog.concerts_near(redis, place, start, end, now) if place else []
+    merged = merge_sources(primary, extra)
+    if on_found and (added := merged[len(primary) :]):
+        on_found(added)
+    return merged
+
+
+# Words every venue name shares, so they never prove two listings are the same room.
+_VENUE_FILLER = frozenset(
+    "the a an at of and by on in theatre theater theatres theaters club room hall bar "
+    "lounge center centre venue house live music ca los angeles".split()
+)
+# Sources disagree on doors versus set time. Early and late sets sit further apart.
+_SAME_SET = dt.timedelta(minutes=90)
+
+
+def _venue_words(venue: str | None) -> set[str]:
+    return {w for w in normalize(venue or "").split() if w not in _VENUE_FILLER}
+
+
+def _same_set(a: dt.time | None, b: dt.time | None) -> bool:
+    if a is None or b is None:
+        return True
+    day = dt.date(2000, 1, 1)
+    gap = dt.datetime.combine(day, a) - dt.datetime.combine(day, b)
+    return abs(gap) <= _SAME_SET
+
+
+def merge_sources(primary: Sequence[Concert], extra: Sequence[Concert]) -> list[Concert]:
+    """Prefer the primary source's listing of a performance; keep other sets, rooms and dates.
+
+    Sources spell venues and cities differently, so a duplicate is the same date, the extra
+    headliner anywhere in the primary Lineup, a shared distinctive venue word and a nearby
+    start time.
+    """
+    by_artist: dict[tuple[dt.date, str], list[Concert]] = {}
+    for concert in primary:
+        if concert.date:
+            for artist in concert.artists:
+                by_artist.setdefault((concert.date, normalize(artist.name)), []).append(concert)
+    merged = list(primary)
+    for concert in extra:
+        matches = (
+            by_artist.get((concert.date, normalize(concert.artists[0].name)), [])
+            if concert.date and concert.artists
+            else []
+        )
+        words = _venue_words(concert.venue)
+        if not any(
+            words & _venue_words(other.venue) and _same_set(concert.time, other.time)
+            for other in matches
+        ):
+            merged.append(concert)
+    return merged
 
 
 async def find_elsewhere(

@@ -32,7 +32,7 @@ If nothing qualifies, the page says so and offers the nearest useful change, suc
 
 ## Ticket
 
-A Ticket shows the date, Artist, the reason for the pick, venue, day and time, price if the source has one, and a link to buy from Ticketmaster. When the source has a real photo, the Ticket shows it beside the details on desktop and above them on phones. A missing or generic source photo stays out. While a Concert is not yet on general sale, a Ticket names its next presale that has not ended and when it starts. VIP packages do not count.
+A Ticket shows the date, Artist, the reason for the pick, venue, day and time, price if the source has one, and a link to the source listing: Ticketmaster, or the JamBase event page. When the source has a real photo, the Ticket shows it beside the details on desktop and above them on phones. A missing or generic source photo stays out. While a Concert is not yet on general sale, a Ticket names its next presale that has not ended and when it starts. VIP packages do not count.
 
 Dates and times read on the venue's clock. A visitor in the same time zone sees "7:30 PM". A visitor anywhere else sees the venue's zone too, as in "7:30 PM CST". Presales open at one moment, so they stay in the visitor's zone.
 

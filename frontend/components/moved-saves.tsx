@@ -11,7 +11,7 @@ export function MovedSaves() {
   if (moved.added) parts.push(`Moved ${countOf(moved.added, "Saved Concert")} from this device into your account.`);
   if (moved.left) {
     parts.push(
-      `${countOf(moved.left, "Saved Concert")} could not be confirmed with Ticketmaster and stayed on this device. The next sign-in tries again.`,
+      `${countOf(moved.left, "Saved Concert")} could not be confirmed with their source and stayed on this device. The next sign-in tries again.`,
     );
   }
   return (

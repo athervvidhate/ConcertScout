@@ -150,8 +150,10 @@ def notable(concerts: Sequence[Concert]) -> list[Candidate]:
     """
     firsts: dict[str, Concert] = {}
     for concert in concerts:
-        if concert.artists and concert.artists[0].mbid:
-            firsts.setdefault(concert.artists[0].mbid, concert)
+        if concert.artists:
+            artist = concert.artists[0]
+            if artist.mbid or artist.source_id:
+                firsts.setdefault(normalize(artist.name), concert)
     return [Candidate(concert=concert) for concert in list(firsts.values())[:SHORTLIST_SIZE]]
 
 

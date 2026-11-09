@@ -25,6 +25,7 @@ from concert_scout import (
     limits,
     security,
     spotify,
+    sync,
     warm,
 )
 from concert_scout.config import Settings
@@ -38,6 +39,7 @@ from concert_scout.pipeline import (
 from concert_scout.security import Refused, SecurityHeaders
 from concert_scout.sources import (
     geocoder,
+    jambase,
     jev,
     lastfm,
     listenbrainz,
@@ -109,6 +111,10 @@ def make_services(
         redis=redis or cache.make_client(settings.redis_url),
         model=model or interpreter.make_model(settings.anthropic_api_key.get_secret_value()),
         turnstile=security.make_turnstile_client(transport),
+        jambase=jambase.make_client(settings.jbd_api_key.get_secret_value(), transport)
+        if settings.jbd_api_key
+        else None,
+        jambase_days=settings.jambase_days,
     )
 
 
@@ -157,6 +163,8 @@ def create_app(
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         yield
         await services.ticketmaster.aclose()
+        if services.jambase:
+            await services.jambase.aclose()
         await services.geocoder.aclose()
         await services.musicbrainz.aclose()
         await services.listenbrainz.aclose()
@@ -287,6 +295,15 @@ def create_app(
             if settings.search_enabled:
                 await home.refresh(services)
             return warmed
+
+        # Vercel's scheduler, once a day: the JamBase catalog, then MusicBrainz IDs.
+        @app.get("/sync", include_in_schema=False)
+        async def sync_catalog(
+            authorization: Annotated[str, Header()] = "",
+        ) -> list[sync.Step]:
+            if not hmac.compare_digest(authorization.encode(), expected.encode()):
+                raise Refused(401, "not_scheduler", "Only the scheduler can sync the catalog.")
+            return await sync.run(services, dt.datetime.now(dt.UTC))
 
     @app.get("/artist", response_model=ArtistProfiles, response_model_exclude_none=True)
     async def artist(

@@ -355,7 +355,13 @@ def router(
             )
         try:
             concerts = await pool.find_concerts(
-                ticketmaster, redis, where, [], start, end, clock.now_in(time_zone)
+                ticketmaster,
+                redis,
+                where,
+                [],
+                start,
+                end,
+                clock.now_in(time_zone),
             )
         except tm.TicketmasterError:
             raise Refused(

@@ -3,7 +3,7 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { LayoutGrid, List, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import Image from "next/image";
+import { ConcertPhoto } from "@/components/concert-source";
 import {
   useCallback,
   useEffect,
@@ -199,18 +199,14 @@ export function Poster({
     );
   }
   function photo(r: Recommendation, inDialog = false) {
-    return r.concert.image ? (
-      <div className={inDialog ? "dialog-photo" : "card-photo"}>
-        <Image
-          src={r.concert.image}
-          alt=""
-          fill
-          unoptimized
-          sizes="(max-width:640px) 100vw, 60vw"
-          draggable={false}
-        />
-      </div>
-    ) : null;
+    return (
+      <ConcertPhoto
+        concert={r.concert}
+        className={inDialog ? "dialog-photo" : "card-photo"}
+        sizes="(max-width:640px) 100vw, 60vw"
+        draggable={false}
+      />
+    );
   }
   function choose(rank: number, event: React.MouseEvent<HTMLElement>) {
     source.current = event.currentTarget.closest<HTMLElement>(".concert-card");

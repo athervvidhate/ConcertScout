@@ -25,6 +25,7 @@ export type Concert = {
   name: string;
   url: string;
   artists: Artist[];
+  source?: "ticketmaster" | "jambase";
   date?: string;
   time?: string;
   // The venue's IANA zone. `date` and `time` already read in it.

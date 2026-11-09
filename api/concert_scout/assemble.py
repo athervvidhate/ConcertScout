@@ -28,8 +28,8 @@ def _stacked(
 ) -> list[Recommendation]:
     """One Recommendation per Artist, carrying their other dates.
 
-    Sources list one Concert more than once under different venue names, so an Artist's date
-    only ever counts once.
+    Keep separate venues and known performance times on the same day. Cross-source duplicates
+    have already been reconciled by the pool.
     """
     by_artist: defaultdict[str, list[Concert]] = defaultdict(list)
     for candidate in shortlist:
@@ -40,9 +40,13 @@ def _stacked(
         artist = _headliner(recommendation.concert)
         if artist in stacked:
             continue
-        dates = {recommendation.concert.date: recommendation.concert}
+
+        def identity(c: Concert) -> tuple[object, ...]:
+            return c.date, normalize(c.venue or ""), normalize(c.city or ""), c.time
+
+        dates = {identity(recommendation.concert): recommendation.concert}
         for concert in by_artist[artist]:
-            dates.setdefault(concert.date, concert)
+            dates.setdefault(identity(concert), concert)
         also = [c for c in dates.values() if c is not recommendation.concert]
         also.sort(key=lambda c: (c.date is None, c.date))
         stacked[artist] = recommendation.model_copy(update={"also": also})

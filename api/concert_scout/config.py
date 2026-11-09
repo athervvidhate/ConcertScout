@@ -1,7 +1,7 @@
 import ipaddress
 from urllib.parse import urlsplit
 
-from pydantic import SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from concert_scout import limits
@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     # Typesafe's Jev grades the shortlist. Required.
     typesafe_api_key: SecretStr
     lastfm_key: SecretStr | None = None
+    jbd_api_key: SecretStr | None = None
+    # How far ahead the national JamBase catalog reaches. The Developer plan allows 180.
+    jambase_days: int = Field(default=90, ge=1, le=180)
+
     redis_url: str = "redis://127.0.0.1:6379/0"
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     search_enabled: bool = True

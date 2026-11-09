@@ -1,9 +1,9 @@
 import { Pointer } from "lucide-react";
-import Image from "next/image";
 import { Fragment, useId, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { ArtistPanel } from "@/components/artist-panel";
+import { ConcertPhoto, SourceLink } from "@/components/concert-source";
 import {
   byVenue,
   formatDate,
@@ -78,16 +78,14 @@ function OtherDates({ concerts }: { concerts: Concert[] }) {
                 <ul className="other-chips">
                   {shows.map((concert) => (
                     <li key={concert.id}>
-                      <a
+                      <SourceLink
                         href={concert.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
                         aria-label={`Tickets for ${[concert.date && formatDate(concert.date), placeOf(concert)].filter(Boolean).join(", ")}`}
                       >
                         {concert.date
                           ? `${formatDayShort(concert.date)} ${formatMonthDay(concert.date)}`
                           : "Tickets"}
-                      </a>
+                      </SourceLink>
                     </li>
                   ))}
                 </ul>
@@ -126,17 +124,13 @@ export function Ticket({
 
   return (
     <article className="ticket" data-color={rank % 5}>
-      {concert.image && !hidePhoto && (
-        <div className="ticket-photo">
-          {/* Ticketmaster already sizes these, so nothing is resized here. */}
-          <Image
-            src={concert.image}
-            alt=""
-            fill
-            unoptimized
-            draggable={false}
-          />
-        </div>
+      {!hidePhoto && (
+        <ConcertPhoto
+          concert={concert}
+          className="ticket-photo"
+          sizes="(max-width: 600px) 100vw, 800px"
+          draggable={false}
+        />
       )}
       <div className="ticket-main">
         {concert.date && (
@@ -164,14 +158,9 @@ export function Ticket({
       </div>
       <div className="ticket-stub">
         {concert.price && <Price text={formatPrice(concert.price, true)} />}
-        <a
-          href={concert.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={`Tickets for ${concert.name}`}
-        >
+        <SourceLink href={concert.url} aria-label={`Tickets for ${concert.name}`}>
           Tickets
-        </a>
+        </SourceLink>
       </div>
     </article>
   );

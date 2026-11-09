@@ -15,7 +15,7 @@ flowchart LR
     B[Browser] -->|POST Search / SSE| A[FastAPI]
     A --> I[Interpret: Haiku]
     I --> R[Resolve place and seed Artists]
-    R --> P[Pool: Ticketmaster]
+    R --> P[Pool: Ticketmaster + JamBase catalog]
     P --> M[Match and shortlist: code]
     M --> K[Grade IDs: Jev]
     K --> S[Assemble facts from source records]
@@ -25,7 +25,7 @@ flowchart LR
 
 1. The interpreter, a Claude Haiku call with no tools, turns the Search into named Artists, style tags, a place and dates.
 2. Code geocodes the place and resolves each Artist through MusicBrainz.
-3. Code gathers every Concert for that place and window from Ticketmaster, cached and shared between Searches.
+3. Code gathers every Concert for that place and window from Ticketmaster and a national JamBase catalog synced daily, cached and shared between Searches.
 4. Code scores those Concerts against the Taste, using similar Artists, tags and genres, and keeps up to 40.
 5. Typesafe's Jev grades every shortlisted Artist from 0 to 3 in one request. It sees short fields, never a date, price or link.
 6. Code drops any ID it does not recognise, keeps the best grades and fills in every fact from the source record.
@@ -88,10 +88,10 @@ docs/
 
 ## Limits
 
-Ticketmaster does not list every show, so small rooms can be missing. Sparse tags and missing Artist IDs can hide a good Concert, and broad electronic genres can still produce weak picks. Reasons are the model's own words about an Artist, so they can be wrong. Dates, venues and links come straight from the source.
+Ticketmaster does not list every show. JamBase fills in small rooms across the US, but some venues are in neither. Sparse tags and missing Artist IDs can hide a good Concert, and broad electronic genres can still produce weak picks. Reasons are the model's own words about an Artist, so they can be wrong. Dates, venues and links come straight from the source.
 
 Spotify is invite-only for now, because of how Spotify limits new apps.
 
 ## Data credits
 
-Concert facts and links come from [Ticketmaster](https://www.ticketmaster.com). Artist identities and tags come from [MusicBrainz](https://musicbrainz.org), under its [data licenses](https://musicbrainz.org/doc/About/Data_License). Similarity and tags come from [ListenBrainz](https://listenbrainz.org), with [Last.fm](https://www.last.fm) as a fallback and an optional Taste import. Places use [Geoapify](https://www.geoapify.com) and [OpenStreetMap contributors](https://www.openstreetmap.org/copyright). The account shelf uses [Spotify](https://open.spotify.com).
+Concert facts and links come from [Ticketmaster](https://www.ticketmaster.com) and [JamBase](https://www.jambase.com). Artist identities and tags come from [MusicBrainz](https://musicbrainz.org), under its [data licenses](https://musicbrainz.org/doc/About/Data_License). Similarity and tags come from [ListenBrainz](https://listenbrainz.org), with [Last.fm](https://www.last.fm) as a fallback and an optional Taste import. Places use [Geoapify](https://www.geoapify.com) and [OpenStreetMap contributors](https://www.openstreetmap.org/copyright). The account shelf uses [Spotify](https://open.spotify.com).

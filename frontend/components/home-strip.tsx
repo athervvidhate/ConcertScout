@@ -1,7 +1,7 @@
 "use client";
 import { motion, useReducedMotion } from "motion/react";
 import { SEARCH_EXAMPLES } from "@/lib/search-examples";
-import Image from "next/image";
+import { ConcertPhoto } from "@/components/concert-source";
 import { nameOf } from "@/components/ticket";
 import type { HomeExample } from "@/lib/home-examples";
 import { EXPO_OUT_CURVE } from "@/lib/choreography";
@@ -50,11 +50,9 @@ export function HomeStrip({
             onClick={() => onExample(example.text)}
             aria-label={`See ${example.text}`}
           >
-            <Image
-              src={r.concert.image!}
-              alt=""
-              fill
-              unoptimized
+            <ConcertPhoto
+              concert={r.concert}
+              className="strip-photo"
               sizes="(max-width:640px) 50vw, 20vw"
             />
             <span>

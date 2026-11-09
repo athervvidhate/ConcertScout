@@ -53,6 +53,29 @@ With no place, skip the pool. Look up the seeds and the top 15 similar Artists b
 
 Stay under Ticketmaster's 5 requests per second and 5,000 a day, with a shared limiter in Redis. All HTTP is async through `httpx`.
 
+### JamBase catalog
+
+JamBase lists clubs and small rooms that Ticketmaster misses. With `JBD_API_KEY` set, a daily `GET /sync` (Vercel cron at 10:00 UTC, the quiet hours in the US) keeps a national copy in Redis, and a Search never calls JamBase. Visitors therefore cannot spend its quota or wait on it.
+
+- The catalog covers the US for the next `JAMBASE_DAYS` days (default 90; the Developer plan allows 180). On November 7, 2026 the US held 14,706 events in the next 30 days and 34,632 in the next six months.
+- The first runs download each state once, 100 events a page, resuming at the next state on the following run. A state that does not fit in what is left of a run waits for the next one. Nine states, CA through GA, took 152 calls.
+- After that, each run asks for US events changed since the previous run (`dateModifiedFrom`, five minutes of overlap), then for the days newly inside the window. About 10,000 US events change in a week, roughly 15 pages a day.
+- Listings live in one Redis hash per one-degree grid cell and month. A Search reads the cells its radius touches, or every cell its state holds, and filters by distance. A month's hash expires a few days after it ends. Changed events move cell, and cancelled, postponed, online-only and removed events leave. A Search with no place does not read the catalog.
+- One Redis lock allows a single writer. Before any catalog request, `/v3/quota` must leave headroom under 900 calls a month, so the Developer plan's 1,000 included calls never overflow. The quota check itself counts as a call. A run lasts at most 240 seconds and keeps the last 60 for MusicBrainz.
+- Reading a week near Los Angeles adds about 15 ms (p95 27 ms on a local Redis); a 90-day window, about 1,500 Concerts, adds about 50 ms (p95 160 ms).
+
+### MusicBrainz IDs for catalog Artists
+
+JamBase's Developer plan does not return MusicBrainz IDs, and tags and similarity need them. The sync resolves names itself:
+
+- One MusicBrainz search resolves up to 20 names (`artist:"A" OR artist:"B" ...`, 100 results), through the shared one-per-second gate. A name takes the exact name or alias match. With several exact namesakes, the top one must lead by 5 points, so Bahamas resolves to Afie Jurvanen and a tie is left unresolved. A name crowded out of a full page is asked again later.
+- Each run first takes Artists playing in the next 30 days in the busy cities (`warm.PLACES`) together with the 20 cells holding the most Concerts. The two lists usually agree but not always, so both count. Soonest Concert first. Then the queue of every other catalog Artist, soonest first.
+- Answers are kept by normalized name. A name with no answer is asked again after 60 days. A Search attaches the IDs when it reads the catalog, so tags and similarity work for these Artists as for Ticketmaster's.
+- On November 7, 2026 a pass settled about 950 names a minute and found IDs for 80% of them. Twelve sampled Los Angeles matches were all the intended Artist.
+
+- A JamBase Concert is dropped as a duplicate when a Ticketmaster Concert on the same date has its headliner anywhere in the Lineup, shares a distinctive venue word, and starts within 90 minutes or has no known time. The sources spell venues and cities differently ("The Belasco" and "Belasco Theater", Hollywood and Los Angeles), so exact matching let a quarter of the catalog through twice. Ticketmaster's price and presales stay. Other rooms and early or late sets stay separate. On November 7, 2026, JamBase added 176 Concerts to the 216 Ticketmaster listed within 50 miles of Los Angeles for the coming week.
+- JamBase has no price or presale. Its image is used only from JamBase's own uploads, never a default, and passes through the Next.js image cache. The footer and Privacy page credit JamBase, and its links carry `rel="nofollow"`.
+
 ## 4. Match
 
 Each Artist in the pool gets the best score it qualifies for. Join on MusicBrainz ID first, then on normalized name. 48% of Artists in the spike had no ID.
@@ -176,4 +199,4 @@ api/concert_scout/
 
 Jev grades poor fits below 2 and assembly leaves them out. If grading fails, only matches with a score strictly greater than 0.3 qualify; genre-only and unmatched Concerts do not fill a Poster. Neutral fallback reasons describe the actual match signal. These thresholds are initial values for evaluation.
 
-For a place-only Search, use Concerts whose headliner has a MusicBrainz ID in Ticketmaster as a practical proxy for notability. Keep the first Concert per headliner, soonest first, up to eight. This proxy may omit notable Artists without linked IDs.
+For a place-only Search, use Concerts whose headliner has a MusicBrainz ID in Ticketmaster, or a JamBase Artist ID, as a practical proxy for notability. Keep the first Concert per headliner, soonest first, up to eight. This proxy may omit notable Artists without linked IDs.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useInView, useReducedMotion } from "motion/react";
-import Image from "next/image";
+import { ConcertPhoto } from "@/components/concert-source";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { SearchChips } from "@/components/search-chips";
 import { nameOf } from "@/components/ticket";
@@ -271,7 +271,7 @@ export function HowSearchWorks() {
           <li className="how-step">
             <span className="how-num">2</span>
             <h3>It checks real listings</h3>
-            <p>Concerts in the shortlist, from real Ticketmaster listings.</p>
+            <p>Concerts in the shortlist, from real Ticketmaster and JamBase listings.</p>
             <div className="how-demo demo-pool" data-how-panel>
               <div className="demo-count" data-demo-part>
                 <b data-count>{candidates.total}</b>Concerts considered near{" "}
@@ -299,16 +299,12 @@ export function HowSearchWorks() {
               <div className="demo-picks" data-demo-part>
                 {picks.map((r) => (
                   <div className="demo-pick" key={r.concert.id}>
-                    {r.concert.image && (
-                      <Image
-                        src={r.concert.image}
-                        alt=""
-                        width={64}
-                        height={48}
-                        unoptimized
-                        loading="lazy"
-                      />
-                    )}
+                    <ConcertPhoto
+                      concert={r.concert}
+                      className="demo-photo"
+                      sizes="64px"
+                      loading="lazy"
+                    />
                     <div>
                       <b>{nameOf(r)}</b>
                       <span>
