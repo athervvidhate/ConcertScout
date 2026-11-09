@@ -6,8 +6,8 @@ import logging
 from pydantic import BaseModel
 from redis.asyncio import Redis
 
-from concert_scout import cache, limits
-from concert_scout.models import Candidates, Interpreted, Poster, Recommendation
+from concert_scout import assemble, cache, limits
+from concert_scout.models import Candidates, Interpreted, Poster
 from concert_scout.pipeline import Services, run_search
 
 logger = logging.getLogger(__name__)
@@ -40,12 +40,7 @@ async def read(redis: Redis, today: dt.date) -> Examples:
     for example in stored.examples:
         if example.interpreted and example.interpreted.end and example.interpreted.end < today:
             continue
-        picks: list[Recommendation] = []
-        for pick in example.poster.recommendations:
-            if pick.concert.date and pick.concert.date < today:
-                continue
-            also = [c for c in pick.also if not c.date or c.date >= today]
-            picks.append(pick.model_copy(update={"also": also}))
+        picks = assemble.upcoming(example.poster.recommendations, today)
         visible.append(example.model_copy(update={"poster": Poster(recommendations=picks)}))
     return Examples(examples=visible)
 
@@ -63,9 +58,7 @@ async def refresh(services: Services) -> None:
         failed = False
         async for event in run_search(text, [], None, "UTC", services):
             if event.event == "interpreted":
-                interpreted = Interpreted.model_validate(
-                    {field: event.data.get(field) for field in Interpreted.model_fields}
-                )
+                interpreted = Interpreted.model_validate(event.data)
             elif event.event == "candidates":
                 candidates = Candidates.model_validate(event.data)
             elif event.event == "poster":

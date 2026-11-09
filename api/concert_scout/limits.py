@@ -24,6 +24,8 @@ TASTE_PER_HOUR = 30
 ARTIST_PER_HOUR = 120
 # Each save or import looks its Concerts up on Ticketmaster.
 SAVES_PER_HOUR = 120
+# Each share writes one small record that lives for 90 days.
+SHARES_PER_HOUR = 30
 FEEDBACK_PER_HOUR = 5
 FEEDBACK_EVERYONE_PER_HOUR = 20
 HOUR_SECONDS = 3600
