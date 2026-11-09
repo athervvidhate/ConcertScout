@@ -29,7 +29,6 @@ export function HomeStrip({
     <section className="home-strip" aria-label="Found by real Searches">
       <header>
         <h2>Found by real Searches</h2>
-        <p>Open an example. See what made the cut.</p>
       </header>
       <div className="strip">
         {picks.map(({ r, example }, index) => (

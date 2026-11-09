@@ -347,7 +347,6 @@ button:disabled { opacity:.6; cursor:default; }
 .home-strip { margin-top:56px; }
 .home-strip header { display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
 .home-strip h2 { font-size:14px; font-weight:650; margin:0; }
-.home-strip p { font-size:13px; color:var(--ink-2); margin:0; }
 .strip-tile { position:relative; flex:1; min-width:0; overflow:hidden; border:0; border-radius:16px; background:var(--photo-bg); color:white; padding:0; text-align:left; transition:flex-grow .5s var(--ease); }
 .strip-tile:hover,.strip-tile:focus-visible { flex-grow:2; }
 .strip-tile img { object-fit:cover; }
@@ -664,4 +663,9 @@ button:disabled { opacity:.6; cursor:default; }
 .concerts-grid .concert-card:not(.solo) .card-body::before { z-index:-2; -webkit-backdrop-filter:blur(14px) saturate(1.15); backdrop-filter:blur(14px) saturate(1.15); -webkit-mask-image:linear-gradient(180deg,transparent,#000 55%); mask-image:linear-gradient(180deg,transparent,#000 55%); }
 .concerts-grid .concert-card:not(.solo) .card-body::after { z-index:-1; background:linear-gradient(180deg,rgb(6 18 14/0.000) 0%,rgb(6 18 14/0.011) 8%,rgb(6 18 14/0.042) 15%,rgb(6 18 14/0.089) 22%,rgb(6 18 14/0.150) 29%,rgb(6 18 14/0.223) 35%,rgb(6 18 14/0.303) 41%,rgb(6 18 14/0.387) 47%,rgb(6 18 14/0.473) 53%,rgb(6 18 14/0.557) 59%,rgb(6 18 14/0.637) 65%,rgb(6 18 14/0.709) 71%,rgb(6 18 14/0.771) 78%,rgb(6 18 14/0.818) 85%,rgb(6 18 14/0.849) 92%,rgb(6 18 14/0.860) 100%); }
 .concerts-grid .concert-card:not(.solo) .card-body > * { text-shadow:0 1px 14px rgb(0 0 0/.28); }
+/* Smaller cards than the lead keep more of their photo: a shorter, lighter backing. Equal-size layouts stay uniform. */
+.concerts-grid:not([data-count="2"]):not([data-count="4"]) .concert-card:not(.rank-0):not(.solo) .card-body { padding-top:20px; }
+@media(min-width:641px) { .concerts-grid:not([data-count="2"]):not([data-count="4"]) .concert-card:not(.rank-0):not(.solo) { min-height:340px; } }
+.concerts-grid:not([data-count="2"]):not([data-count="4"]) .concert-card:not(.rank-0):not(.solo) .card-body::before,.concerts-grid:not([data-count="2"]):not([data-count="4"]) .concert-card:not(.rank-0):not(.solo) .card-body::after { top:-24px; }
+.concerts-grid:not([data-count="2"]):not([data-count="4"]) .concert-card:not(.rank-0):not(.solo) .card-body::before { -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); -webkit-mask-image:linear-gradient(180deg,transparent,#000 70%); mask-image:linear-gradient(180deg,transparent,#000 70%); }
 .concerts-grid .card-meta,.concerts-grid .card-why,.concerts-grid .card-bill { opacity:1; color:#fff; }
