@@ -18,9 +18,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from redis.asyncio import Redis
 
 from concert_scout import limits
-from concert_scout.models import Artist, Concert
+from concert_scout.models import Concert
 from concert_scout.names import normalize
-from concert_scout.sources import http, ticketmaster
+from concert_scout.sources import http, jambase, ticketmaster
 
 Provider = Literal["ticketmaster", "ticketfairy", "jambase"]
 DEFAULT_REFERENCES = Path(__file__).with_name("coverage-references.json")
@@ -232,27 +232,13 @@ def parse_candidates(provider: Provider, body: dict[str, Any]) -> tuple[list[Can
         if body.get("success") is not True:
             raise ValueError("unsuccessful response")
         total = int(body["pagination"]["totalItems"])
-        rows = []
-        for row in body["events"]:
-            location: dict[str, Any] = row.get("location") or {}
-            address: dict[str, Any] = location.get("address") or {}
-            region: dict[str, Any] = address.get("addressRegion") or {}
-            local_start: str = row.get("startDate") or ""
-            rows.append(
-                Candidate(
-                    concert=Concert(
-                        id=row["identifier"],
-                        name=row["name"],
-                        url=row["url"],
-                        artists=[Artist(name=p["name"]) for p in row.get("performer", [])],
-                        date=dt.date.fromisoformat(local_start[:10]) if local_start else None,
-                        venue=location.get("name"),
-                        city=address.get("addressLocality"),
-                        region=region.get("alternateName"),
-                    ),
-                    status=row.get("eventStatus", "unknown"),
-                )
+        rows = [
+            Candidate(
+                concert=jambase.parse_listing(row).concert,
+                status=row.get("eventStatus", "unknown"),
             )
+            for row in body["events"]
+        ]
     else:
         if body.get("success") is not True:
             raise ValueError("unsuccessful response")

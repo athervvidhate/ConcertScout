@@ -261,7 +261,7 @@ def test_jambase_real_fields_preserve_identity_and_lineup_without_double_prefix(
         "Fox Royale",
     ]
     assert concert.url == "https://www.jambase.com/show/hit-the-lights-lodge-room-20261108"
-    assert concert.time is None and concert.price is None
+    assert concert.time == dt.time(20) and concert.price is None
 
 
 @pytest.mark.asyncio
