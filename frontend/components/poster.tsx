@@ -4,6 +4,7 @@ import { Dialog } from "@base-ui/react/dialog";
 import { LayoutGrid, List, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ConcertPhoto } from "@/components/concert-source";
+import { ListenStage } from "@/components/listen";
 import {
   useCallback,
   useEffect,
@@ -13,6 +14,7 @@ import {
   useState,
 } from "react";
 import { AnimatedCount } from "@/components/animated-count";
+import { AddToCalendar } from "@/components/add-to-calendar";
 import { nameOf, Ticket } from "@/components/ticket";
 import { WorkingSearch } from "@/components/working-search";
 import { SaveButton } from "@/components/save-button";
@@ -95,7 +97,18 @@ export function Poster({
   const decisions = useDecisions();
   const hint = useArtistHint();
   const current = recommendations[selected];
-  const closed = useCallback(() => setOpen(false), []);
+  // One player at a time, named by where it plays: "dialog:<id>" or "solo:<id>".
+  const [listeningTo, setListeningTo] = useState<string | null>(null);
+  const closed = useCallback(() => {
+    setOpen(false);
+    setListeningTo((playing) => (playing?.startsWith("dialog:") ? null : playing));
+  }, []);
+  function listenProps(where: string) {
+    return {
+      listening: listeningTo === where,
+      onListen: (on: boolean) => setListeningTo(on ? where : null),
+    };
+  }
   const ticketMotion = useTicketMotion(
     open,
     current?.concert.id,
@@ -372,6 +385,12 @@ export function Poster({
                           >
                             <div className="solo-photo">
                               {photo(r)}
+                              {concert.artists[0] && (
+                                <ListenStage
+                                  name={concert.artists[0].name}
+                                  listening={listeningTo === `solo:${concert.id}`}
+                                />
+                              )}
                               {bookmark(r)}
                             </div>
                             <div className="solo-body">
@@ -381,6 +400,7 @@ export function Poster({
                                 artistHint={hint}
                                 onArtistOpen={dismissArtistHint}
                                 hidePhoto
+                                {...listenProps(`solo:${concert.id}`)}
                               />
                               <div className="solo-actions">
                                 <SaveButton
@@ -388,6 +408,7 @@ export function Poster({
                                   pending={pending.has(concert.id)}
                                   onToggle={() => void toggleSave(r)}
                                 />
+                                <AddToCalendar concert={concert} name={name} />
                                 {shareLink && (
                                   <ShareButton
                                     title={`${name} on Concert Scout`}
@@ -452,18 +473,27 @@ export function Poster({
                         <Dialog.Description className="sr-only">
                           Concert details and why it fits your Search.
                         </Dialog.Description>
-                        {current.concert.image && (
+                        {(current.concert.image ||
+                          listeningTo === `dialog:${current.concert.id}`) && (
                           <div className="dialog-media">
                             {photo(current, true)}
+                            {current.concert.artists[0] && (
+                              <ListenStage
+                                name={current.concert.artists[0].name}
+                                listening={listeningTo === `dialog:${current.concert.id}`}
+                              />
+                            )}
                           </div>
                         )}
                         <div className="dialog-details">
                           <Ticket
+                            key={current.concert.id}
                             recommendation={current}
                             rank={selected}
                             artistHint={hint}
                             onArtistOpen={dismissArtistHint}
                             hidePhoto
+                            {...listenProps(`dialog:${current.concert.id}`)}
                           />
                           <div className="dialog-actions">
                             <SaveButton
@@ -479,6 +509,10 @@ export function Poster({
                               />
                             )}
                           </div>
+                          <AddToCalendar
+                            concert={current.concert}
+                            name={nameOf(current)}
+                          />
                           <p className="decision-status" role="status">
                             {notice}
                           </p>

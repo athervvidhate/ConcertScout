@@ -4,6 +4,7 @@ and domain adapter fixtures.
 No production flag enables this. Never import this module from the application package.
 """
 
+import os
 import socket
 import subprocess
 import tempfile
@@ -97,7 +98,9 @@ app = create_app(
         spotify_client_id="test-client",
         spotify_client_secret=SecretStr("test-secret"),
         spotify_encryption_key=SecretStr(Fernet.generate_key().decode()),
-        spotify_redirect_uri="http://127.0.0.1:8146/auth/spotify/callback",
+        # Playwright passes the ports it chose; see frontend/e2e/ports.ts.
+        cors_origins=[os.environ["E2E_WEB_URL"]],
+        spotify_redirect_uri=f"{os.environ['E2E_API_URL']}/auth/spotify/callback",
         supabase_url=supabase_stack.URL,
         supabase_publishable_key=supabase_stack.PUBLISHABLE_KEY,
         supabase_secret_key=SecretStr(supabase_stack.secret_key()),

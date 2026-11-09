@@ -116,7 +116,7 @@ test("live API stream keeps source facts, missing values and the Poster through 
   expect((await page.locator(".ticket .artist-name").boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await expect(page.getByRole("link",{name:"Tickets for Contract Concert One"})).toHaveAttribute("href","https://tickets.example/one");
   await expect(page.locator(".dialog-photo img")).toHaveAttribute("src",/\/spotify-logo-white\.svg$/);
-  await page.locator(".other-toggle").click();
+  await page.getByRole("button",{name:"1 more date",exact:true}).click();
   await expect(page.locator(".other-chips a")).toHaveAttribute("href","https://tickets.example/three");
   await expect(page.locator(".other-place")).toContainText("Oakland");
   await page.keyboard.press("Escape");

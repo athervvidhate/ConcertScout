@@ -51,6 +51,22 @@ _Avoid_: Favorite, stub, wishlist item
 An optional Concert Scout sign-in, with Google or an email and password, that keeps a person's Saved Concerts on every device. Spotify is a separate connection, not an account.
 _Avoid_: Profile, user, login
 
+**Preview**:
+Spotify's player for a Ticket's headliner, opened from Listen on the Ticket so a person can hear them before deciding.
+_Avoid_: Sample, snippet, embed (in copy)
+
+**Followed Artist**:
+An Artist a person with an Account chose to hear about.
+_Avoid_: Subscription, favorite, tracked artist
+
+**Alert**:
+An email Concert Scout sends to an Account about something the person asked to hear about, such as a new Concert by a Followed Artist near their Alert place. An Account gets at most one a day.
+_Avoid_: Notification, newsletter, digest
+
+**Alert place**:
+The one place, with a radius, where an Account wants to hear about Concerts.
+_Avoid_: Home, location, area
+
 **Artist panel**: the side panel opened from an Artist's name on a Ticket, showing public facts from Last.fm and a link to Spotify. It never calls a model.
 
 **Shared Poster**: a Poster kept at its own link, which anyone can open without running a Search.

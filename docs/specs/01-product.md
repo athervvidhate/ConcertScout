@@ -40,6 +40,8 @@ The reason comes from the ranker. Every other fact comes from the source record,
 
 The visitor saves from the Ticket. Saving leaves it open and confirms where it was kept. The dialog closes with its close button, Escape or the backdrop and returns focus to the Concert that opened it. Skip, dragging and the one-by-one deck were removed by the owner's decision on November 7, 2026. Every action works from the keyboard.
 
+A Ticket and each Saved Concert offer "Add to calendar", which downloads one `.ics` file built in the browser with no request. It carries the Lineup, venue, source link and start time on the venue's clock (`TZID`), all from the source record. A Concert with no start time becomes an all-day event on its date, and none gets an end time, because the source reports none.
+
 ## Shared Posters
 
 A Poster or a single Ticket can be shared by link. The Share button uses the browser's share sheet where there is one and copies the link otherwise. A link names a Shared Poster, which anyone can open on any device without a Search, a model call or a sign-in, and a Ticket link opens that Poster with the Ticket open.
@@ -53,6 +55,14 @@ The `/p/[id]` page says "Shared Poster", shows the date it was made and the read
 A guest's Saved Concerts live in `localStorage` and stay on one device. A Saved Concert stores its source ID and the facts needed to show it, and a page lists them with past Concerts removed.
 
 An optional account keeps Saved Concerts on every device. Sign in from the menu with Google, or with an email and password after confirming the email. While signed in, a Save goes to the account, and the API reads the Concert's facts from its source before storing it: Ticketmaster, or the JamBase Catalog. Signing in moves the device's guest saves into the account. Each one leaves the device only once the account holds it, and any the API cannot confirm with their source stay on the device for the next sign-in. Signing out shows none of the account's saves. The Account page offers sign-out and account deletion, which needs a sign-in from the last 10 minutes.
+
+## Alerts
+
+A signed-in person follows an Artist from the Artist panel or a Ticket. A guest sees an invitation to sign in instead. The Account page lists Followed Artists, each with an unfollow action, and holds the Alert place, a radius and a switch that turns Alerts on or off. Alerts start off until the person sets an Alert place.
+
+Once a day, Concert Scout looks for Concerts by Followed Artists within the Alert place over the next 6 months, and emails the Account any it has not mentioned before. One email holds them all, and an Account gets at most one a day. Each Concert in it shows the Artist, date and time on the venue's clock, venue, city and a link to its source listing, all from the source record. A missing time stays out. No model writes or reads an Alert.
+
+Every Alert has a one-click unsubscribe link that works without signing in, and it turns Alerts off. Unfollowing an Artist or deleting the Account stops everything about it. See [ADR 0006](../adr/0006-alerts-by-email-through-resend.md).
 
 ## Spotify shelf
 

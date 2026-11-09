@@ -48,7 +48,7 @@ export function formatTime(time: string): string {
   return timeFormat.format(new Date(`1970-01-01T${time}Z`));
 }
 
-function zoneName(zone: string, style: "short" | "longOffset", at: Date): string | undefined {
+export function zoneName(zone: string, style: "short" | "longOffset", at: Date): string | undefined {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: style }).formatToParts(at);
   return parts.find(({ type }) => type === "timeZoneName")?.value;
 }

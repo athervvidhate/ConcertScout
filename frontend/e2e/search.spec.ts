@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { API_URL, WEB_URL } from "./ports";
+
 // These journeys check behavior, not presentation: reduced motion skips the Poster's holds,
 // and only the @phone layout checks repeat at phone width. The motion and layout specs cover the rest.
 test.use({ reducedMotion: "reduce" });
@@ -47,7 +49,7 @@ async function noOverflow(page: Page) {
 test("a truncated app stream offers a retry of the same Search", async ({ page }) => {
   await page.goto("/");
   let interrupted = false;
-  await page.route("http://127.0.0.1:8146/search", async route => {
+  await page.route(`${API_URL}/search`, async route => {
     if (interrupted) return route.continue();
     interrupted = true;
     // This is our own public SSE contract, not a vendor API imitation.
@@ -66,7 +68,7 @@ test("a truncated app stream offers a retry of the same Search", async ({ page }
 test("history stays local, and only imported Artist names enter a Search", async ({ page }) => {
   await page.goto("/");
   const requests: string[] = [];
-  page.on("request", r => { if (r.method() === "POST" && r.url().startsWith("http://127.0.0.1:8146")) requests.push(r.postData() ?? ""); });
+  page.on("request", r => { if (r.method() === "POST" && r.url().startsWith(API_URL)) requests.push(r.postData() ?? ""); });
   await openMenuItem(page, /^Your Taste/);
   await page.getByRole("button", {name: "Other ways to add your Taste"}).click();
   await page.getByLabel("Import from").selectOption("history");
@@ -153,10 +155,10 @@ test("location is used only after the visitor presses its button", async ({ page
 // Enter through our real OAuth routes, substituting only the typed Spotify adapter on the server.
 // No Spotify authorization page, token response, or metadata JSON is imitated in the browser.
 async function spotifyCallback(context: import("@playwright/test").BrowserContext, code: string) {
-  const login = await context.request.get("http://127.0.0.1:8146/auth/spotify/login", {params: {return_to: "http://127.0.0.1:3146"}, maxRedirects: 0});
+  const login = await context.request.get(`${API_URL}/auth/spotify/login`, {params: {return_to: WEB_URL}, maxRedirects: 0});
   expect(login.status()).toBe(303);
   const state = new URL(login.headers().location).searchParams.get("state")!;
-  const callback = await context.request.get("http://127.0.0.1:8146/auth/spotify/callback", {params: {code, state}, maxRedirects: 0});
+  const callback = await context.request.get(`${API_URL}/auth/spotify/callback`, {params: {code, state}, maxRedirects: 0});
   expect(callback.status()).toBe(303);
   return callback.headers().location;
 }
@@ -187,7 +189,7 @@ test("Spotify has its own shelf, never enters Search Taste, and disconnect remov
   await openMenuItem(page, /^Your Taste/);
   await page.getByRole("button", {name: "Disconnect Spotify", exact: true}).click();
   await expect(shelf).toHaveCount(0);
-  const status = await context.request.get("http://127.0.0.1:8146/auth/spotify/status");
+  const status = await context.request.get(`${API_URL}/auth/spotify/status`);
   expect((await status.json()).connected).toBe(false);
   expect((await context.cookies()).some(c => c.name === "concert_scout_spotify")).toBe(false);
   expect(await page.evaluate(() => JSON.stringify({...localStorage}))).not.toMatch(/private-platform/);
@@ -348,6 +350,76 @@ test("an Artist Last.fm does not know says so and keeps the Spotify link", async
   await expect(panel.getByRole("link", {name: "Search on Spotify"})).toHaveAttribute("href", /open\.spotify\.com\/search/);
 });
 
+function artistProfile(page: Page, spotifyUrl?: string) {
+  return page.route("**/artist?*", async route => {
+    const name = new URL(route.request().url()).searchParams.get("name");
+    const response = await route.fetch();
+    await route.fulfill({response, json: {profiles: [{name, spotify_url: spotifyUrl, tags: [], top_tracks: [], similar: []}]}});
+  });
+}
+
+test("Listen on a Ticket is the only thing that loads Spotify's Preview", {tag: "@phone"}, async ({page, isMobile}) => {
+  const id = "4Z8W4fKeB5YxbusRsdQVPb";
+  const spotify: string[] = [];
+  page.on("request", request => {
+    if (new URL(request.url()).hostname.endsWith("spotify.com") && !request.url().endsWith(".svg")) spotify.push(request.url());
+  });
+  await page.route("https://open.spotify.com/**", route => route.fulfill({contentType: "text/html", body: "<title>Preview stand-in</title>"}));
+  await artistProfile(page, `https://open.spotify.com/artist/${id}`);
+  await page.goto("/");
+  await search(page);
+  const ticket = page.locator(".ticket-dialog");
+  const listen = ticket.getByRole("button", {name: "Listen to Contract Artist"});
+  await expect(listen).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(spotify).toEqual([]);
+  expect(await page.context().cookies()).toEqual([]);
+
+  if (isMobile) await listen.tap();
+  else {
+    await listen.focus();
+    await page.keyboard.press("Enter");
+  }
+  const preview = ticket.locator("iframe");
+  await expect(preview).toHaveAttribute("src", `https://open.spotify.com/embed/artist/${id}`);
+  await expect(preview).toHaveAttribute("title", "Contract Artist on Spotify");
+  await expect(preview).toHaveAttribute("loading", "lazy");
+  await expect(preview).toHaveAttribute("allow", /encrypted-media/);
+  const stop = ticket.getByRole("button", {name: "Stop listening to Contract Artist"});
+  await expect(stop).toBeFocused();
+  await expect.poll(() => spotify).toEqual([`https://open.spotify.com/embed/artist/${id}`]);
+
+  // Spotify's player takes the photograph's place, in the same box, at Spotify's minimum size.
+  const box = (await preview.boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(280);
+  expect(box.height).toBeGreaterThanOrEqual(352);
+  const stage = (await ticket.locator(".listen-stage").boundingBox())!,
+    media = (await ticket.locator(".dialog-media").boundingBox())!;
+  expect(stage).toEqual(media);
+  // Nothing of ours sits on Spotify's player, Close included.
+  const close = (await ticket.getByRole("button", {name: "Close Ticket"}).boundingBox())!;
+  const apart = close.x >= box.x + box.width || close.x + close.width <= box.x ||
+    close.y >= box.y + box.height || close.y + close.height <= box.y;
+  expect(apart).toBe(true);
+  await noOverflow(page);
+  await stop.press("Enter");
+  await expect(preview).toHaveCount(0);
+  await listen.press("Enter");
+  await expect(preview).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(ticket).toHaveCount(0);
+});
+
+test("an Artist with no exact Spotify page gets a Spotify search instead of a player", async ({page}) => {
+  await artistProfile(page);
+  await page.goto("/");
+  await search(page);
+  const ticket = page.locator(".ticket-dialog");
+  await ticket.getByRole("button", {name: "Listen to Contract Artist"}).click();
+  await expect(ticket.getByRole("link", {name: "Search on Spotify"})).toHaveAttribute("href", /open\.spotify\.com\/search/);
+  await expect(ticket.locator("iframe")).toHaveCount(0);
+});
+
 test("the brand returns to the home page, and the Artist panel opens from a Ticket", async ({page}) => {
   await page.goto("/");
   await search(page);
@@ -488,7 +560,7 @@ test("a reload keeps the Poster without a new Search, and the brand still return
 test("a reload during a Search offers a retry of the same words", async ({page}) => {
   await page.goto("/");
   let held = false;
-  await page.route("http://127.0.0.1:8146/search", async route => {
+  await page.route(`${API_URL}/search`, async route => {
     if (held) return route.continue();
     held = true;
     // The stream never finishes, as when the page reloads mid-Search.

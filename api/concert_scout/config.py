@@ -33,6 +33,8 @@ class Settings(BaseSettings):
 
     resend_api_key: SecretStr | None = None
     feedback_email: str | None = None
+    # Where links in an Alert email lead.
+    site_url: str = "http://localhost:3000"
 
     # Optional accounts. Leave these blank to keep sign-in off; Search never needs them.
     supabase_url: str | None = None

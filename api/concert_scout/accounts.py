@@ -1,4 +1,5 @@
-"""Account routes: the signed-in person's Saved Concerts, and deleting the account.
+"""Account routes: the signed-in person's Saved Concerts, Followed Artists and Alert settings,
+and deleting the account.
 
 The owner of every operation is the verified access token's subject. No route accepts an
 account ID from the browser.
@@ -7,7 +8,7 @@ account ID from the browser.
 import asyncio
 import logging
 import time
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx
 from fastapi import APIRouter, Depends, Header, Path, Request, Response
@@ -17,10 +18,11 @@ from redis.exceptions import RedisError
 
 from concert_scout import limits, pool, security
 from concert_scout.config import Settings
-from concert_scout.models import Concert
+from concert_scout.models import Concert, Place
+from concert_scout.names import normalize
 from concert_scout.security import Refused
-from concert_scout.sources import supabase
-from concert_scout.sources.supabase import Account, SavedConcert
+from concert_scout.sources import geocoder, supabase
+from concert_scout.sources.supabase import Account, FollowedArtist, SavedConcert
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,28 @@ class ImportRequest(BaseModel):
     saves: Annotated[list[GuestSave], Field(max_length=MAX_IMPORT)]
 
 
+ArtistName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+
+class FollowRequest(BaseModel):
+    name: ArtistName
+
+
+class AlertPlaceRequest(BaseModel):
+    place: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=120)]
+    radius_miles: Literal[10, 25, 50, 100] = 50
+
+
+class EnabledRequest(BaseModel):
+    enabled: bool
+
+
+class AlertsView(BaseModel):
+    enabled: bool
+    place: Place | None
+    followed: list[FollowedArtist]
+
+
 class Imported(BaseModel):
     saved: list[SavedConcert]
     # Saves the source no longer has, or could not confirm. They stay on the device.
@@ -63,6 +87,7 @@ def router(
     client: httpx.AsyncClient,
     redis: Redis,
     ticketmaster: httpx.AsyncClient,
+    places: httpx.AsyncClient,
 ) -> APIRouter:
     assert settings.supabase_publishable_key and settings.supabase_secret_key
     publishable, secret = settings.supabase_publishable_key, settings.supabase_secret_key
@@ -167,6 +192,80 @@ def router(
                 raise unavailable() from None
         kept = {s.concert.id for s in saved}
         return Imported(saved=saved, failed=[i for i in unique if i not in kept])
+
+    @routes.get("/alerts")
+    async def alerts(account: Annotated[Account, Depends(current_account)]) -> AlertsView:
+        try:
+            settings_row, followed = await asyncio.gather(
+                supabase.alert_settings(client, publishable, account),
+                supabase.list_followed(client, publishable, account),
+            )
+        except supabase.SupabaseError as exc:
+            logger.warning("Alerts read failed: %s", exc)
+            raise unavailable() from None
+        return AlertsView(enabled=settings_row.enabled, place=settings_row.place, followed=followed)
+
+    @routes.post("/followed")
+    async def follow(
+        body: FollowRequest, account: Annotated[Account, Depends(current_account)]
+    ) -> FollowedArtist:
+        key = normalize(body.name)
+        if not key:
+            raise Refused(422, "artist_name", "That is not an Artist name.")
+        artist = FollowedArtist(artist_key=key, name=body.name)
+        try:
+            await supabase.follow(client, secret, account, artist)
+        except supabase.SupabaseError as exc:
+            logger.warning("Follow failed: %s", exc)
+            raise unavailable() from None
+        return artist
+
+    @routes.delete("/followed/{artist_key}", status_code=204)
+    async def unfollow(
+        artist_key: Annotated[str, Path(min_length=1, max_length=200)],
+        account: Annotated[Account, Depends(current_account)],
+    ) -> Response:
+        try:
+            await supabase.unfollow(client, publishable, account, artist_key)
+        except supabase.SupabaseError as exc:
+            logger.warning("Unfollow failed: %s", exc)
+            raise unavailable() from None
+        return Response(status_code=204)
+
+    @routes.put("/alerts/place", dependencies=[Depends(limit)])
+    async def set_place(
+        body: AlertPlaceRequest, account: Annotated[Account, Depends(current_account)]
+    ) -> Place:
+        """The place a person typed, as the geocoder reads it. Never a browser location."""
+        try:
+            found = await geocoder.geocode(places, redis, body.place)
+        except geocoder.GeocoderError as exc:
+            logger.warning("Alert place lookup failed: %s", exc)
+            message = "The place lookup is not answering. Try again soon."
+            raise Refused(503, "source_unavailable", message) from None
+        if found is None:
+            raise Refused(422, "place_not_found", f"We couldn't find {body.place}.")
+        place = found.model_copy(update={"radius_miles": body.radius_miles})
+        try:
+            await supabase.set_alert_place(client, secret, account.id, place)
+        except supabase.SupabaseError as exc:
+            logger.warning("Alert place write failed: %s", exc)
+            raise unavailable() from None
+        return place
+
+    @routes.put("/alerts/enabled", status_code=204)
+    async def set_enabled(
+        body: EnabledRequest, account: Annotated[Account, Depends(current_account)]
+    ) -> Response:
+        try:
+            current = await supabase.alert_settings(client, publishable, account)
+            if body.enabled and current.place is None:
+                raise Refused(409, "alert_place", "Choose an Alert place first.")
+            await supabase.set_alerts_enabled(client, secret, account.id, body.enabled)
+        except supabase.SupabaseError as exc:
+            logger.warning("Alerts switch failed: %s", exc)
+            raise unavailable() from None
+        return Response(status_code=204)
 
     @routes.delete("", status_code=204)
     async def delete_account(account: Annotated[Account, Depends(current_account)]) -> Response:

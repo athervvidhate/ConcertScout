@@ -91,11 +91,6 @@ export function useTicketMotion(
       flying.current?.remove();
       flying.current = null;
     };
-    if (photo)
-      sheet.style.setProperty(
-        "--ticket-photo-height",
-        `${photo.getBoundingClientRect().height}px`,
-      );
     sheet.scrollTop = 0;
     sheet.dataset.motionPhase = "opening";
     if (reduced || !photo || !target || !origin || !source.current) {
