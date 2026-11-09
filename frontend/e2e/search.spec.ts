@@ -346,29 +346,29 @@ test("an Artist Last.fm does not know says so and keeps the Spotify link", async
   await expect(panel).toContainText("couldn't find details");
   await expect(panel).toContainText("on Last.fm");
   await expect(panel.getByRole("link", {name: "Search on Spotify"})).toHaveAttribute("href", /open\.spotify\.com\/search/);
-  await expect(panel.getByRole("button", {name: /Listen/})).toHaveCount(0);
-  await expect(panel.locator("iframe")).toHaveCount(0);
 });
 
-test("Listen is the only thing that loads Spotify's Preview", async ({page, isMobile}) => {
+function artistProfile(page: Page, spotifyUrl?: string) {
+  return page.route("**/artist?*", async route => {
+    const name = new URL(route.request().url()).searchParams.get("name");
+    const response = await route.fetch();
+    await route.fulfill({response, json: {profiles: [{name, spotify_url: spotifyUrl, tags: [], top_tracks: [], similar: []}]}});
+  });
+}
+
+test("Listen on a Ticket is the only thing that loads Spotify's Preview", async ({page, isMobile}) => {
   const id = "4Z8W4fKeB5YxbusRsdQVPb";
   const spotify: string[] = [];
   page.on("request", request => {
     if (new URL(request.url()).hostname.endsWith("spotify.com") && !request.url().endsWith(".svg")) spotify.push(request.url());
   });
   await page.route("https://open.spotify.com/**", route => route.fulfill({contentType: "text/html", body: "<title>Preview stand-in</title>"}));
-  await page.route("**/artist?*", async route => {
-    const name = new URL(route.request().url()).searchParams.get("name");
-    const response = await route.fetch();
-    await route.fulfill({response, json: {profiles: [{name, spotify_url: `https://open.spotify.com/artist/${id}`, tags: [], top_tracks: [], similar: []}]}});
-  });
+  await artistProfile(page, `https://open.spotify.com/artist/${id}`);
   await page.goto("/");
   await search(page);
-  await page.locator(".ticket .artist-name").first().click();
-  const panel = page.getByRole("dialog", {name: "Contract Artist", exact: true});
-  const listen = panel.getByRole("button", {name: "Listen to Contract Artist"});
+  const ticket = page.locator(".ticket-dialog");
+  const listen = ticket.getByRole("button", {name: "Listen to Contract Artist"});
   await expect(listen).toBeVisible();
-  await expect(panel.getByRole("link", {name: "Open on Spotify"})).toBeVisible();
   await page.waitForTimeout(500);
   expect(spotify).toEqual([]);
   expect(await page.context().cookies()).toEqual([]);
@@ -378,24 +378,35 @@ test("Listen is the only thing that loads Spotify's Preview", async ({page, isMo
     await listen.focus();
     await page.keyboard.press("Enter");
   }
-  const preview = panel.locator("iframe");
+  const preview = ticket.locator("iframe");
   await expect(preview).toHaveAttribute("src", `https://open.spotify.com/embed/artist/${id}`);
   await expect(preview).toHaveAttribute("title", "Contract Artist on Spotify");
   await expect(preview).toHaveAttribute("loading", "lazy");
   await expect(preview).toHaveAttribute("allow", /encrypted-media/);
-  await expect(panel.getByRole("button", {name: "Stop listening to Contract Artist"})).toBeFocused();
+  const stop = ticket.getByRole("button", {name: "Stop listening to Contract Artist"});
+  await expect(stop).toBeFocused();
   await expect.poll(() => spotify).toEqual([`https://open.spotify.com/embed/artist/${id}`]);
 
   const box = (await preview.boundingBox())!;
   expect(box.width).toBeGreaterThanOrEqual(280);
   expect(box.height).toBe(352);
   await noOverflow(page);
-  await panel.getByRole("button", {name: "Stop listening to Contract Artist"}).press("Enter");
+  await stop.press("Enter");
   await expect(preview).toHaveCount(0);
   await listen.press("Enter");
   await expect(preview).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(panel).toHaveCount(0);
+  await expect(ticket).toHaveCount(0);
+});
+
+test("an Artist with no exact Spotify page gets a Spotify search instead of a player", async ({page}) => {
+  await artistProfile(page);
+  await page.goto("/");
+  await search(page);
+  const ticket = page.locator(".ticket-dialog");
+  await ticket.getByRole("button", {name: "Listen to Contract Artist"}).click();
+  await expect(ticket.getByRole("link", {name: "Search on Spotify"})).toHaveAttribute("href", /open\.spotify\.com\/search/);
+  await expect(ticket.locator("iframe")).toHaveCount(0);
 });
 
 test("the brand returns to the home page, and the Artist panel opens from a Ticket", async ({page}) => {

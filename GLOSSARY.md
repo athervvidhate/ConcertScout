@@ -52,7 +52,7 @@ An optional Concert Scout sign-in, with Google or an email and password, that ke
 _Avoid_: Profile, user, login
 
 **Preview**:
-Spotify's player for an Artist, shown in the Artist panel so a person can hear them.
+Spotify's player for a Ticket's headliner, opened from Listen on the Ticket so a person can hear them before deciding.
 _Avoid_: Sample, snippet, embed (in copy)
 
 **Artist panel**: the side panel opened from an Artist's name on a Ticket, showing public facts from Last.fm and a link to Spotify. It never calls a model.

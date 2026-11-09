@@ -4,54 +4,25 @@ import { Dialog } from "@base-ui/react/dialog";
 import { X } from "lucide-react";
 import { useState } from "react";
 
-import { type ArtistProfile, previewSrc, spotifyHref, useArtistProfiles } from "@/lib/artist";
+import { type ArtistProfile, spotifyHref, useArtistProfiles } from "@/lib/artist";
 
 const count = new Intl.NumberFormat("en-US");
 
-/** Spotify's own player, shown as Spotify provides it. */
-function Preview({ name, src }: { name: string; src: string }) {
-  return (
-    <iframe
-      className="artist-preview"
-      title={`${name} on Spotify`}
-      src={src}
-      width="100%"
-      height="352"
-      loading="lazy"
-      allowFullScreen
-      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-    />
-  );
-}
-
 function Profile({ profile, named }: { profile: ArtistProfile; named: boolean }) {
   const { listeners, bio, tags, top_tracks: tracks, similar } = profile;
-  const preview = previewSrc(profile);
-  // Nothing from Spotify loads, and no Spotify cookie is set, until Listen is pressed.
-  // Focus stays on the button: Escape pressed inside Spotify's iframe would not close the panel.
-  const [listening, setListening] = useState(false);
   const nothing = listeners === undefined && !bio && !tags.length && !tracks.length && !similar.length;
 
   return (
     <section className="artist-profile" aria-label={profile.name}>
       {named && <h3 className="artist-part">{profile.name}</h3>}
-      <div className="artist-actions">
-        {preview && (
-          <button type="button" className="artist-listen" onClick={() => setListening(!listening)}>
-            {listening ? "Stop" : "Listen"}
-            <span className="sr-only">{listening ? " listening to " : " to "}{profile.name}</span>
-          </button>
-        )}
-        <a
-          className="artist-spotify"
-          href={spotifyHref(profile)}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {profile.spotify_url ? "Open on Spotify" : "Search on Spotify"}
-        </a>
-      </div>
-      {preview && listening && <Preview name={profile.name} src={preview} />}
+      <a
+        className="artist-spotify"
+        href={spotifyHref(profile)}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {profile.spotify_url ? "Open on Spotify" : "Search on Spotify"}
+      </a>
       {nothing && <p className="artist-missing">We couldn&apos;t find details for {profile.name} on Last.fm.</p>}
       {profile.listeners !== undefined && (
         <p className="artist-listeners">

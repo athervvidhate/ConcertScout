@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 
 import { ArtistPanel } from "@/components/artist-panel";
 import { ConcertPhoto, SourceLink } from "@/components/concert-source";
+import { Listen } from "@/components/listen";
 import {
   byVenue,
   formatDate,
@@ -157,6 +158,7 @@ export function Ticket({
         {reason && <p>{reason}</p>}
         <p className="venue">{details.join(", ")}</p>
         {presale && <p className="presale">{presale}</p>}
+        {concert.artists[0] && <Listen name={concert.artists[0].name} />}
         {also.length > 0 && <OtherDates concerts={also} />}
       </div>
       <div className="ticket-stub">
