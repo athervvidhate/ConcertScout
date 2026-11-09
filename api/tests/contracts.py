@@ -64,15 +64,14 @@ CONCERTS = [
 
 
 def settings_with(**overrides: Any) -> Settings:
-    return Settings(
-        _env_file=None,  # pyright: ignore[reportCallIssue]
-        tm_key=SecretStr("unused-test-key"),
-        anthropic_api_key=SecretStr("unused-test-key"),
-        geoapify_key=SecretStr("unused-test-key"),
-        typesafe_api_key=SecretStr("unused-test-key"),
-        cors_origins=["http://localhost:3000", "http://127.0.0.1:3146"],
-        **overrides,
-    )
+    defaults: dict[str, Any] = {
+        "tm_key": SecretStr("unused-test-key"),
+        "anthropic_api_key": SecretStr("unused-test-key"),
+        "geoapify_key": SecretStr("unused-test-key"),
+        "typesafe_api_key": SecretStr("unused-test-key"),
+        "cors_origins": ["http://localhost:3000"],
+    }
+    return Settings(_env_file=None, **(defaults | overrides))  # pyright: ignore[reportCallIssue]
 
 
 def forbidden_http(request: httpx.Request) -> httpx.Response:

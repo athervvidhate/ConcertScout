@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { API_URL, WEB_URL } from "./ports";
+
 // These journeys check behavior, not presentation: reduced motion skips the Poster's holds,
 // and only the @phone layout checks repeat at phone width. The motion and layout specs cover the rest.
 test.use({ reducedMotion: "reduce" });
@@ -47,7 +49,7 @@ async function noOverflow(page: Page) {
 test("a truncated app stream offers a retry of the same Search", async ({ page }) => {
   await page.goto("/");
   let interrupted = false;
-  await page.route("http://127.0.0.1:8146/search", async route => {
+  await page.route(`${API_URL}/search`, async route => {
     if (interrupted) return route.continue();
     interrupted = true;
     // This is our own public SSE contract, not a vendor API imitation.
@@ -66,7 +68,7 @@ test("a truncated app stream offers a retry of the same Search", async ({ page }
 test("history stays local, and only imported Artist names enter a Search", async ({ page }) => {
   await page.goto("/");
   const requests: string[] = [];
-  page.on("request", r => { if (r.method() === "POST" && r.url().startsWith("http://127.0.0.1:8146")) requests.push(r.postData() ?? ""); });
+  page.on("request", r => { if (r.method() === "POST" && r.url().startsWith(API_URL)) requests.push(r.postData() ?? ""); });
   await openMenuItem(page, /^Your Taste/);
   await page.getByRole("button", {name: "Other ways to add your Taste"}).click();
   await page.getByLabel("Import from").selectOption("history");
@@ -153,10 +155,10 @@ test("location is used only after the visitor presses its button", async ({ page
 // Enter through our real OAuth routes, substituting only the typed Spotify adapter on the server.
 // No Spotify authorization page, token response, or metadata JSON is imitated in the browser.
 async function spotifyCallback(context: import("@playwright/test").BrowserContext, code: string) {
-  const login = await context.request.get("http://127.0.0.1:8146/auth/spotify/login", {params: {return_to: "http://127.0.0.1:3146"}, maxRedirects: 0});
+  const login = await context.request.get(`${API_URL}/auth/spotify/login`, {params: {return_to: WEB_URL}, maxRedirects: 0});
   expect(login.status()).toBe(303);
   const state = new URL(login.headers().location).searchParams.get("state")!;
-  const callback = await context.request.get("http://127.0.0.1:8146/auth/spotify/callback", {params: {code, state}, maxRedirects: 0});
+  const callback = await context.request.get(`${API_URL}/auth/spotify/callback`, {params: {code, state}, maxRedirects: 0});
   expect(callback.status()).toBe(303);
   return callback.headers().location;
 }
@@ -187,7 +189,7 @@ test("Spotify has its own shelf, never enters Search Taste, and disconnect remov
   await openMenuItem(page, /^Your Taste/);
   await page.getByRole("button", {name: "Disconnect Spotify", exact: true}).click();
   await expect(shelf).toHaveCount(0);
-  const status = await context.request.get("http://127.0.0.1:8146/auth/spotify/status");
+  const status = await context.request.get(`${API_URL}/auth/spotify/status`);
   expect((await status.json()).connected).toBe(false);
   expect((await context.cookies()).some(c => c.name === "concert_scout_spotify")).toBe(false);
   expect(await page.evaluate(() => JSON.stringify({...localStorage}))).not.toMatch(/private-platform/);
@@ -488,7 +490,7 @@ test("a reload keeps the Poster without a new Search, and the brand still return
 test("a reload during a Search offers a retry of the same words", async ({page}) => {
   await page.goto("/");
   let held = false;
-  await page.route("http://127.0.0.1:8146/search", async route => {
+  await page.route(`${API_URL}/search`, async route => {
     if (held) return route.continue();
     held = true;
     // The stream never finishes, as when the page reloads mid-Search.
