@@ -44,7 +44,7 @@ The visitor saves from the Ticket. Saving leaves it open and confirms where it w
 
 A guest's Saved Concerts live in `localStorage` and stay on one device. A Saved Concert stores its source ID and the facts needed to show it, and a page lists them with past Concerts removed.
 
-An optional account keeps Saved Concerts on every device. Sign in from the menu with Google, or with an email and password after confirming the email. While signed in, a Save goes to the account, and the API reads the Concert's facts from Ticketmaster before storing it. Signing in moves the device's guest saves into the account. Each one leaves the device only once the account holds it, and any the API cannot confirm with Ticketmaster stay on the device for the next sign-in. Signing out shows none of the account's saves. The Account page offers sign-out and account deletion, which needs a sign-in from the last 10 minutes.
+An optional account keeps Saved Concerts on every device. Sign in from the menu with Google, or with an email and password after confirming the email. While signed in, a Save goes to the account, and the API reads the Concert's facts from its source before storing it: Ticketmaster, or the JamBase Catalog. Signing in moves the device's guest saves into the account. Each one leaves the device only once the account holds it, and any the API cannot confirm with their source stay on the device for the next sign-in. Signing out shows none of the account's saves. The Account page offers sign-out and account deletion, which needs a sign-in from the last 10 minutes.
 
 ## Spotify shelf
 

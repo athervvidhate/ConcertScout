@@ -15,8 +15,9 @@ from joserfc import jwt
 from joserfc.jwk import ECKey
 from pydantic import SecretStr
 
-from concert_scout import accounts
+from concert_scout import accounts, pool
 from concert_scout.app import create_app
+from concert_scout.models import Concert
 from concert_scout.sources import supabase
 from tests import supabase_stack as stack
 from tests.contracts import CONCERTS, contract_model, forbidden_http, install_sources, settings_with
@@ -129,6 +130,23 @@ async def test_a_concert_the_source_lacks_is_never_saved(api: httpx.AsyncClient)
     assert response.status_code == 404
     assert response.json()["code"] == "concert_not_found"
     assert await saved_ids(api, person) == []
+
+
+async def test_a_catalog_concert_saves_by_its_source_id(
+    api: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    catalog_concert = ONE.model_copy(update={"id": "jambase:17324221", "source": "jambase"})
+
+    async def from_catalog(_: object, __: object, concert_id: str) -> Concert:
+        if concert_id != catalog_concert.id:
+            raise pool.ConcertNotFound
+        return catalog_concert
+
+    monkeypatch.setattr(pool, "find_concert", from_catalog)
+    person = stack.new_person()
+    saved = await api.put(f"/account/saved/{catalog_concert.id}", json={}, headers=bearer(person))
+    assert saved.status_code == 200
+    assert await saved_ids(api, person) == [catalog_concert.id]
 
 
 async def test_tokens_this_project_did_not_sign_are_refused(api: httpx.AsyncClient) -> None:

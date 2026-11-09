@@ -211,6 +211,23 @@ async def _read(redis: Redis, keys: Iterable[str]) -> list[Listing]:
     return listings
 
 
+def holds(concert_id: str) -> bool:
+    """Whether an ID names a Catalog Concert. JamBase prefixes its own identifiers."""
+    return concert_id.startswith("jambase:")
+
+
+async def find(redis: Redis, concert_id: str) -> Concert | None:
+    """One Catalog Concert by ID. The sync removes cancelled and past events, so they are None."""
+    key = await redis.hget(WHERE, concert_id)
+    value = await redis.hget(_texts([key])[0], concert_id) if key else None
+    if not value:
+        return None
+    try:
+        return Listing.model_validate_json(value).concert
+    except ValidationError:
+        return None
+
+
 async def busiest_cells(redis: Redis, first: dt.date, last: dt.date, count: int) -> list[str]:
     """The cells holding the most Concerts in the window: where the music actually is."""
     members = await redis.smembers(CELLS)

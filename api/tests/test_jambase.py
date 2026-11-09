@@ -253,3 +253,12 @@ async def test_large_state_waits_for_a_run_that_can_afford_it() -> None:
         with pytest.raises(jambase.JamBaseError, match="5 pages exceed this run"):
             await sync._walk(calls, redis, step, {}, TODAY)  # pyright: ignore[reportPrivateUsage]
     assert calls.used == 1
+
+
+async def test_a_saved_catalog_concert_reads_its_facts_from_the_catalog() -> None:
+    redis = FakeAsyncRedis()
+    first = (await stored(redis))[0]
+    async with httpx.AsyncClient(transport=httpx.MockTransport(forbidden_http)) as client:
+        assert await pool.find_concert(client, redis, first.id) == first
+        with pytest.raises(pool.ConcertNotFound):
+            await pool.find_concert(client, redis, "jambase:0")

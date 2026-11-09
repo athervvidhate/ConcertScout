@@ -23,6 +23,8 @@ ALGORITHMS = ["ES256", "RS256"]
 KEYS_TTL = 600.0
 # A token signed by a new key refetches the key set, but no more often than this.
 REFETCH_GAP = 30.0
+# Supabase's clock can run slightly ahead of ours, which makes a fresh token look early.
+CLOCK_LEEWAY = 10
 TABLE = "/rest/v1/saved_concerts"
 
 
@@ -87,6 +89,7 @@ class Verifier:
             except InvalidKeyIdError:
                 decoded = jwt.decode(token, await self._keys(refresh=True), algorithms=ALGORITHMS)
             jwt.JWTClaimsRegistry(
+                leeway=CLOCK_LEEWAY,
                 iss={"essential": True, "value": self.issuer},
                 aud={"essential": True, "value": AUDIENCE},
                 sub={"essential": True},

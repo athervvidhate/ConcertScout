@@ -20,7 +20,6 @@ from concert_scout.sources import (
     listenbrainz,
     musicbrainz,
     spotify_catalog,
-    ticketmaster,
 )
 
 PLACE = Place(name="San Francisco, California", lat=37.77, lon=-122.42)
@@ -126,7 +125,7 @@ async def contract_concert(_: httpx.AsyncClient, __: object, concert_id: str) ->
     for concert in CONCERTS:
         if concert.id == concert_id:
             return concert
-    raise ticketmaster.ConcertNotFound
+    raise pool.ConcertNotFound
 
 
 def install_sources(patch: pytest.MonkeyPatch) -> None:

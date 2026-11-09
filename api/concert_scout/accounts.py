@@ -20,7 +20,6 @@ from concert_scout.config import Settings
 from concert_scout.models import Concert
 from concert_scout.security import Refused
 from concert_scout.sources import supabase
-from concert_scout.sources import ticketmaster as tm
 from concert_scout.sources.supabase import Account, SavedConcert
 
 logger = logging.getLogger(__name__)
@@ -32,7 +31,7 @@ IMPORT_CONCURRENCY = 4
 # Deleting an account asks for a sign-in this recent, so an unattended device cannot do it.
 RECENT_SIGN_IN = 10 * 60
 
-ConcertId = Annotated[str, Path(pattern=r"^[A-Za-z0-9._-]{1,100}$")]
+ConcertId = Annotated[str, Path(pattern=r"^[A-Za-z0-9._:-]{1,100}$")]
 Reason = Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)]
 
 
@@ -41,7 +40,7 @@ class SaveRequest(BaseModel):
 
 
 class GuestSave(BaseModel):
-    concert_id: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9._-]{1,100}$")]
+    concert_id: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9._:-]{1,100}$")]
     reason: Reason | None = None
 
 
@@ -96,12 +95,12 @@ def router(
     async def source_facts(concert_id: str) -> Concert:
         try:
             return await pool.find_concert(ticketmaster, redis, concert_id)
-        except tm.ConcertNotFound:
-            message = "Ticketmaster no longer lists that Concert."
+        except pool.ConcertNotFound:
+            message = "Its source no longer lists that Concert."
             raise Refused(404, "concert_not_found", message) from None
-        except tm.TicketmasterError as exc:
+        except pool.SourceUnavailable as exc:
             logger.warning("Saved Concert lookup failed: %s", exc)
-            message = "Ticketmaster is not answering. Try saving again soon."
+            message = "That Concert's source is not answering. Try saving again soon."
             raise Refused(503, "source_unavailable", message) from None
 
     @routes.get("/saved", response_model_exclude_none=True)
@@ -153,7 +152,7 @@ def router(
             async with gate:
                 try:
                     concert = await pool.find_concert(ticketmaster, redis, save.concert_id)
-                except (tm.ConcertNotFound, tm.TicketmasterError):
+                except (pool.ConcertNotFound, pool.SourceUnavailable):
                     return None
             return SavedConcert(concert=concert, reason=save.reason)
 

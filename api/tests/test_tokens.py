@@ -63,10 +63,19 @@ async def test_a_current_token_names_its_account_and_sign_in_time(
     assert time.time() - account.authenticated_at < 60
 
 
+async def test_a_token_from_a_clock_a_few_seconds_ahead_is_accepted(
+    project: Project, verifier: supabase.Verifier
+) -> None:
+    """Supabase's clock can run a little ahead of the API's, so a fresh token looks early."""
+    account = await verifier.verify(project.token(iat=int(time.time()) + 3))
+    assert account.id == "person"
+
+
 @pytest.mark.parametrize(
     "claims",
     [
         {"exp": int(time.time()) - 60},
+        {"iat": int(time.time()) + 120},
         {"aud": "anon"},
         {"role": "anon"},
         {"iss": "https://other.supabase.co/auth/v1"},

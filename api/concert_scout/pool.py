@@ -6,6 +6,7 @@ from collections.abc import Sequence
 import httpx
 from pydantic import BaseModel
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 from concert_scout import cache, catalog, clock
 from concert_scout.models import Concert, Place
@@ -21,12 +22,33 @@ class CachedConcerts(BaseModel):
     concerts: list[Concert]
 
 
+class ConcertNotFound(Exception):
+    """The Concert's source no longer lists it, or it was cancelled."""
+
+
+class SourceUnavailable(Exception):
+    """The Concert's source could not be read just now."""
+
+
 async def find_concert(client: httpx.AsyncClient, redis: Redis, concert_id: str) -> Concert:
     """One Concert's facts by its source ID, for a Concert saved away from its Poster."""
+    if catalog.holds(concert_id):
+        try:
+            found = await catalog.find(redis, concert_id)
+        except RedisError as exc:
+            raise SourceUnavailable(type(exc).__name__) from None
+        if found is None:
+            raise ConcertNotFound
+        return found
     key = f"concert:{concert_id}"
     if cached := await cache.read(redis, key, Concert):
         return cached
-    concert = await ticketmaster.find_concert(client, redis, concert_id)
+    try:
+        concert = await ticketmaster.find_concert(client, redis, concert_id)
+    except ticketmaster.ConcertNotFound:
+        raise ConcertNotFound from None
+    except ticketmaster.TicketmasterError as exc:
+        raise SourceUnavailable(str(exc)) from None
     await cache.write(redis, key, concert, CACHE_TTL)
     return concert
 
