@@ -289,6 +289,8 @@ body:has(.information)::before { animation:none; opacity:.35; }
 .listen-button { display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:0 16px; border:1px solid var(--line-2); border-radius:999px; background:var(--surface); color:var(--ink); font:600 15px var(--font-ui),sans-serif; cursor:pointer; transition:background .2s; }
 .listen-button:hover { background:var(--soft); }
 .listen-button svg { fill:currentColor; }
+.listen-button[aria-busy=true] { cursor:progress; opacity:.75; }
+.listen-body { overflow:hidden; }
 .listen p { margin:8px 0 0; font-size:14px; }
 .listen-player { display:block; box-sizing:border-box; width:100%; min-width:280px; margin-top:12px; border:0; border-radius:12px; }
 .artist-listeners { font:800 22px var(--font-ui),monospace; }
