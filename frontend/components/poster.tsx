@@ -17,7 +17,7 @@ import { nameOf, Ticket } from "@/components/ticket";
 import { WorkingSearch } from "@/components/working-search";
 import { SaveButton } from "@/components/save-button";
 import { dismissArtistHint, useArtistHint } from "@/lib/artist-hint";
-import { Choreography } from "@/lib/choreography";
+import { Choreography, EXPO_OUT_CURVE } from "@/lib/choreography";
 import {
   captureNames,
   revealPoster,
@@ -28,6 +28,13 @@ import { formatDate, formatConcertTime } from "@/lib/format";
 import { removeSaved, saveConcert, useDecisions } from "@/lib/saved";
 import type { Candidates, Recommendation } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
+
+type View = "grid" | "list";
+const VIEW_KEY = "concert-scout-view";
+const VIEWS = [
+  { kind: "grid", label: "Grid view", Icon: LayoutGrid },
+  { kind: "list", label: "List view", Icon: List },
+] as const;
 
 type Props = {
   candidates: Candidates | null;
@@ -54,27 +61,25 @@ export function Poster({
   const reduced = useReducedMotion();
   const [cached] = useState(!searching && hasPoster);
   const [stage, setStage] = useState<"working" | "picks" | "poster">("working");
-  const [view, setView] = useState<"grid" | "list">(() => {
+  const [view, setView] = useState<View>(() => {
     try {
-      return localStorage.getItem("concert-scout-view") === "list"
-        ? "list"
-        : "grid";
+      return localStorage.getItem(VIEW_KEY) === "list" ? "list" : "grid";
     } catch {
       return "grid";
     }
   });
   const [results, setResults] = useState<HTMLDivElement | null>(null);
-  const root = useRef<HTMLElement>(null),
-    source = useRef<HTMLElement>(null);
-  const frames = useRef(new Map<string, NameFrame>()),
-    revealed = useRef(false);
-  const [selected, setSelected] = useState(0),
-    [open, setOpen] = useState(false),
-    [expanded, setExpanded] = useState(false),
-    [notice, setNotice] = useState("");
+  const root = useRef<HTMLElement>(null);
+  const source = useRef<HTMLElement>(null);
+  const frames = useRef(new Map<string, NameFrame>());
+  const revealed = useRef(false);
+  const [selected, setSelected] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [notice, setNotice] = useState("");
   const [pending, setPending] = useState<Set<string>>(() => new Set());
-  const decisions = useDecisions(),
-    hint = useArtistHint();
+  const decisions = useDecisions();
+  const hint = useArtistHint();
   const current = recommendations[selected];
   const closed = useCallback(() => setOpen(false), []);
   const ticketMotion = useTicketMotion(
@@ -132,10 +137,17 @@ export function Poster({
     );
   }, [results, stage, view, reduced]);
 
+  function chooseView(next: View) {
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {}
+  }
+
   async function toggleSave(r = current) {
     if (!r || pending.has(r.concert.id)) return;
-    const id = r.concert.id,
-      removing = decisions[id] === "saved";
+    const id = r.concert.id;
+    const removing = decisions[id] === "saved";
     setPending((before) => new Set(before).add(id));
     try {
       if (removing) {
@@ -169,6 +181,12 @@ export function Poster({
       });
     }
   }
+  const rise = {
+    hidden: { opacity: reduced ? 1 : 0, y: reduced ? 0 : 24 },
+    shown: { opacity: 1, y: 0 },
+  };
+  const riseTiming = { duration: reduced ? 0 : 0.8, ease: EXPO_OUT_CURVE };
+
   function bookmark(r: Recommendation) {
     return (
       <SaveButton
@@ -232,7 +250,7 @@ export function Poster({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{
                   duration: reduced ? 0 : 0.7,
-                  ease: [0.16, 1, 0.3, 1],
+                  ease: EXPO_OUT_CURVE,
                 }}
               >
                 <div>
@@ -264,13 +282,10 @@ export function Poster({
                       return;
                     event.preventDefault();
                     const next = view === "grid" ? "list" : "grid";
-                    setView(next);
-                    try {
-                      localStorage.setItem("concert-scout-view", next);
-                    } catch {}
+                    chooseView(next);
                     event.currentTarget
                       .querySelector<HTMLButtonElement>(
-                        `button[aria-label="${next === "grid" ? "Grid" : "List"} view"]`,
+                        `button[data-view="${next}"]`,
                       )
                       ?.focus();
                   }}
@@ -283,31 +298,18 @@ export function Poster({
                       ease: [0.2, 0.8, 0.2, 1],
                     }}
                   />
-                  {[
-                    ["grid", LayoutGrid],
-                    ["list", List],
-                  ].map(([kind, Icon]) => {
-                    const Type = Icon as typeof List;
-                    return (
-                      <button
-                        key={String(kind)}
-                        aria-label={`${kind === "grid" ? "Grid" : "List"} view`}
-                        title={`${kind === "grid" ? "Grid" : "List"} view`}
-                        aria-pressed={view === kind}
-                        onClick={() => {
-                          setView(kind as "grid" | "list");
-                          try {
-                            localStorage.setItem(
-                              "concert-scout-view",
-                              String(kind),
-                            );
-                          } catch {}
-                        }}
-                      >
-                        <Type aria-hidden />
-                      </button>
-                    );
-                  })}
+                  {VIEWS.map(({ kind, label, Icon }) => (
+                    <button
+                      key={kind}
+                      data-view={kind}
+                      aria-label={label}
+                      title={label}
+                      aria-pressed={view === kind}
+                      onClick={() => chooseView(kind)}
+                    >
+                      <Icon aria-hidden />
+                    </button>
+                  ))}
                 </div>
               </motion.header>
               <Dialog.Root
@@ -330,16 +332,19 @@ export function Poster({
                     transition={{ duration: reduced ? 0 : 0.2 }}
                   >
                     {recommendations.map((r, rank) => {
-                      const { concert, reason } = r,
-                        name = nameOf(r),
-                        date = concert.date ? formatDate(concert.date) : null,
-                        meta = [
-                          concert.venue,
-                          concert.city,
-                          formatConcertTime(concert),
-                        ]
-                          .filter(Boolean)
-                          .join(" · ");
+                      const { concert, reason } = r;
+                      const name = nameOf(r);
+                      const date = concert.date
+                        ? formatDate(concert.date)
+                        : null;
+                      const meta = [
+                        concert.venue,
+                        concert.city,
+                        formatConcertTime(concert),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ");
+                      const bill = showTitle(concert, name);
                       if (recommendations.length === 1 && view === "grid")
                         return (
                           <article
@@ -397,11 +402,7 @@ export function Poster({
                           {bookmark(r)}
                           <div className="card-body">
                             <h3 className="card-name">{name}</h3>
-                            {showTitle(concert, name) && (
-                              <p className="card-bill">
-                                {showTitle(concert, name)}
-                              </p>
-                            )}
+                            {bill && <p className="card-bill">{bill}</p>}
                             <p className="card-meta">{meta}</p>
                             {reason && <p className="card-why">{reason}</p>}
                           </div>
@@ -472,16 +473,7 @@ export function Poster({
                 shown: { transition: { staggerChildren: reduced ? 0 : 0.1 } },
               }}
             >
-              <motion.div
-                variants={{
-                  hidden: { opacity: reduced ? 1 : 0, y: reduced ? 0 : 24 },
-                  shown: { opacity: 1, y: 0 },
-                }}
-                transition={{
-                  duration: reduced ? 0 : 0.8,
-                  ease: [0.16, 1, 0.3, 1],
-                }}
-              >
+              <motion.div variants={rise} transition={riseTiming}>
                 <h2>Nothing here fits</h2>
                 <p>
                   {candidates
@@ -492,14 +484,8 @@ export function Poster({
               </motion.div>
               <motion.div
                 className="empty-actions"
-                variants={{
-                  hidden: { opacity: reduced ? 1 : 0, y: reduced ? 0 : 24 },
-                  shown: { opacity: 1, y: 0 },
-                }}
-                transition={{
-                  duration: reduced ? 0 : 0.8,
-                  ease: [0.16, 1, 0.3, 1],
-                }}
+                variants={rise}
+                transition={riseTiming}
               >
                 {onWiderDates && (
                   <button onClick={onWiderDates}>
@@ -522,7 +508,7 @@ export function Poster({
               transition={{
                 duration: reduced ? 0 : 0.7,
                 delay: reduced ? 0 : 0.8,
-                ease: [0.16, 1, 0.3, 1],
+                ease: EXPO_OUT_CURVE,
               }}
             >
               <h3>Also playing, not picked</h3>

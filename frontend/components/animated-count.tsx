@@ -1,7 +1,11 @@
 "use client";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useLayoutEffect, useRef } from "react";
-import { Choreography } from "@/lib/choreography";
+import {
+  BACK_OUT_CURVE,
+  Choreography,
+  EXPO_OUT_CURVE,
+} from "@/lib/choreography";
 
 export function AnimatedCount({ value }: { value: number }) {
   const element = useRef<HTMLSpanElement>(null),
@@ -36,7 +40,7 @@ export function SavedCount({ value }: { value: number }) {
           exit={{ scale: reduced ? 1 : 0 }}
           transition={{
             duration: reduced ? 0 : 0.6,
-            ease: [0.34, 1.56, 0.64, 1],
+            ease: BACK_OUT_CURVE,
           }}
         >
           <AnimatePresence mode="popLayout" initial={false}>
@@ -47,7 +51,7 @@ export function SavedCount({ value }: { value: number }) {
               exit={{ y: reduced ? 0 : "-100%", opacity: 0 }}
               transition={{
                 duration: reduced ? 0 : 0.45,
-                ease: [0.16, 1, 0.3, 1],
+                ease: EXPO_OUT_CURVE,
               }}
             >
               {value}

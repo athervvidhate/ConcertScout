@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { CalendarDays, MapPin, Music2, UserRound } from "lucide-react";
 import { formatMonthDay } from "@/lib/format";
 import type { Interpreted } from "@/lib/search";
+import { BACK_OUT_CURVE } from "@/lib/choreography";
 
 export function SearchChips({
   interpreted,
@@ -68,7 +69,7 @@ export function SearchChips({
               scale: 1,
               transition: {
                 duration: reduced ? 0 : 0.7,
-                ease: [0.34, 1.56, 0.64, 1],
+                ease: BACK_OUT_CURVE,
               },
             },
           }}

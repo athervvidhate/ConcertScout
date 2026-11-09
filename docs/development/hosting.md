@@ -52,8 +52,6 @@ Configure `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_TURNSTILE_SITE_KEY` explicitly 
 
 For a preview using the existing public API, allow that exact frontend origin in the API's `CORS_ORIGINS` and the hostname on the matching Turnstile widget. Preserve existing allowed origins, real bot verification and spend/visitor limits. Rebuild after changing public frontend values and redeploy the existing API revision after changing its runtime allowlist. A green frontend build and local browser suite do not prove those deployed connections work: check the real preview's endpoint, CORS preflight and one complete Search through the real widget.
 
-The November 8 PR81 preview shipped without either public setting and tried its own hostname on port 8443; the browser showed “Reading your Search” until its network request failed. The production API was healthy but also refused this preview's origin. The prepared connection settings and remaining approval are recorded in [the incident notes](../validation/2026-11-08-preview-search.md). The handoff's explicit approval requirement for remote configuration and deployments still applies.
-
 ## Accounts on Supabase
 
 1. Create a Supabase project in US East, near the API's `iad1` region, and apply the migrations with `npx supabase link` and `npx supabase db push` from `frontend/`, with `--workdir ..`. Keep the project on asymmetric JWT signing keys, which new projects use by default.

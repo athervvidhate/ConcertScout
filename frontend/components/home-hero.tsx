@@ -2,6 +2,7 @@
 import dynamic from "next/dynamic";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { EXPO_OUT_CURVE } from "@/lib/choreography";
 const LINES = [
   { lead: "Tame Impala in ", accent: "London" },
   { lead: "Jazz in ", accent: "New Orleans" },
@@ -69,7 +70,7 @@ export function HomeHero({
       transition={{
         duration: reduced ? 0 : 0.8,
         delay: reduced ? 0 : 0.3,
-        ease: [0.16, 1, 0.3, 1],
+        ease: EXPO_OUT_CURVE,
       }}
     >
       <motion.span
@@ -81,7 +82,7 @@ export function HomeHero({
         transition={{
           duration: reduced ? 0 : 0.8,
           delay: reduced ? 0 : 0.05,
-          ease: [0.16, 1, 0.3, 1],
+          ease: EXPO_OUT_CURVE,
         }}
       >
         Find a night of

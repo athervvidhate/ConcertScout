@@ -1,8 +1,14 @@
 /** Native animation sequences, with one cancellation boundary per UI journey. */
-export const EXPO_OUT = "cubic-bezier(.16,1,.3,1)";
-export const EXPO_IN_OUT = "cubic-bezier(.87,0,.13,1)";
-export const BACK_OUT = "cubic-bezier(.34,1.56,.64,1)";
-export const POWER_OUT = "cubic-bezier(.22,.61,.36,1)";
+type Curve = readonly [number, number, number, number];
+const cubic = (curve: Curve) => `cubic-bezier(${curve.join(",")})`;
+
+// Motion components take the curves; native animations take their CSS form.
+export const EXPO_OUT_CURVE: Curve = [0.16, 1, 0.3, 1];
+export const EXPO_IN_OUT_CURVE: Curve = [0.87, 0, 0.13, 1];
+export const BACK_OUT_CURVE: Curve = [0.34, 1.56, 0.64, 1];
+export const EXPO_OUT = cubic(EXPO_OUT_CURVE);
+export const EXPO_IN_OUT = cubic(EXPO_IN_OUT_CURVE);
+export const BACK_OUT = cubic(BACK_OUT_CURVE);
 
 export class Choreography {
   readonly controller = new AbortController();

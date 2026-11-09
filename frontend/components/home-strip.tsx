@@ -4,6 +4,7 @@ import { SEARCH_EXAMPLES } from "@/lib/search-examples";
 import Image from "next/image";
 import { nameOf } from "@/components/ticket";
 import type { HomeExample } from "@/lib/home-examples";
+import { EXPO_OUT_CURVE } from "@/lib/choreography";
 
 export function HomeStrip({
   examples,
@@ -42,7 +43,7 @@ export function HomeStrip({
             transition={{
               duration: reduced ? 0 : 1,
               delay: reduced ? 0 : 0.4 + index * 0.05,
-              ease: [0.16, 1, 0.3, 1],
+              ease: EXPO_OUT_CURVE,
             }}
             className="strip-tile"
             data-active={example.text === SEARCH_EXAMPLES[active]}

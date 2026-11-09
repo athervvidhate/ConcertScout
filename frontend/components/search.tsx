@@ -26,6 +26,7 @@ import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/place";
 import { API_URL } from "@/lib/search";
 import { useImportedTaste } from "@/lib/taste";
 import { useSearch } from "@/lib/use-search";
+import { EXPO_IN_OUT_CURVE, EXPO_OUT_CURVE } from "@/lib/choreography";
 
 const NO_LOCATION =
   "We could not get your location. Type a city in the search box instead.";
@@ -143,6 +144,38 @@ export function Search() {
       );
   }
 
+  function searchAgain(query: string, near: Place | null = place) {
+    setText(query);
+    run(query, near);
+  }
+
+  function searchWiderDates() {
+    if (!searchedFor) return;
+    const words = [
+      ...searchedFor.artists,
+      ...searchedFor.genres,
+      searchedFor.region ?? searchedFor.place,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    searchAgain(`${words} in the next three months`);
+  }
+
+  // Concerts elsewhere are already on the page; otherwise drop the place and Search again.
+  function searchAnywhere() {
+    if (elsewhere) {
+      document
+        .getElementById("elsewhere")
+        ?.scrollIntoView({ behavior: reduced ? "instant" : "smooth" });
+      return;
+    }
+    if (!interpreted) return;
+    searchAgain(
+      [...interpreted.artists, ...interpreted.genres].join(" "),
+      null,
+    );
+  }
+
   function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = text.trim();
@@ -180,12 +213,12 @@ export function Search() {
         initial={{ opacity: reduced ? 1 : 0, y: reduced ? 0 : 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{
-          layout: { duration: reduced ? 0 : 0.8, ease: [0.87, 0, 0.13, 1] },
+          layout: { duration: reduced ? 0 : 0.8, ease: EXPO_IN_OUT_CURVE },
           opacity: { duration: reduced ? 0 : 1, delay: reduced ? 0 : 0.25 },
           y: {
             duration: reduced ? 0 : 1,
             delay: reduced ? 0 : 0.25,
-            ease: [0.16, 1, 0.3, 1],
+            ease: EXPO_OUT_CURVE,
           },
         }}
         onSubmit={submit}
@@ -264,7 +297,7 @@ export function Search() {
             transition={{
               duration: reduced ? 0 : 0.8,
               delay: reduced ? 0 : 0.38,
-              ease: [0.16, 1, 0.3, 1],
+              ease: EXPO_OUT_CURVE,
             }}
           >
             <motion.p
@@ -278,7 +311,7 @@ export function Search() {
               transition={{
                 duration: reduced ? 0 : 1,
                 delay: reduced ? 0 : 0.33,
-                ease: [0.16, 1, 0.3, 1],
+                ease: EXPO_OUT_CURVE,
               }}
             >
               An Artist, a sound, a place. We find the Concerts worth going out
@@ -344,7 +377,6 @@ export function Search() {
             transition={{ duration: reduced ? 0 : 0.25 }}
           >
             <Poster
-              key={searchRun}
               candidates={candidates}
               recommendations={recommendations}
               searching={phase === "searching"}
@@ -356,37 +388,13 @@ export function Search() {
                 input.current?.select();
               }}
               onWiderDates={
-                canSearch && searchedFor
-                  ? () => {
-                      const words = [
-                        ...searchedFor.artists,
-                        ...searchedFor.genres,
-                        searchedFor.region ?? searchedFor.place,
-                      ]
-                        .filter(Boolean)
-                        .join(" ");
-                      const wider = `${words} in the next three months`;
-                      setText(wider);
-                      run(wider);
-                    }
-                  : undefined
+                canSearch && searchedFor ? searchWiderDates : undefined
               }
               onAnywhere={
-                elsewhere
-                  ? () =>
-                      document.getElementById("elsewhere")?.scrollIntoView({
-                        behavior: reduced ? "instant" : "smooth",
-                      })
-                  : canSearch && interpreted && interpreted.artists.length > 0
-                    ? () => {
-                        const anywhere = [
-                          ...interpreted.artists,
-                          ...interpreted.genres,
-                        ].join(" ");
-                        setText(anywhere);
-                        run(anywhere, null);
-                      }
-                    : undefined
+                elsewhere ||
+                (canSearch && interpreted && interpreted.artists.length > 0)
+                  ? searchAnywhere
+                  : undefined
               }
             />
           </motion.div>
@@ -445,7 +453,7 @@ export function Search() {
             transition={{
               duration: reduced ? 0 : 0.8,
               delay: reduced ? 0 : 0.46,
-              ease: [0.16, 1, 0.3, 1],
+              ease: EXPO_OUT_CURVE,
             }}
           >
             <HomeGuide

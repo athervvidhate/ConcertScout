@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useLayoutEffect, useRef } from "react";
-import { Choreography, BACK_OUT } from "@/lib/choreography";
+import { BACK_OUT, Choreography, EXPO_OUT_CURVE } from "@/lib/choreography";
 import type { Candidates } from "@/lib/search";
 
 const STEPS = ["interpret", "resolve", "pool", "match", "rank"];
@@ -36,8 +36,8 @@ export function WorkingSearch({
   picked: Set<string>;
   done: boolean;
 }) {
-  const root = useRef<HTMLDivElement>(null),
-    reduced = useReducedMotion();
+  const root = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
   useLayoutEffect(() => {
     if (reduced || !root.current) return;
     const scope = new Choreography();
@@ -104,7 +104,7 @@ export function WorkingSearch({
       transition: {
         duration: reduced ? 0 : 0.6,
         delay: reduced ? 0 : 0.1,
-        ease: [0.16, 1, 0.3, 1] as const,
+        ease: EXPO_OUT_CURVE,
       },
     },
     exit: {
@@ -125,28 +125,14 @@ export function WorkingSearch({
       <div className="run-head">
         <div className="run-icon">
           <AnimatePresence initial={false}>
-            <motion.span
-              key={kind}
-              {...swap}
-              transition={{
-                duration: reduced ? 0 : 0.6,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-            >
+            <motion.span key={kind} {...swap}>
               <Icon aria-hidden size={22} />
             </motion.span>
           </AnimatePresence>
         </div>
         <div className="run-text" role="status">
           <AnimatePresence initial={false}>
-            <motion.span
-              key={status}
-              {...swap}
-              transition={{
-                duration: reduced ? 0 : 0.6,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-            >
+            <motion.span key={status} {...swap}>
               {status}
             </motion.span>
           </AnimatePresence>
