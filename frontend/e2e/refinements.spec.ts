@@ -121,15 +121,17 @@ test("eight dates unfold within the viewport without enlarging the photo or scro
     .getByRole("button", { name: "8 more dates", exact: true })
     .click();
   // Sample the actual frame on successive paints, rather than only its final geometry.
-  const heights = await sheet.evaluate(async (e) => {
-    const values: number[] = [];
+  const frames = await sheet.evaluate(async (e) => {
+    const values: { at: number; height: number }[] = [];
     const until = performance.now() + 700;
-    while (performance.now() < until) {
-      values.push(e.getBoundingClientRect().height);
-      await new Promise(requestAnimationFrame);
+    let at = performance.now();
+    while (at < until) {
+      values.push({ at, height: e.getBoundingClientRect().height });
+      at = await new Promise<number>(requestAnimationFrame);
     }
     return values;
   });
+  const heights = frames.map((frame) => frame.height);
   const after = await sheet.boundingBox(),
     afterPhoto = await page.locator(".dialog-photo").boundingBox();
   expect(afterPhoto!.width).toBeCloseTo(photo!.width, 0);
@@ -142,11 +144,19 @@ test("eight dates unfold within the viewport without enlarging the photo or scro
         (height) => height > before!.height + 5 && height < after!.height - 5,
       ),
     ).toBe(true);
+    // Speed, not per-frame distance: a busy machine drops frames without the sheet jumping.
+    // The limit is 70px per 60fps frame.
     expect(
       Math.max(
-        ...heights.slice(1).map((height, i) => Math.abs(height - heights[i])),
+        ...frames
+          .slice(1)
+          .map(
+            (frame, i) =>
+              Math.abs(frame.height - frames[i].height) /
+              Math.max(frame.at - frames[i].at, 1000 / 60),
+          ),
       ),
-    ).toBeLessThan(70);
+    ).toBeLessThan(70 / (1000 / 60));
   }
   await expect(sheet.locator(".other-chips a")).toHaveCount(8);
   await expect(sheet.locator(".other-chips a").last()).toBeInViewport();
