@@ -32,9 +32,9 @@ test("a Ticket adds its Concert to a calendar from the keyboard, with no request
   const { download, file } = await addFromKeyboard(page, "Contract Artist");
   expect(requests.filter((url) => !url.startsWith("blob:"))).toEqual([]);
 
-  expect(download.suggestedFilename()).toBe("contract-artist.ics");
+  expect(download.suggestedFilename()).toBe("contract-concert-one.ics");
   expect(file).toContain("BEGIN:VCALENDAR\r\n");
-  expect(file).toContain("SUMMARY:Contract Artist\r\n");
+  expect(file).toContain("SUMMARY:Contract Concert One\r\n");
   expect(file).toContain("LOCATION:Source Hall\\, San Francisco\\, CA\r\n");
   expect(file).toContain("URL:https://tickets.example/one\r\n");
   // The source reports 7:30 PM and no zone, so the time stays on that clock with no end.
@@ -63,6 +63,6 @@ test("a Saved Concert adds itself to a calendar", async ({ page }) => {
   expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const { file } = await addFromKeyboard(page, "Contract Artist");
-  expect(file).toContain("SUMMARY:Contract Artist\r\n");
+  expect(file).toContain("SUMMARY:Contract Concert One\r\n");
   expect(file).toMatch(/\r\nDTSTART:\d{8}T193000\r\n/);
 });

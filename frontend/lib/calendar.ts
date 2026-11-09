@@ -1,6 +1,5 @@
 import { zoneName } from "@/lib/format";
 import type { Concert } from "@/lib/search";
-import { showTitle } from "@/lib/show-title";
 
 /**
  * A Concert as an iCalendar (RFC 5545) file, built from the source record alone. The `ics`
@@ -80,9 +79,10 @@ function timezone(zone: string, offset: string): string[] {
   ];
 }
 
-/** The Lineup, or the listing's own name when the source gives no Artists. */
-function summaryOf({ artists, name }: Concert): string {
-  return artists.map((artist) => artist.name).join(", ") || name;
+/** The Lineup, when it says something the listing's name does not. */
+function lineupOf({ artists, name }: Concert): string | undefined {
+  const lineup = artists.map((artist) => artist.name).join(", ");
+  return lineup && lineup.toLowerCase() !== name.toLowerCase() ? lineup : undefined;
 }
 
 /**
@@ -93,8 +93,6 @@ export function calendarFile(concert: Concert, now = new Date()): string | undef
   const { date, time, time_zone, id, url, venue, city, region } = concert;
   if (!date) return undefined;
   const day = date.replaceAll("-", "");
-  const summary = summaryOf(concert);
-  const title = showTitle(concert, summary);
   const location = [venue, city, region].filter(Boolean).join(", ");
 
   let start: string;
@@ -117,9 +115,9 @@ export function calendarFile(concert: Concert, now = new Date()): string | undef
     `UID:${text(id)}@concertscout.app`,
     `DTSTAMP:${stamp(now)}`,
     start,
-    `SUMMARY:${text(summary)}`,
+    `SUMMARY:${text(concert.name)}`,
     ...(location ? [`LOCATION:${text(location)}`] : []),
-    `DESCRIPTION:${text([title, url].filter(Boolean).join("\n"))}`,
+    `DESCRIPTION:${text([lineupOf(concert), url].filter(Boolean).join("\n"))}`,
     `URL:${url}`,
     "END:VEVENT",
     "END:VCALENDAR",
@@ -127,9 +125,9 @@ export function calendarFile(concert: Concert, now = new Date()): string | undef
   return lines.map(fold).join(CRLF) + CRLF;
 }
 
-/** A file name from the Lineup, with nothing a file system refuses. */
+/** A file name from the listing's name, with nothing a file system refuses. */
 export function calendarFileName(concert: Concert): string {
-  const slug = summaryOf(concert)
+  const slug = concert.name
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
     .toLowerCase()

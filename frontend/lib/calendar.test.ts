@@ -92,15 +92,15 @@ describe("calendarFile", () => {
     expect(calendarFile({ ...concert, date: undefined }, NOW)).toBeUndefined();
   });
 
-  it("lists the Lineup in the summary and the tour in the description", () => {
+  it("names the event as the listing does, with the Lineup in the description", () => {
     const file = lines(
       calendarFile(
         { ...concert, name: "Khruangbin: A La Sala Tour", artists: [{ name: "Khruangbin" }, { name: "Mdou Moctar" }] },
         NOW,
       )!,
     );
-    expect(file).toContain("SUMMARY:Khruangbin\\, Mdou Moctar");
-    expect(file).toContain("DESCRIPTION:A La Sala Tour\\nhttps://tickets.example/khruangbin");
+    expect(file).toContain("SUMMARY:Khruangbin: A La Sala Tour");
+    expect(file).toContain("DESCRIPTION:Khruangbin\\, Mdou Moctar\\nhttps://tickets.example/khruangbin");
   });
 
   it("escapes characters the format reserves", () => {
@@ -108,7 +108,7 @@ describe("calendarFile", () => {
       calendarFile(
         {
           ...concert,
-          artists: [{ name: "Earth, Wind & Fire; Live" }, { name: "Back\\slash" }],
+          name: "Earth, Wind & Fire; Live, Back\\slash",
           venue: "Hall\nTwo",
         },
         NOW,
@@ -120,7 +120,7 @@ describe("calendarFile", () => {
 
   it("ends every line with CRLF and folds long ones at 75 octets without splitting a character", () => {
     const name = "Sigur Rós ".repeat(20).trim();
-    const file = calendarFile({ ...concert, artists: [{ name }] }, NOW)!;
+    const file = calendarFile({ ...concert, name }, NOW)!;
     expect(file.endsWith("\r\n")).toBe(true);
     expect(file.replace(/\r\n/g, "")).not.toMatch(/[\r\n]/);
     for (const line of file.split("\r\n")) {
@@ -131,12 +131,12 @@ describe("calendarFile", () => {
 });
 
 describe("calendarFileName", () => {
-  it("names the file after the Lineup", () => {
+  it("names the file after the listing", () => {
     expect(calendarFileName(concert)).toBe("khruangbin.ics");
-    expect(calendarFileName({ ...concert, artists: [{ name: "Sigur Rós" }, { name: "AC/DC" }] })).toBe("sigur-ros-ac-dc.ics");
+    expect(calendarFileName({ ...concert, name: "Sigur Rós / AC/DC" })).toBe("sigur-ros-ac-dc.ics");
   });
 
   it("falls back when nothing usable is left", () => {
-    expect(calendarFileName({ ...concert, artists: [{ name: "東京" }] })).toBe("concert.ics");
+    expect(calendarFileName({ ...concert, name: "東京" })).toBe("concert.ics");
   });
 });
