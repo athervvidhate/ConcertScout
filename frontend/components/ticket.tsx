@@ -1,10 +1,10 @@
-import { Pointer } from "lucide-react";
-import { Fragment, useId, useState } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { ChevronLeft, ChevronRight, Pointer } from "lucide-react";
+import { Fragment, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { ArtistPanel } from "@/components/artist-panel";
 import { ConcertPhoto, SourceLink } from "@/components/concert-source";
-import { Listen } from "@/components/listen";
+import { ListenButton, ListenStage } from "@/components/listen";
 import {
   byVenue,
   formatDate,
@@ -43,60 +43,38 @@ function placeOf({ venue, city, region }: Concert): string {
   return [venue, city, region].filter(Boolean).join(", ");
 }
 
-function OtherDates({ concerts }: { concerts: Concert[] }) {
-  const [open, setOpen] = useState(false);
-  const id = useId();
-  const reduced = useReducedMotion();
-  const count =
-    concerts.length === 1 ? "1 more date" : `${concerts.length} more dates`;
+function moreDates(count: number): string {
+  return count === 1 ? "1 more date" : `${count} more dates`;
+}
+
+/** The headliner's other dates, by venue. It takes the details' place rather than adding to them. */
+function DatesPane({ concerts }: { concerts: Concert[] }) {
   return (
-    <div className="other-dates" data-expanded={open}>
-      <button
-        className="other-toggle"
-        aria-expanded={open}
-        aria-controls={id}
-        onClick={() => setOpen(!open)}
-      >
-        {count}
-      </button>
-      <motion.div
-        id={id}
-        className="other-content"
-        inert={!open}
-        aria-hidden={!open}
-        initial={false}
-        animate={{ height: open ? "auto" : 0, opacity: open ? 1 : 0 }}
-        transition={{ duration: reduced ? 0 : 0.5, ease: [0.22, 0.8, 0.2, 1] }}
-      >
-        <ul className="other-venues">
-          {byVenue(concerts).map((shows) => {
-            const { id, venue, city, region } = shows[0];
-            return (
-              <li key={id}>
-                <p className="other-place">
-                  {[city, region].filter(Boolean).join(", ")}
-                </p>
-                {venue && <p className="other-venue">{venue}</p>}
-                <ul className="other-chips">
-                  {shows.map((concert) => (
-                    <li key={concert.id}>
-                      <SourceLink
-                        href={concert.url}
-                        aria-label={`Tickets for ${[concert.date && formatDate(concert.date), placeOf(concert)].filter(Boolean).join(", ")}`}
-                      >
-                        {concert.date
-                          ? `${formatDayShort(concert.date)} ${formatMonthDay(concert.date)}`
-                          : "Tickets"}
-                      </SourceLink>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            );
-          })}
-        </ul>
-      </motion.div>
-    </div>
+    <ul className="other-venues">
+      {byVenue(concerts).map((shows) => {
+        const { id, venue, city, region } = shows[0];
+        return (
+          <li key={id}>
+            <p className="other-place">{[city, region].filter(Boolean).join(", ")}</p>
+            {venue && <p className="other-venue">{venue}</p>}
+            <ul className="other-chips">
+              {shows.map((concert) => (
+                <li key={concert.id}>
+                  <SourceLink
+                    href={concert.url}
+                    aria-label={`Tickets for ${[concert.date && formatDate(concert.date), placeOf(concert)].filter(Boolean).join(", ")}`}
+                  >
+                    {concert.date
+                      ? `${formatDayShort(concert.date)} ${formatMonthDay(concert.date)}`
+                      : "Tickets"}
+                  </SourceLink>
+                </li>
+              ))}
+            </ul>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -106,7 +84,10 @@ type TicketProps = {
   // Shown once, on a visitor's first Ticket, because the name doesn't look like a button.
   artistHint?: boolean;
   onArtistOpen?: () => void;
+  /** Set where the photograph lives outside the Ticket, which then also holds Listen's stage. */
   hidePhoto?: boolean;
+  listening?: boolean;
+  onListen?: (listening: boolean) => void;
 };
 
 export function Ticket({
@@ -115,10 +96,29 @@ export function Ticket({
   artistHint,
   onArtistOpen,
   hidePhoto,
+  listening: shared,
+  onListen,
 }: TicketProps) {
   const { concert, reason, also = [] } = recommendation;
-  // Only an Artist has a panel. A Concert with no Lineup is just its title.
-  const artist = concert.artists[0]?.name;
+  const [own, setOwn] = useState(false);
+  const listening = onListen ? !!shared : own;
+  const listen = onListen ?? setOwn;
+  const [view, setView] = useState<"details" | "dates">("details");
+  const reduced = useReducedMotion();
+  // After a swap, focus lands on the control that swaps back, once the new pane mounts.
+  const moved = useRef(false);
+  const focusAfterSwap = (node: HTMLButtonElement | null) => {
+    if (node && moved.current) {
+      moved.current = false;
+      node.focus();
+    }
+  };
+  const swap = (next: "details" | "dates") => {
+    moved.current = true;
+    setView(next);
+  };
+  // Only an Artist has a panel or a Preview. A Concert with no Lineup is just its title.
+  const headliner = concert.artists[0]?.name;
   const details = [
     placeOf(concert),
     concert.date && formatDayShort(concert.date),
@@ -129,37 +129,96 @@ export function Ticket({
   return (
     <article className="ticket" data-color={rank % 5}>
       {!hidePhoto && (
-        <ConcertPhoto
-          concert={concert}
-          className="ticket-photo"
-          sizes="(max-width: 600px) 100vw, 800px"
-          draggable={false}
-        />
+        <div className="ticket-media">
+          <ConcertPhoto
+            concert={concert}
+            className="ticket-photo"
+            sizes="(max-width: 600px) 100vw, 800px"
+            draggable={false}
+          />
+          {headliner && <ListenStage name={headliner} listening={listening} />}
+        </div>
       )}
       <div className="ticket-main">
-        {concert.date && (
-          <time
-            className="date"
-            dateTime={concert.date}
-            aria-label={formatDate(concert.date)}
-          >
-            {formatMonthDay(concert.date)}
-          </time>
-        )}
-        <h2>
-          {artist ? <ArtistPanel name={artist} onOpen={onArtistOpen} /> : concert.name}
-        </h2>
-        {artist && artistHint && (
-          <p className="artist-hint">
-            <Pointer aria-hidden size={15} />
-            Tap the name for more
-          </p>
-        )}
-        {reason && <p>{reason}</p>}
-        <p className="venue">{details.join(", ")}</p>
-        {presale && <p className="presale">{presale}</p>}
-        {concert.artists[0] && <Listen name={concert.artists[0].name} />}
-        {also.length > 0 && <OtherDates concerts={also} />}
+        {/* One pane at a time, so the Ticket never grows to fit both. */}
+        <AnimatePresence mode="wait" initial={false}>
+          {view === "details" ? (
+            <motion.div
+              key="details"
+              className="ticket-pane"
+              initial={{ opacity: 0, x: reduced ? 0 : -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: reduced ? 0 : -16 }}
+              transition={{ duration: reduced ? 0 : 0.18 }}
+            >
+              {concert.date && (
+                <time
+                  className="date"
+                  dateTime={concert.date}
+                  aria-label={formatDate(concert.date)}
+                >
+                  {formatMonthDay(concert.date)}
+                </time>
+              )}
+              <h2>
+                {headliner ? (
+                  <ArtistPanel name={headliner} onOpen={onArtistOpen} />
+                ) : (
+                  concert.name
+                )}
+              </h2>
+              {headliner && artistHint && (
+                <p className="artist-hint">
+                  <Pointer aria-hidden size={15} />
+                  Tap the name for more
+                </p>
+              )}
+              {reason && <p>{reason}</p>}
+              <p className="venue">{details.join(", ")}</p>
+              {presale && <p className="presale">{presale}</p>}
+              {(headliner || also.length > 0) && (
+                <div className="ticket-pills">
+                  {headliner && (
+                    <ListenButton name={headliner} listening={listening} onListen={listen} />
+                  )}
+                  {also.length > 0 && (
+                    <button
+                      ref={focusAfterSwap}
+                      type="button"
+                      className="ticket-pill"
+                      onClick={() => swap("dates")}
+                    >
+                      {moreDates(also.length)}
+                      <ChevronRight aria-hidden size={16} />
+                    </button>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="dates"
+              className="ticket-pane"
+              initial={{ opacity: 0, x: reduced ? 0 : 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: reduced ? 0 : 16 }}
+              transition={{ duration: reduced ? 0 : 0.18 }}
+            >
+              <button
+                ref={focusAfterSwap}
+                type="button"
+                className="ticket-back"
+                onClick={() => swap("details")}
+              >
+                <ChevronLeft aria-hidden size={16} />
+                <span className="sr-only">Back to </span>
+                {nameOf(recommendation)}
+              </button>
+              <p className="dates-heading">{moreDates(also.length)}</p>
+              <DatesPane concerts={also} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
       <div className="ticket-stub">
         {concert.price && <Price text={formatPrice(concert.price, true)} />}

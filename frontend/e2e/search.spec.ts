@@ -356,7 +356,7 @@ function artistProfile(page: Page, spotifyUrl?: string) {
   });
 }
 
-test("Listen on a Ticket is the only thing that loads Spotify's Preview", async ({page, isMobile}) => {
+test("Listen on a Ticket is the only thing that loads Spotify's Preview", {tag: "@phone"}, async ({page, isMobile}) => {
   const id = "4Z8W4fKeB5YxbusRsdQVPb";
   const spotify: string[] = [];
   page.on("request", request => {
@@ -387,9 +387,18 @@ test("Listen on a Ticket is the only thing that loads Spotify's Preview", async 
   await expect(stop).toBeFocused();
   await expect.poll(() => spotify).toEqual([`https://open.spotify.com/embed/artist/${id}`]);
 
+  // Spotify's player takes the photograph's place, in the same box, at Spotify's minimum size.
   const box = (await preview.boundingBox())!;
   expect(box.width).toBeGreaterThanOrEqual(280);
-  expect(box.height).toBe(352);
+  expect(box.height).toBeGreaterThanOrEqual(352);
+  const stage = (await ticket.locator(".listen-stage").boundingBox())!,
+    media = (await ticket.locator(".dialog-media").boundingBox())!;
+  expect(stage).toEqual(media);
+  // Nothing of ours sits on Spotify's player, Close included.
+  const close = (await ticket.getByRole("button", {name: "Close Ticket"}).boundingBox())!;
+  const apart = close.x >= box.x + box.width || close.x + close.width <= box.x ||
+    close.y >= box.y + box.height || close.y + close.height <= box.y;
+  expect(apart).toBe(true);
   await noOverflow(page);
   await stop.press("Enter");
   await expect(preview).toHaveCount(0);
