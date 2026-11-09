@@ -74,16 +74,92 @@
   judged: true
 - id: afrobeats-new-york
   text: Afrobeats in New York
+  snapshot: afrobeats-new-york-2026-11-09-370a48f6
+  good:
+  - Tyla
+  - Ayra Starr
+  - Antibalas
+  - Richard Bona
+  - Kes
+  bad:
+  - Udit Narayan
+  - Gena
+  - Cherish the Ladies
+  - Martin Hayes
+  - Lila Downs
+  - La India
+  - Vince Giordano and the Nighthawks
+  - Wheatus
+  - New Constellations
+  - Hamilton Leithauser
+  - eldon
+  - The Afghan Whigs
+  judged: true
 - id: chicago-far-month
   text: Hip hop in Chicago in September 2027
+  snapshot: chicago-far-month-2026-11-09-649e443a
+  bad:
+  - Sampa the Great
+  - Levi.Sct
+  - TBD/TBD
+  - Evanston Folk Festival 2027 (2-Day Pass)
+  judged: true
 - id: drum-and-bass-boise
   text: Drum and bass in Boise
+  snapshot: drum-and-bass-boise-2026-11-09-56a82090
+  good:
+  - ATLiens
+  - Shrek Rave
+  - GHENGAR
+  - Zingara
+  - METAL CHURCH AND ARMORED SAINT, Livekill
+  bad:
+  - Todd Rundgren
+  - Token
+  - Squirrel Flower
+  - Dwight Yoakam
+  - Rotimi
+  - Petty Theft
+  - Three Days Grace
+  - 'Olivia O’Brien Presents: The PIXIE Tour'
+  - JEFF CROSBY'S ANNUAL HOMECOMING RUN
+  - Olivia O'Brien
+  - Not.Greenday
+  - 'Maddie Zahm: Everything All The Time Tour'
+  judged: true
 - id: ambient-seattle
   text: Ambient electronic music in Seattle
+  snapshot: ambient-seattle-2026-11-09-68399cde
+  good:
+  - Beats Antique
+  - Bluetech
+  - Bonobo
+  bad:
+  - ALLEYCVT
+  - Dennett
+  - TVBOO
+  - Tape B
+  - Sippy
+  - ZULAN
+  - Nikademis
+  - Level Up
+  - Zingara
+  - Sully
+  - FKJ
+  - Rhye
+  - Emma Ruth Rundle
+  - Jai Wolf
+  judged: true
 - id: punk-los-angeles
   text: Punk like Turnstile in Los Angeles
 - id: folk-austin
   text: Intimate folk music in Austin
+  snapshot: folk-austin-2026-11-09-a9da46e3
+  bad:
+  - Gracie Abrams
+  - girlsweetvoiced
+  - Carly Rae Jepsen
+  judged: true
 - id: four-tet-boise
   text: Something like Four Tet in Boise this weekend
 - id: instrumental-san-francisco
@@ -96,8 +172,28 @@
   text: Heavy metal in Denver
 - id: no-place-doja-cat
   text: Concerts by Doja Cat or similar Artists
+  snapshot: no-place-doja-cat-2026-11-09-f912fc50
+  good:
+  - Doja Cat
+  - Latto
+  - Harry Styles
+  judged: true
 - id: sparse-answer
   text: Tuvan throat singing in Boise this weekend
+  snapshot: sparse-answer-2026-11-09-acf4d4c1
+  bad:
+  - Rotimi
+  - Triptides, Eunoian
+  - Petty Theft
+  - Three Days Grace
+  - 'Olivia O’Brien Presents: The PIXIE Tour'
+  - JEFF CROSBY'S ANNUAL HOMECOMING RUN
+  - Olivia O'Brien
+  - Not.Greenday
+  - 'Maddie Zahm: Everything All The Time Tour'
+  - 'THE SLIGHTEST BITS, cryshadow, Eunoian, The Mall Goth Moths '
+  - Todd Rundgren
+  judged: true
 - id: rap-atlanta
   text: Artists like JID in Atlanta
   snapshot: rap-atlanta-2026-11-09-a5d883f8
