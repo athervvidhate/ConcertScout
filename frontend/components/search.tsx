@@ -39,7 +39,6 @@ export function Search() {
   const [activeExample, setActiveExample] = useState(0);
   const [returningHome, setReturningHome] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const [exampleNotice, setExampleNotice] = useState("");
   const [text, setText] = useState("");
   const [tasteOpen, setTasteOpen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -126,22 +125,17 @@ export function Search() {
     window.scrollTo({ top: 0, behavior: "instant" });
     setActiveExample(0);
     setText("");
-    setExampleNotice("");
     clear();
   }
 
+  // A cached example Poster opens at once; an expired one runs as a live Search.
   function tryExample(example: string) {
     setText(example);
     const cached = examples.find((item) => item.text === example);
-    if (cached) {
-      showExample(cached);
-      input.current?.blur();
-      window.scrollTo({ top: 0, behavior: reduced ? "instant" : "smooth" });
-      setExampleNotice("");
-    } else
-      setExampleNotice(
-        "This example is being refreshed. You can Search with these words instead.",
-      );
+    if (!cached) return run(example);
+    showExample(cached);
+    input.current?.blur();
+    window.scrollTo({ top: 0, behavior: reduced ? "instant" : "smooth" });
   }
 
   function searchAgain(query: string, near: Place | null = place) {
@@ -318,7 +312,6 @@ export function Search() {
               for.
             </motion.p>
             <SearchExamples onExample={tryExample} ready />
-            {exampleNotice && <p role="status">{exampleNotice}</p>}
             {!spotify.connected && (
               <HomeStrip
                 active={activeExample}

@@ -15,14 +15,12 @@ test("long photo captions remain inside their readable area without repeating th
     .first()
     .click();
   await expect(page.locator(".concert-card")).toHaveCount(7);
-  const king = page
-    .locator(".concert-card")
-    .filter({
-      has: page.getByRole("heading", {
-        name: "King Gizzard and the Lizard Wizard",
-        exact: true,
-      }),
-    });
+  const king = page.locator(".concert-card").filter({
+    has: page.getByRole("heading", {
+      name: "King Gizzard and the Lizard Wizard",
+      exact: true,
+    }),
+  });
   await expect(king.locator(".card-bill")).toHaveCount(0);
   await expect(page.locator(".card-bill").first()).toHaveText(
     "Deadbeat EU/UK Tour 2027",
@@ -144,4 +142,30 @@ test("returning home waits for the photo strip layout before revealing the green
   await page.reload();
   await expect(page.locator(".home-strip")).toHaveCount(0);
   await expect(page.locator(".home-guide")).toHaveCount(1);
+});
+
+test("an example missing from the cache runs as a live Search", async ({
+  page,
+}) => {
+  await page.route("**/examples", (route) =>
+    route.fulfill({ json: { examples: [tame] } }),
+  );
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Search", exact: true }),
+  ).toBeEnabled();
+  const search = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/search") && request.method() === "POST",
+  );
+  await page
+    .getByRole("button", {
+      name: "Jazz in New Orleans this weekend",
+      exact: true,
+    })
+    .click();
+  expect((await search).postDataJSON().text).toBe(
+    "Jazz in New Orleans this weekend",
+  );
+  await expect(page.getByRole("region", { name: "Poster" })).toBeVisible();
 });
