@@ -45,8 +45,10 @@ export function HomeHero({
     clientHydration,
     serverHydration,
   );
-  const [line, setLine] = useState(0),
-    reduced = useReducedMotion();
+  const [line, setLine] = useState(0);
+  const reduced = useReducedMotion();
+  // The flap draws two halves; while the headline fades in, their seam shows through the type.
+  const [settled, setSettled] = useState(!returning);
   useEffect(() => {
     if (reduced) return;
     let index = 0;
@@ -72,6 +74,7 @@ export function HomeHero({
         delay: reduced ? 0 : 0.3,
         ease: EXPO_OUT_CURVE,
       }}
+      onAnimationComplete={() => setSettled(true)}
     >
       <motion.span
         className="headline-lead"
@@ -92,7 +95,7 @@ export function HomeHero({
         {LINES[line].accent}
       </span>
       <div className="roll hero-flap" aria-hidden="true" data-hero-index={line}>
-        {!hydrated || reduced ? (
+        {!hydrated || reduced || !settled ? (
           <span className="hero-phrase">
             {LINES[0].lead}
             <b>{LINES[0].accent}</b>

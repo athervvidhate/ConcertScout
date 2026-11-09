@@ -659,5 +659,9 @@ button:disabled { opacity:.6; cursor:default; }
 /* Readable photo captions follow their actual content height, including long Artist names. */
 .concerts-grid .concert-card:not(.solo) { display:flex; flex-direction:column; justify-content:flex-end; padding-top:76px; }
 .concerts-grid .concert-card:not(.solo) .card-body { position:relative; inset:auto; margin-top:auto; padding:44px 20px 18px; isolation:isolate; }
-.concerts-grid .concert-card:not(.solo) .card-body::before { content:""; position:absolute; inset:0; z-index:-1; background:linear-gradient(180deg,transparent,#0a1a15ed 32px); }
+/* Caption backing: a progressive blur under an eased scrim, starting well above the text so it has no edge. */
+.concerts-grid .concert-card:not(.solo) .card-body::before,.concerts-grid .concert-card:not(.solo) .card-body::after { content:""; position:absolute; inset:-56px 0 0; pointer-events:none; }
+.concerts-grid .concert-card:not(.solo) .card-body::before { z-index:-2; -webkit-backdrop-filter:blur(14px) saturate(1.15); backdrop-filter:blur(14px) saturate(1.15); -webkit-mask-image:linear-gradient(180deg,transparent,#000 55%); mask-image:linear-gradient(180deg,transparent,#000 55%); }
+.concerts-grid .concert-card:not(.solo) .card-body::after { z-index:-1; background:linear-gradient(180deg,rgb(6 18 14/0.000) 0%,rgb(6 18 14/0.011) 8%,rgb(6 18 14/0.042) 15%,rgb(6 18 14/0.089) 22%,rgb(6 18 14/0.150) 29%,rgb(6 18 14/0.223) 35%,rgb(6 18 14/0.303) 41%,rgb(6 18 14/0.387) 47%,rgb(6 18 14/0.473) 53%,rgb(6 18 14/0.557) 59%,rgb(6 18 14/0.637) 65%,rgb(6 18 14/0.709) 71%,rgb(6 18 14/0.771) 78%,rgb(6 18 14/0.818) 85%,rgb(6 18 14/0.849) 92%,rgb(6 18 14/0.860) 100%); }
+.concerts-grid .concert-card:not(.solo) .card-body > * { text-shadow:0 1px 14px rgb(0 0 0/.28); }
 .concerts-grid .card-meta,.concerts-grid .card-why,.concerts-grid .card-bill { opacity:1; color:#fff; }
