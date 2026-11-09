@@ -14,6 +14,7 @@ import {
   useState,
 } from "react";
 import { AnimatedCount } from "@/components/animated-count";
+import { AddToCalendar } from "@/components/add-to-calendar";
 import { nameOf, Ticket } from "@/components/ticket";
 import { WorkingSearch } from "@/components/working-search";
 import { SaveButton } from "@/components/save-button";
@@ -407,6 +408,7 @@ export function Poster({
                                   pending={pending.has(concert.id)}
                                   onToggle={() => void toggleSave(r)}
                                 />
+                                <AddToCalendar concert={concert} name={name} />
                                 {shareLink && (
                                   <ShareButton
                                     title={`${name} on Concert Scout`}
@@ -507,6 +509,10 @@ export function Poster({
                               />
                             )}
                           </div>
+                          <AddToCalendar
+                            concert={current.concert}
+                            name={nameOf(current)}
+                          />
                           <p className="decision-status" role="status">
                             {notice}
                           </p>

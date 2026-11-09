@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Pointer } from "lucide-react";
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { ArtistPanel } from "@/components/artist-panel";
@@ -88,6 +88,8 @@ type TicketProps = {
   hidePhoto?: boolean;
   listening?: boolean;
   onListen?: (listening: boolean) => void;
+  // More actions beside Tickets, for a Ticket whose host offers none of its own.
+  actions?: ReactNode;
 };
 
 export function Ticket({
@@ -98,6 +100,7 @@ export function Ticket({
   hidePhoto,
   listening: shared,
   onListen,
+  actions,
 }: TicketProps) {
   const { concert, reason, also = [] } = recommendation;
   const [own, setOwn] = useState(false);
@@ -225,6 +228,7 @@ export function Ticket({
         <SourceLink href={concert.url} aria-label={`Tickets for ${concert.name}`}>
           Tickets
         </SourceLink>
+        {actions}
       </div>
     </article>
   );

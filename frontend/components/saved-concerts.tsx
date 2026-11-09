@@ -4,9 +4,10 @@ import { Button } from "@base-ui/react/button";
 import { X } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 
+import { AddToCalendar } from "@/components/add-to-calendar";
 import { AccountDialog } from "@/components/account-dialog";
 import { MovedSaves } from "@/components/moved-saves";
-import { Ticket } from "@/components/ticket";
+import { nameOf, Ticket } from "@/components/ticket";
 import { useAccount } from "@/lib/account";
 import { removeSaved, upcoming, useSavedConcerts } from "@/lib/saved";
 
@@ -61,7 +62,16 @@ export function SavedConcerts() {
       <ul className="saved-list">
         {concerts.map((recommendation, rank) => (
           <li key={recommendation.concert.id}>
-            <Ticket recommendation={recommendation} rank={rank} />
+            <Ticket
+              recommendation={recommendation}
+              rank={rank}
+              actions={
+                <AddToCalendar
+                  concert={recommendation.concert}
+                  name={nameOf(recommendation)}
+                />
+              }
+            />
             <Button
               type="button"
               className="saved-remove"
