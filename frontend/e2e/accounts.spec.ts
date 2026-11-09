@@ -2,6 +2,8 @@ import { execFileSync } from "node:child_process";
 
 import { type Browser, expect, type Page, test } from "@playwright/test";
 
+import { WEB_URL } from "./ports";
+
 // Accounts are behavior, not layout: one width, and reduced motion skips the Poster's holds.
 test.use({ reducedMotion: "reduce" });
 test.skip(({ isMobile }) => isMobile, "Width does not change account behavior");
@@ -99,7 +101,7 @@ async function savedNames(page: Page): Promise<string[]> {
 
 async function secondBrowser(browser: Browser): Promise<Page> {
   const context = await browser.newContext({
-    baseURL: "http://127.0.0.1:3146",
+    baseURL: WEB_URL,
   });
   return context.newPage();
 }
@@ -123,7 +125,7 @@ test("a new account confirms by email, and its saves follow it to another browse
   await page.getByRole("button", { name: "Close" }).click();
 
   await follow(page, await emailedLink(email));
-  await expect(page).toHaveURL(/127\.0\.0\.1:3146\/$/);
+  await expect(page).toHaveURL(`${WEB_URL}/`);
   await expect(page).not.toHaveURL(/token_hash/);
 
   await saveFirstConcert(page);
@@ -171,7 +173,7 @@ test("signing in moves guest saves into the account, and signing out or switchin
 
   await page.goto("/account");
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/3146\/$/);
+  await expect(page).toHaveURL(`${WEB_URL}/`);
   expect(await savedNames(page)).toEqual([]);
 
   await signIn(page, second);
@@ -201,7 +203,7 @@ test("a forgotten password resets by email, and a deleted account cannot sign in
   ).toBeVisible();
   await page.getByLabel("New password").fill(changed);
   await page.getByRole("button", { name: "Save password" }).click();
-  await expect(page).toHaveURL(/3146\/$/);
+  await expect(page).toHaveURL(`${WEB_URL}/`);
 
   await page.goto("/account");
   await page.getByRole("button", { name: "Sign out" }).click();
@@ -210,7 +212,7 @@ test("a forgotten password resets by email, and a deleted account cannot sign in
   await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
   await page.getByRole("button", { name: "Delete account" }).click();
   await page.getByRole("button", { name: "Yes, delete my account" }).click();
-  await expect(page).toHaveURL(/3146\/$/);
+  await expect(page).toHaveURL(`${WEB_URL}/`);
 
   await openMenuItem(page, "Sign in");
   const panel = page.getByRole("dialog", { name: "Sign in" });
