@@ -95,6 +95,7 @@ export type SearchEvent =
   | { event: "pool"; data: { total: number } }
   | { event: "candidates"; data: Candidates }
   | { event: "poster"; data: { recommendations: Recommendation[] } }
+  | { event: "shareable"; data: { search_id: string } }
   | { event: "elsewhere"; data: Elsewhere }
   | { event: "error"; data: SearchError }
   | { event: "done"; data: Record<string, never> };

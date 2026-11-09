@@ -36,6 +36,12 @@ On November 8 the owner superseded the dialog-only decision: provide reversible 
 
 List switching fades/lifts the old view over 200 ms then raises the new Concerts over 550 ms with a 40 ms stagger and a small photo zoom. Persist the choice; arrow keys switch views and move focus. Save fills from the click point, springs its check, and rolls the header count while preserving storage failure behavior. The home strip expands and desaturates its photos, and the hero is a split-flap headline. Library half-face glyph coordinates must align when settled, and their backgrounds must change with the page palette without an independent color transition. Reduced motion shows end states immediately. Most motion uses transforms and opacity; the finite photo/pill flights and sheet/card reveals also animate frame dimensions and clipping, and there are no pointer-following effects. Keep touch controls at least 44px. Verify 390px and 1280px widths, both themes, reduced motion, keyboard focus and no horizontal document overflow. Physical-device frame rate and screen-reader acceptance are separate from automated Chromium checks.
 
+## Shared Poster
+
+A Share button sits beside the Grid and List views, in a solo Ticket's actions and as an icon beside Save in the Ticket dialog, so the dialog keeps its height. The visitor sees "Link copied" or "Shared" briefly, and a failed link says so beside the button. Closing the share sheet is not a failure.
+
+`/p/[id]` opens a Poster at once, without the working view or the name flight, under a "Shared Poster" pill, the Search's reading as a heading and chips, and the date it was made. A Ticket link opens its dialog without a flight. When every Concert has passed it says so, and an unknown or expired link has its own page. A Search box below the Poster sends its words to the home Search. The link preview image is 1200×630 in the dark Moss palette, set in Anton: the label, the heading and up to five picks with dates and cities. Satori cannot read WOFF2, so `app/fonts/anton.ttf` is the same typeface unpacked for it.
+
 ## Empty, errors and existing features
 
 An empty Poster says Nothing here fits. Offer a Search over the next three months using the understood Taste/place, a worldwide Search when the API supports a named Artist, and editing the Search. Actions that submit still require a fresh bot token. Elsewhere remains a source-only board for an empty place/Taste Search. It never becomes a model-ranked Poster.

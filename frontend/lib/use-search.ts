@@ -24,6 +24,8 @@ export type SearchState = {
   candidates: Candidates | null;
   recommendations: Recommendation[];
   hasPoster: boolean;
+  // Names this Poster to the server, which alone can turn it into a Shared Poster.
+  searchId: string | null;
   elsewhere: Elsewhere | null;
   error: string | null;
   retryable: boolean;
@@ -41,6 +43,7 @@ const IDLE: SearchState = {
   candidates: null,
   recommendations: [],
   hasPoster: false,
+  searchId: null,
   elsewhere: null,
   error: null,
   retryable: true,
@@ -128,6 +131,8 @@ export function useSearch() {
               hasPoster: true,
               recommendations: data.recommendations,
             }));
+          } else if (event === "shareable") {
+            setState((state) => ({ ...state, searchId: data.search_id }));
           } else if (event === "elsewhere") {
             setState((state) => ({ ...state, elsewhere: data }));
           } else if (event === "done") {

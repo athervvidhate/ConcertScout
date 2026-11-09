@@ -155,6 +155,8 @@ Code rejects any ID not in the shortlist and any level below 2. It orders by lev
 GET  /health
 GET  /artist?name=
 POST /search            streams SSE
+POST /share             {search_id} -> {id}
+GET  /share/{id}        a Shared Poster
 GET  /auth/spotify/login
 GET  /auth/spotify/callback
 POST /auth/spotify/disconnect
@@ -169,6 +171,7 @@ POST /auth/spotify/disconnect
 | `pool` | `{total}` |
 | `candidates` | `{names, total}` |
 | `poster` | `{recommendations}` |
+| `shareable` | `{search_id}`, only after a Poster with picks |
 | `elsewhere` | `{keyword, concerts}`, only after an empty Poster |
 | `error` | `{code, message, retry_after}` |
 | `done` | `{}` |
@@ -190,6 +193,7 @@ api/concert_scout/
   sources/          ticketmaster, musicbrainz, listenbrainz, lastfm, geocoder
   cache.py          Redis helpers
   warm.py           daily cache warming for busy cities
+  share.py          Shared Posters: kept Searches and their links
   limits.py         rate limits and spend
 ```
 

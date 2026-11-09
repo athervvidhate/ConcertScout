@@ -20,6 +20,8 @@ The real Cloudflare browser widget uses its published test site key and needs ac
 
 Failures retain traces and screenshots in `frontend/test-results/`; CI uploads them for seven days. No automatic retry hides a failure. Configuration follows the [Playwright web-server workflow](https://playwright.dev/docs/test-webserver).
 
+Sharing journeys search, share by copied link and by the Web Share API, then open the link in a second browser context. They check that the link opens the same Poster with no request beyond GETs, that a Ticket link opens its dialog, that an unknown link has its own page, that the preview tags and image resolve, and that the Poster page's Search box only prefills. The API contracts in `test_share.py` cover create and read, expiry and unknown IDs, a forged body, past Concerts, the stored fields and the per-client limit. A real iMessage, Slack or Discord preview needs a public deployment and is checked by hand.
+
 ## Accounts
 
 `make check-accounts` starts the local Supabase stack and runs the `supabase`-marked API tests against it: real Auth tokens, the real Data API and real row-level security. They prove that one account cannot read or remove another's saves, that a browser cannot write rows past the API, that importing twice adds each Concert once, that tokens this project did not sign are refused, and that deleting an account needs a recent sign-in and removes its saves. Token expiry, audience, issuer and key rotation are checked without the stack in `test_tokens.py`.

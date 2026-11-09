@@ -40,6 +40,14 @@ The reason comes from the ranker. Every other fact comes from the source record,
 
 The visitor saves from the Ticket. Saving leaves it open and confirms where it was kept. The dialog closes with its close button, Escape or the backdrop and returns focus to the Concert that opened it. Skip, dragging and the one-by-one deck were removed by the owner's decision on November 7, 2026. Every action works from the keyboard.
 
+## Shared Posters
+
+A Poster or a single Ticket can be shared by link. The Share button uses the browser's share sheet where there is one and copies the link otherwise. A link names a Shared Poster, which anyone can open on any device without a Search, a model call or a sign-in, and a Ticket link opens that Poster with the Ticket open.
+
+The browser never sends a Poster. When a Search finishes with picks, the server keeps what it produced under a Search ID it hands to that browser, and sharing promotes it. A Shared Poster holds the Recommendations and the Search's reading and lasts 90 days. It never holds coordinates, imported Taste or Spotify data. Past Concerts drop out whenever it is read, so an old link shows only what is still to come. A cached example Poster has no Search ID, so it has no Share button.
+
+The `/p/[id]` page says "Shared Poster", shows the date it was made and the reading as chips, and has a Search box that fills the home Search without running it. A link preview shows a generated Poster image.
+
 ## Saved Concerts
 
 A guest's Saved Concerts live in `localStorage` and stay on one device. A Saved Concert stores its source ID and the facts needed to show it, and a page lists them with past Concerts removed.

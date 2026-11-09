@@ -52,3 +52,6 @@ An optional Concert Scout sign-in, with Google or an email and password, that ke
 _Avoid_: Profile, user, login
 
 **Artist panel**: the side panel opened from an Artist's name on a Ticket, showing public facts from Last.fm and a link to Spotify. It never calls a model.
+
+**Shared Poster**: a Poster kept at its own link, which anyone can open without running a Search.
+_Avoid_: permalink, snapshot (an eval term)

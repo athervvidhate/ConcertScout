@@ -34,6 +34,8 @@ export default function PrivacyPage() {
         <p>Ticket photos load directly from Ticketmaster, so Ticketmaster sees your IP address when they appear. JamBase photos pass through this site’s image cache; your browser does not request them directly from JamBase.</p>
         <h2>Reports about a Search</h2>
         <p>If you press Tell us and send a report, your Search, your note, how the app read the Search, any error and the results on screen go to the owner by email through Resend. Your location coordinates and connected Spotify data are not included. If you imported Taste, the Artists that Search used can appear in the report.</p>
+        <h2>Sharing a Poster</h2>
+        <p>Pressing Share keeps the Poster the server made for that Search at its own link for 90 days. Anyone with the link can open it without a Search or an account. It holds the Concerts, their reasons, the words the Search was read as and the date it was made. It never holds your location, your imported Taste, your Search text or any Spotify data. Link previews fetch it too, so chat apps that show one will request the page and its image.</p>
         <h2>A connected Spotify account</h2>
         <p>An invited account can connect through Spotify’s own consent page. Its top Artists, top songs, followed Artists and newest 1,000 Liked Songs are used only for exact-name lookups in a separate shelf. They never enter a model, imported Taste, or localStorage.</p>
         <p>Access and refresh tokens are encrypted in Redis for at most seven days, and the Artist list for at most one day. The browser holds an opaque HttpOnly connection cookie. Disconnect Spotify inside Your Taste to delete the stored tokens, Artist list and cookie immediately. If you clear cookies first, the server entry expires on its own within seven days.</p>
@@ -44,6 +46,7 @@ export default function PrivacyPage() {
         <ul>
           <li>A signed-in account keeps its Saved Concerts until you remove them or delete the account. A guest’s Saved Concerts and imported Taste stay in this browser until you remove them or clear site storage. Past Saved Concerts are hidden from the Saved page.</li>
           <li>Ticketmaster Concert data is cached for six hours, JamBase Concert data until the Concert has passed, refreshed daily, Artist metadata and similarity for seven days, and place lookups for thirty days.</li>
+          <li>A Shared Poster stays for 90 days at its link. Until you share, a Search’s Poster waits on the server for six hours so a share can promote it.</li>
           <li>Hourly limits use a hash of the client address, not a raw address in Redis. Spend counters hold numeric totals.</li>
           <li>App traces record step times, token counts and cost. They omit Search text, Taste, exception contents and Spotify account data.</li>
         </ul>
@@ -53,7 +56,7 @@ export default function PrivacyPage() {
         <h2>Your controls</h2>
         <p>Remove a Saved Concert on the Saved page. Sign out or delete your account on the Account page. Remove imported Taste inside Your Taste. Press the location button again, labelled Forget my location, to delete the stored location. Disconnect Spotify before clearing cookies. Browser site settings can clear all remaining local choices.</p>
         <p>For questions, contact <a href="https://atherv.com" target="_blank" rel="noopener noreferrer">Atherv Vidhate through the portfolio</a>.</p>
-        <p className="information-date">Updated November 8, 2026.</p>
+        <p className="information-date">Updated November 9, 2026.</p>
       </article>
     </main>
   );

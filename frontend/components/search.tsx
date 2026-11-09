@@ -24,6 +24,7 @@ import { countOf, TastePanel } from "@/components/taste-panel";
 import { formatInterpreted, formatPosterHeading } from "@/lib/format";
 import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/place";
 import { API_URL } from "@/lib/search";
+import { createSharedPoster, sharedUrl } from "@/lib/share";
 import { useImportedTaste } from "@/lib/taste";
 import { useSearch } from "@/lib/use-search";
 import { EXPO_IN_OUT_CURVE, EXPO_OUT_CURVE } from "@/lib/choreography";
@@ -32,6 +33,11 @@ const NO_LOCATION =
   "We could not get your location. Type a city in the search box instead.";
 const TURNSTILE_SITE_KEY =
   process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "1x00000000000000000000AA";
+
+// The API makes the same link for a Search every time, so sharing twice is harmless.
+async function linkToPoster(searchId: string, concertId?: string) {
+  return sharedUrl(await createSharedPoster(searchId), concertId);
+}
 
 export function Search() {
   const { examples, loading: examplesLoading } = useHomeExamples();
@@ -58,6 +64,7 @@ export function Search() {
     candidates,
     recommendations,
     hasPoster,
+    searchId,
     elsewhere,
     error,
     retryable,
@@ -83,7 +90,12 @@ export function Search() {
       : interpreted;
 
   useEffect(() => {
-    const timer = setTimeout(() => setPlace(readPlace()), 0);
+    const timer = setTimeout(() => {
+      setPlace(readPlace());
+      // A Shared Poster's Search box lands here with its words, which only fill the input.
+      const words = new URLSearchParams(window.location.search).get("q");
+      if (words) setText(words.slice(0, 500));
+    }, 0);
     // Wake the Python function while the visitor reads/types; never delay the Search box.
     const controller = new AbortController();
     const deadline = setTimeout(() => controller.abort(), 5000);
@@ -386,8 +398,11 @@ export function Search() {
               candidates={candidates}
               recommendations={recommendations}
               searching={phase === "searching"}
-              resumed={resumed}
+              instant={resumed}
               hasPoster={hasPoster}
+              shareLink={
+                searchId ? (id) => linkToPoster(searchId, id) : undefined
+              }
               status={status}
               step={step}
               onChange={() => {
