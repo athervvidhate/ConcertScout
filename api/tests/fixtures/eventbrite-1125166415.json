@@ -1,0 +1,306 @@
+{
+  "events": [
+    {
+      "id": "2003605404701",
+      "name": {
+        "text": "ONE NIGHT IN HYDERABAD! Tollywood, Telangana, Bollywood Party \u2022 DJ Prashant",
+        "html": "ONE NIGHT IN HYDERABAD! Tollywood, Telangana, Bollywood Party \u2022 DJ Prashant"
+      },
+      "url": "https://www.eventbrite.com/e/one-night-in-hyderabad-tollywood-telangana-bollywood-party-dj-prashant-tickets-2003605404701",
+      "start": {
+        "timezone": "America/Los_Angeles",
+        "utc": "2026-11-21T06:30:00Z",
+        "local": "2026-11-20T22:30:00"
+      },
+      "end": {
+        "timezone": "America/Los_Angeles",
+        "utc": "2026-11-21T09:45:00Z",
+        "local": "2026-11-21T01:45:00"
+      },
+      "hide_start_date": false,
+      "hide_end_date": false,
+      "listed": true,
+      "shareable": true,
+      "online_event": false,
+      "is_series_parent": false,
+      "status": "live",
+      "category_id": "103",
+      "category": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/categories/103/",
+        "id": "103",
+        "name": "Music",
+        "name_localized": "Music",
+        "short_name": "Music",
+        "short_name_localized": "Music"
+      },
+      "format": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/formats/11/",
+        "id": "11",
+        "name": "Party or Social Gathering",
+        "name_localized": "Party or Social Gathering",
+        "short_name": "Party",
+        "short_name_localized": "Party"
+      },
+      "venue": {
+        "address": {
+          "address_1": "500 Bellevue Way Northeast",
+          "address_2": "#Suite 310, 3rd floor",
+          "city": "Bellevue",
+          "region": "WA",
+          "postal_code": "98004",
+          "country": "US",
+          "latitude": "47.6142475",
+          "longitude": "-122.2007738",
+          "localized_address_display": "500 Bellevue Way Northeast #Suite 310, 3rd floor, Bellevue, WA 98004",
+          "localized_area_display": "Bellevue, WA",
+          "localized_multi_line_address_display": [
+            "500 Bellevue Way Northeast",
+            "#Suite 310, 3rd floor",
+            "Bellevue, WA 98004"
+          ]
+        },
+        "resource_uri": "https://www.eventbriteapi.com/v3/venues/299900674/",
+        "id": "299900674",
+        "age_restriction": null,
+        "capacity": null,
+        "name": "Mirra | Social Entertainment Venue - Lincoln South Tower (3rd Floor)",
+        "latitude": "47.6142475",
+        "longitude": "-122.2007738"
+      },
+      "logo": {
+        "original": {
+          "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1196412101%2F14888582609%2F1%2Foriginal.20261023-005942?auto=format%2Ccompress&q=75&sharp=10&s=22efc01afc345b78cb7f0d9e0b4caf6f",
+          "width": 1774,
+          "height": 887
+        },
+        "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1196412101%2F14888582609%2F1%2Foriginal.20261023-005942?crop=focalpoint&fit=crop&h=200&w=450&auto=format%2Ccompress&q=75&sharp=10&fp-x=0.661&fp-y=0.548&s=49b748ce8d23d4716239ea2f8bff7ac8"
+      },
+      "ticket_availability": {
+        "has_available_tickets": true,
+        "minimum_ticket_price": {
+          "currency": "USD",
+          "value": 1000,
+          "major_value": "10.00",
+          "display": "10.00 USD"
+        },
+        "maximum_ticket_price": {
+          "currency": "USD",
+          "value": 2500,
+          "major_value": "25.00",
+          "display": "25.00 USD"
+        },
+        "is_sold_out": false,
+        "start_sales_date": {
+          "timezone": "America/Los_Angeles",
+          "utc": "2026-10-22T07:00:00Z",
+          "local": "2026-10-22T00:00:00"
+        },
+        "waitlist_available": false
+      },
+      "organizer_id": "1125166415"
+    },
+    {
+      "id": "2004229281734",
+      "name": {
+        "text": "Diwali Festival of Lights Bollywood Party In Eugene | DJ Prashant",
+        "html": "Diwali Festival of Lights Bollywood Party In Eugene | DJ Prashant"
+      },
+      "url": "https://www.eventbrite.com/e/diwali-festival-of-lights-bollywood-party-in-eugene-dj-prashant-tickets-2004229281734",
+      "start": {
+        "timezone": "America/Los_Angeles",
+        "utc": "2026-11-14T05:00:00Z",
+        "local": "2026-11-13T21:00:00"
+      },
+      "end": {
+        "timezone": "America/Los_Angeles",
+        "utc": "2026-11-14T09:30:00Z",
+        "local": "2026-11-14T01:30:00"
+      },
+      "hide_start_date": false,
+      "hide_end_date": false,
+      "listed": true,
+      "shareable": true,
+      "online_event": false,
+      "is_series_parent": false,
+      "status": "live",
+      "category_id": "103",
+      "category": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/categories/103/",
+        "id": "103",
+        "name": "Music",
+        "name_localized": "Music",
+        "short_name": "Music",
+        "short_name_localized": "Music"
+      },
+      "format": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/formats/11/",
+        "id": "11",
+        "name": "Party or Social Gathering",
+        "name_localized": "Party or Social Gathering",
+        "short_name": "Party",
+        "short_name_localized": "Party"
+      },
+      "venue": {
+        "address": {
+          "address_1": "924 Willamette Street",
+          "address_2": "",
+          "city": "Eugene",
+          "region": "OR",
+          "postal_code": "97401",
+          "country": "US",
+          "latitude": "44.0496256",
+          "longitude": "-123.0928981",
+          "localized_address_display": "924 Willamette Street, Eugene, OR 97401",
+          "localized_area_display": "Eugene, OR",
+          "localized_multi_line_address_display": [
+            "924 Willamette Street",
+            "Eugene, OR 97401"
+          ]
+        },
+        "resource_uri": "https://www.eventbriteapi.com/v3/venues/300077415/",
+        "id": "300077415",
+        "age_restriction": null,
+        "capacity": null,
+        "name": "The Barn Light Bar",
+        "latitude": "44.0496256",
+        "longitude": "-123.0928981"
+      },
+      "logo": {
+        "original": {
+          "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1197477889%2F14888582609%2F1%2Foriginal.20261107-045937?auto=format%2Ccompress&q=75&sharp=10&s=4e1c131a7fdd61cdf21d695962d8e4a6",
+          "width": 1774,
+          "height": 887
+        },
+        "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1197477889%2F14888582609%2F1%2Foriginal.20261107-045937?crop=focalpoint&fit=crop&h=200&w=450&auto=format%2Ccompress&q=75&sharp=10&fp-x=0.5&fp-y=0.5&s=395b9a34f5d6b498fa2ea2759fa0c516"
+      },
+      "ticket_availability": {
+        "has_available_tickets": true,
+        "minimum_ticket_price": {
+          "currency": "USD",
+          "value": 1000,
+          "major_value": "10.00",
+          "display": "10.00 USD"
+        },
+        "maximum_ticket_price": {
+          "currency": "USD",
+          "value": 1500,
+          "major_value": "15.00",
+          "display": "15.00 USD"
+        },
+        "is_sold_out": false,
+        "start_sales_date": {
+          "timezone": "America/Los_Angeles",
+          "utc": "2026-10-01T07:00:00Z",
+          "local": "2026-10-01T00:00:00"
+        },
+        "waitlist_available": false
+      },
+      "organizer_id": "1125166415"
+    },
+    {
+      "id": "2004230706997",
+      "name": {
+        "text": "Diwali Festival of Lights - All Ages Bollywood Party | DJ Prashant",
+        "html": "Diwali Festival of Lights - All Ages Bollywood Party | DJ Prashant"
+      },
+      "url": "https://www.eventbrite.com/e/diwali-festival-of-lights-all-ages-bollywood-party-dj-prashant-tickets-2004230706997",
+      "start": {
+        "timezone": "America/Los_Angeles",
+        "utc": "2026-11-15T04:30:00Z",
+        "local": "2026-11-14T20:30:00"
+      },
+      "end": {
+        "timezone": "America/Los_Angeles",
+        "utc": "2026-11-15T09:00:00Z",
+        "local": "2026-11-15T01:00:00"
+      },
+      "hide_start_date": false,
+      "hide_end_date": false,
+      "listed": true,
+      "shareable": true,
+      "online_event": false,
+      "is_series_parent": false,
+      "status": "live",
+      "category_id": "103",
+      "category": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/categories/103/",
+        "id": "103",
+        "name": "Music",
+        "name_localized": "Music",
+        "short_name": "Music",
+        "short_name_localized": "Music"
+      },
+      "format": {
+        "resource_uri": "https://www.eventbriteapi.com/v3/formats/11/",
+        "id": "11",
+        "name": "Party or Social Gathering",
+        "name_localized": "Party or Social Gathering",
+        "short_name": "Party",
+        "short_name_localized": "Party"
+      },
+      "venue": {
+        "address": {
+          "address_1": "16365 Northwest Twin Oaks Drive",
+          "address_2": "",
+          "city": "Beaverton",
+          "region": "OR",
+          "postal_code": "97006",
+          "country": "US",
+          "latitude": "45.5311056",
+          "longitude": "-122.8453926",
+          "localized_address_display": "16365 Northwest Twin Oaks Drive, Beaverton, OR 97006",
+          "localized_area_display": "Beaverton, OR",
+          "localized_multi_line_address_display": [
+            "16365 Northwest Twin Oaks Drive",
+            "Beaverton, OR 97006"
+          ]
+        },
+        "resource_uri": "https://www.eventbriteapi.com/v3/venues/300091235/",
+        "id": "300091235",
+        "age_restriction": null,
+        "capacity": null,
+        "name": "Xplore",
+        "latitude": "45.5311056",
+        "longitude": "-122.8453926"
+      },
+      "logo": {
+        "original": {
+          "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1197320588%2F14888582609%2F1%2Foriginal.20261105-041225?auto=format%2Ccompress&q=75&sharp=10&s=ba5fd929d83f0500376d669574c161d5",
+          "width": 2000,
+          "height": 1000
+        },
+        "url": "https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com%2Fimages%2F1197320588%2F14888582609%2F1%2Foriginal.20261105-041225?crop=focalpoint&fit=crop&h=200&w=450&auto=format%2Ccompress&q=75&sharp=10&fp-x=0.5&fp-y=0.5&s=6432687a37aea83ab42e3c075849cb27"
+      },
+      "ticket_availability": {
+        "has_available_tickets": true,
+        "minimum_ticket_price": {
+          "currency": "USD",
+          "value": 0,
+          "major_value": "0.00",
+          "display": "0.00 USD"
+        },
+        "maximum_ticket_price": {
+          "currency": "USD",
+          "value": 5000,
+          "major_value": "50.00",
+          "display": "50.00 USD"
+        },
+        "is_sold_out": false,
+        "start_sales_date": {
+          "timezone": "America/Los_Angeles",
+          "utc": "2026-11-04T08:00:00Z",
+          "local": "2026-11-04T00:00:00"
+        },
+        "waitlist_available": false
+      },
+      "organizer_id": "1125166415"
+    }
+  ],
+  "pagination": {
+    "object_count": 3,
+    "page_number": 1,
+    "page_size": 50,
+    "page_count": 1,
+    "has_more_items": false
+  }
+}
