@@ -42,7 +42,9 @@ export default function PrivacyPage() {
         <p>Access and refresh tokens are encrypted in Redis for at most seven days, and the Artist list for at most one day. The browser holds an opaque HttpOnly connection cookie. Disconnect Spotify inside Your Taste to delete the stored tokens, Artist list and cookie immediately. If you clear cookies first, the server entry expires on its own within seven days.</p>
         <h2>An optional account</h2>
         <p>You can create an account with Google or an email and password. Supabase stores your email, sign-in details and Saved Concerts. Google sign-in shares only your name, email and profile picture with Supabase. While you are signed in, each Saved Concert is stored in your account with the facts its source listed and its reason, and you can see it on any device you sign in on. Imported Taste, your location and any Spotify connection still stay on each device.</p>
-        <p>Signing in moves any Saved Concerts made on this device before signing in into your account. Deleting your account on the Account page removes your sign-in and every Saved Concert in it at once.</p>
+        <p>Signing in moves any Saved Concerts made on this device before signing in into your account. Deleting your account on the Account page removes your sign-in and everything stored with it at once.</p>
+        <h2>Alerts</h2>
+        <p>A signed-in account can follow Artists and choose an Alert place by typing it. The account stores the Artist names, that place as the geocoder read it, whether Alerts are on, and which Concerts an Alert already mentioned. A location your browser shares is never used. Once a day, code matches Followed Artists against Concert listings near the Alert place, with no model involved, and Resend delivers at most one email to your account’s address. Every Alert has a link that turns Alerts off without signing in.</p>
         <h2>What stays and for how long</h2>
         <ul>
           <li>A signed-in account keeps its Saved Concerts until you remove them or delete the account. A guest’s Saved Concerts and imported Taste stay in this browser until you remove them or clear site storage. Past Saved Concerts are hidden from the Saved page.</li>
@@ -55,7 +57,7 @@ export default function PrivacyPage() {
         <h2>Other services</h2>
         <p>Cloudflare Turnstile checks requests for automation. The app adds no ads, advertising analytics or affiliate parameters. Upstream services process the requests they receive under their own policies.</p>
         <h2>Your controls</h2>
-        <p>Remove a Saved Concert on the Saved page. Sign out or delete your account on the Account page. Remove imported Taste inside Your Taste. Press the location button again, labelled Forget my location, to delete the stored location. Disconnect Spotify before clearing cookies. Browser site settings can clear all remaining local choices.</p>
+        <p>Remove a Saved Concert on the Saved page. Unfollow Artists, change your Alert place or turn Alerts off on the Account page, where you can also sign out or delete your account. Remove imported Taste inside Your Taste. Press the location button again, labelled Forget my location, to delete the stored location. Disconnect Spotify before clearing cookies. Browser site settings can clear all remaining local choices.</p>
         <p>For questions, contact <a href="https://atherv.com" target="_blank" rel="noopener noreferrer">Atherv Vidhate through the portfolio</a>.</p>
         <p className="information-date">Updated November 9, 2026.</p>
       </article>

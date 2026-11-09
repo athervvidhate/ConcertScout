@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { AccountDialog } from "@/components/account-dialog";
+import { AlertSettings } from "@/components/alert-settings";
 import { MovedSaves } from "@/components/moved-saves";
 import { deleteAccount, signOut, useAccount } from "@/lib/account";
 import { SearchRefused } from "@/lib/search";
@@ -76,10 +77,12 @@ export function AccountSettings() {
         </button>
       </div>
 
+      <AlertSettings />
+
       <h2>Delete account</h2>
       <p>
-        This deletes your account and its Saved Concerts for good. Saves still on this device stay
-        until you remove them.
+        This deletes your account, its Saved Concerts, Followed Artists and Alert settings for good.
+        Saves still on this device stay until you remove them.
       </p>
       {!confirming ? (
         <div className="account-actions">

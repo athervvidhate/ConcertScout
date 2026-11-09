@@ -272,6 +272,19 @@ body:has(.information)::before { animation:none; opacity:.35; }
 .account-page input { box-sizing:border-box; }
 .account-page form button { font:700 18px var(--font-ui),sans-serif; cursor:pointer; }
 .information-date { font-size:14px; margin-top:28px; }
+.account-page h3 { font:700 20px/1.3 var(--font-ui),sans-serif; margin:24px 0 8px; }
+.alert-place label { display:block; font-weight:700; }
+.alert-current { margin:4px 0 10px; }
+.alert-fields { display:flex; flex-wrap:wrap; gap:10px; }
+.alert-fields input { flex:1 1 220px; min-height:48px; padding:0 14px; border:2px solid var(--ink); border-radius:8px; background:var(--surface); color:var(--ink); font:500 18px var(--font-ui),sans-serif; }
+.alert-fields select { min-height:48px; padding:0 10px; border:2px solid var(--ink); border-radius:8px; background:var(--surface); color:var(--ink); font:600 17px var(--font-ui),sans-serif; }
+.alert-fields button { min-height:48px; padding:0 18px; border:2px solid var(--ink); border-radius:8px; background:var(--ink); color:var(--surface); }
+.alert-fields button:disabled { opacity:.5; cursor:default; }
+.alert-switch { display:flex; align-items:center; gap:12px; min-height:48px; font-weight:600; cursor:pointer; }
+.alert-switch input { width:24px; height:24px; accent-color:var(--ink); }
+.followed-artists { list-style:none; padding:0; margin:0; }
+.followed-artists li { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid currentColor; margin:0; }
+.followed-artists button { min-height:44px; padding:0 14px; border:2px solid currentColor; border-radius:8px; background:transparent; color:inherit; font:700 16px var(--font-ui),sans-serif; cursor:pointer; }
 @media(max-width:560px) { .information article { font-size:17px; } }
 
 /* Artist panel: shares the Taste drawer, with its own contents. */
@@ -283,6 +296,9 @@ body:has(.information)::before { animation:none; opacity:.35; }
 .artist-panel ol { margin:0; padding-left:24px; list-style:decimal; }
 .artist-panel a { color:inherit; text-decoration:underline; text-underline-offset:3px; }
 .artist-panel li { min-height:30px; }
+.artist-panel .artist-follow { align-self:flex-start; min-height:48px; padding:0 18px; border:2px solid currentColor; border-radius:8px; background:transparent; color:inherit; font:700 17px var(--font-ui),sans-serif; cursor:pointer; }
+.artist-panel .artist-follow[aria-pressed="true"] { background:var(--ink); border-color:var(--ink); color:var(--surface); }
+.artist-panel .artist-follow:disabled { opacity:.6; cursor:default; }
 .artist-panel .artist-spotify { justify-self:start; align-self:flex-start; display:inline-flex; align-items:center; min-height:48px; padding:0 18px; border-radius:8px; font-weight:700; text-decoration:none; }
 .artist-missing { opacity:.8; }
 /* Listen lays Spotify's player over the photograph, in the same box, so nothing around it moves. */

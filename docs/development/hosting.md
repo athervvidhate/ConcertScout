@@ -33,14 +33,15 @@ Set secrets through the hosting dashboard or private CLI input. Never put values
 | API | `SEARCHES_PER_HOUR` | `10` starting limit |
 | Frontend | `NEXT_PUBLIC_API_URL` | `https://api.concertscout.app`, without a trailing slash; set before building |
 | Frontend | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Public production site key restricted to `concertscout.app` |
-| API | `RESEND_API_KEY`, `FEEDBACK_EMAIL` | Optional Search reports by email. The address must be the one on the Resend account |
+| API | `RESEND_API_KEY`, `FEEDBACK_EMAIL` | Search reports by email, and Alerts. Reports go to the address on the Resend account. Alerts send from `alerts@concertscout.app`, so the key must be allowed to send from `concertscout.app`. Without the key there are no Alerts |
+| API | `SITE_URL` | Where links in an Alert email lead: `https://concertscout.app` |
 | API | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Optional official invite-only app credentials |
 | API | `SPOTIFY_ENCRYPTION_KEY` | Stable private Fernet key, separately generated for production |
 | API | `SPOTIFY_REDIRECT_URI` | Exact `https://api.concertscout.app/auth/spotify/callback`, also registered in Spotify |
 | API | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | Optional accounts: the project's URL and publishable key |
 | API | `SUPABASE_SECRET_KEY` | The project's secret key. Server only |
 | Frontend | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | The same URL and publishable key; set before building |
-| API | `CRON_SECRET` | Random string of at least 32 characters. Vercel's daily crons send it to `/warm`, `/refresh-examples` and `/sync`; unset, those routes do not exist |
+| API | `CRON_SECRET` | Random string of at least 32 characters. Vercel's daily crons send it to `/warm`, `/refresh-examples`, `/sync` and `/alerts`; unset, those routes do not exist |
 | API | `JBD_API_KEY` | Optional JamBase Developer key. Only the daily `/sync` cron uses it; unset, Searches stay Ticketmaster-only |
 | API | `JAMBASE_DAYS` | Optional catalog window in days, default 90, at most 180 |
 
