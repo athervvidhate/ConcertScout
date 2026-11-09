@@ -51,7 +51,7 @@ Spend is capped in code. Before a paid Search, the API checks the exact origin, 
 
 A person judges recommendation quality, because nothing else can. Twenty drafted Searches cover named Artists, sparse genres, plain descriptions, big and small cities, and different date windows. Each is captured with its real source responses and model answers, so it can be replayed offline after the concert calendar has moved on.
 
-The labels are not finished, so this project claims no quality score yet. The measures are bad picks, must-find recall, judged relevance, source-fact integrity, latency and cost. Runs can also be compared Artist by Artist. The [evaluation spec](docs/specs/06-evals.md) has the targets, and [the latest stability report](docs/validation/2026-11-07-ranker-stability.md) shows how much Posters vary between runs today.
+The labels are not finished, so this project claims no quality score yet. The measures are bad picks, must-find recall, judged relevance, source-fact integrity, latency and cost. Runs can also be compared Artist by Artist. The [evaluation spec](docs/specs/06-evals.md) has the targets.
 
 ## Stack
 

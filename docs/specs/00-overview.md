@@ -4,7 +4,7 @@ Concert Scout finds concerts a person would want to see, from their taste and wh
 
 We rebuild in place in this repo. The old ADK app, its v0 frontend and its deployment scripts all go. Nothing stays for compatibility.
 
-Terms follow [GLOSSARY.md](../../GLOSSARY.md). Choices with lasting trade-offs live in [the ADRs](../adr/), and the evidence lives in [the research notes](../research/).
+Terms follow [GLOSSARY.md](../../GLOSSARY.md). Choices with lasting trade-offs live in [the ADRs](../adr/).
 
 ## Specs
 
@@ -63,5 +63,5 @@ Chat, other Concert sources, buying tickets inside the app, ads, and any paid ti
 
 ## Open items
 
-- Genre matching needs tuning against judged Searches. [The spike](../research/12-candidate-matching-spike.md) found it strong for country and punk and weak for electronic.
+- Genre matching needs tuning against judged Searches. It is strong for country and punk and weak for electronic.
 - The per-visitor limit is set from measured cost, not guessed. See [05-platform](05-platform.md).

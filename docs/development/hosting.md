@@ -95,7 +95,7 @@ Pending: moving production to the addresses above, public Search enablement and 
 
 ## Primary references
 
-Checked November 6, 2026: [Vercel FastAPI entrypoint, lifespan and streaming](https://vercel.com/docs/frameworks/backend/fastapi), [Python versions, locks and bundle exclusions](https://vercel.com/docs/functions/runtimes/python), [Vercel request headers](https://vercel.com/docs/headers/request-headers), [Cloudflare test keys](https://developers.cloudflare.com/turnstile/troubleshooting/testing/). The broader trade-off research is [08-python-hosting](../research/08-python-hosting.md).
+Checked November 6, 2026: [Vercel FastAPI entrypoint, lifespan and streaming](https://vercel.com/docs/frameworks/backend/fastapi), [Python versions, locks and bundle exclusions](https://vercel.com/docs/functions/runtimes/python), [Vercel request headers](https://vercel.com/docs/headers/request-headers), [Cloudflare test keys](https://developers.cloudflare.com/turnstile/troubleshooting/testing/).
 
 ## Cached home examples
 

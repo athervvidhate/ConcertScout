@@ -10,4 +10,4 @@
 
 The SVGs contain outlined Anton lettering and no external resources. Backgrounds are transparent. Keep their aspect ratio and clear space; use the mark rather than shrinking the lettering below legibility. The header selects its rendition with the same light/dark token state as the page, before paint.
 
-Rebuild paths with `scripts/brand/build-logo.py`. The original concept PNG is retained for reference; the SVGs are the production assets.
+Rebuild paths with `scripts/brand/build-logo.py`. The SVGs are the production assets.
