@@ -18,6 +18,7 @@ export type SearchState = {
   run: number;
   searched: string;
   status: string | null;
+  step: string | null;
   interpreted: Interpreted | null;
   candidates: Candidates | null;
   recommendations: Recommendation[];
@@ -32,6 +33,7 @@ const IDLE: SearchState = {
   run: 0,
   searched: "",
   status: null,
+  step: null,
   interpreted: null,
   candidates: null,
   recommendations: [],
@@ -49,48 +51,107 @@ export function useSearch() {
 
   useEffect(() => () => current.current?.abort(), []);
 
-  const search = useCallback(async (text: string, token: string, taste: string[], near: Coordinates | null) => {
-    current.current?.abort();
-    const controller = new AbortController();
-    current.current = controller;
-    setState(({ run }) => ({ ...IDLE, phase: "searching", run: run + 1, searched: text }));
+  const search = useCallback(
+    async (
+      text: string,
+      token: string,
+      taste: string[],
+      near: Coordinates | null,
+    ) => {
+      current.current?.abort();
+      const controller = new AbortController();
+      current.current = controller;
+      setState(({ run }) => ({
+        ...IDLE,
+        phase: "searching",
+        run: run + 1,
+        searched: text,
+      }));
 
-    let finished = false;
-    let error: string | null = null;
-    let retryable = true;
-    try {
-      for await (const { event, data } of streamSearch(text, token, taste, near, controller.signal)) {
-        if (event === "status") {
-          setState((state) => ({ ...state, status: data.message }));
-        } else if (event === "interpreted") {
-          setState((state) => ({ ...state, interpreted: data }));
-        } else if (event === "candidates") {
-          setState((state) => ({ ...state, candidates: data }));
-        } else if (event === "poster") {
-          setState((state) => ({ ...state, hasPoster: true, recommendations: data.recommendations }));
-        } else if (event === "elsewhere") {
-          setState((state) => ({ ...state, elsewhere: data }));
-        } else if (event === "done") {
-          finished = true;
-        } else if (event === "error") {
-          error = data.message;
-          retryable = !NEEDS_A_NEW_SEARCH.includes(data.code) && data.retry_after === undefined;
+      let finished = false;
+      let error: string | null = null;
+      let retryable = true;
+      try {
+        for await (const { event, data } of streamSearch(
+          text,
+          token,
+          taste,
+          near,
+          controller.signal,
+        )) {
+          if (event === "status") {
+            setState((state) => ({
+              ...state,
+              status: data.message,
+              step: data.step,
+            }));
+          } else if (event === "interpreted") {
+            setState((state) => ({ ...state, interpreted: data }));
+          } else if (event === "candidates") {
+            setState((state) => ({ ...state, candidates: data }));
+          } else if (event === "poster") {
+            setState((state) => ({
+              ...state,
+              hasPoster: true,
+              recommendations: data.recommendations,
+            }));
+          } else if (event === "elsewhere") {
+            setState((state) => ({ ...state, elsewhere: data }));
+          } else if (event === "done") {
+            finished = true;
+          } else if (event === "error") {
+            error = data.message;
+            retryable =
+              !NEEDS_A_NEW_SEARCH.includes(data.code) &&
+              data.retry_after === undefined;
+          }
         }
+        if (!finished) error = DROPPED;
+      } catch (caught) {
+        if (controller.signal.aborted) return;
+        error =
+          caught instanceof TypeError ? UNREACHABLE : (caught as Error).message;
+        if (caught instanceof SearchRefused) retryable = caught.retryable;
       }
-      if (!finished) error = DROPPED;
-    } catch (caught) {
       if (controller.signal.aborted) return;
-      error = caught instanceof TypeError ? UNREACHABLE : (caught as Error).message;
-      if (caught instanceof SearchRefused) retryable = caught.retryable;
-    }
-    if (controller.signal.aborted) return;
-    setState((state) => ({ ...state, phase: "finished", status: null, error, retryable }));
-  }, []);
+      setState((state) => ({
+        ...state,
+        phase: "finished",
+        status: null,
+        step: null,
+        error,
+        retryable,
+      }));
+    },
+    [],
+  );
 
   const clear = useCallback(() => {
     current.current?.abort();
     setState(IDLE);
   }, []);
 
-  return { ...state, search, clear };
+  const showExample = useCallback(
+    (example: {
+      text: string;
+      interpreted: Interpreted | null;
+      candidates: Candidates | null;
+      poster: { recommendations: Recommendation[] };
+    }) => {
+      current.current?.abort();
+      setState(({ run }) => ({
+        ...IDLE,
+        run: run + 1,
+        phase: "finished",
+        searched: example.text,
+        interpreted: example.interpreted,
+        candidates: example.candidates,
+        hasPoster: true,
+        recommendations: example.poster.recommendations,
+      }));
+    },
+    [],
+  );
+
+  return { ...state, search, clear, showExample };
 }

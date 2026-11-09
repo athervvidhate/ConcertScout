@@ -10,8 +10,8 @@ The build grows in vertical slices. After each ticket, a person can run the app 
 | 4 | Artist matching | 2, 3 | Concerts are ordered by Taste |
 | 5 | Ranker and Assemble | 4 | Up to 8 picks, each with a reason |
 | 6 | Eval harness and judging tool | 5 | Hand-judged Searches can score the pipeline |
-| 7 | Poster and Fine print loader | 5 | The new design replaces the plain list |
-| 8 | Tickets and Saved Concerts | 7 | Save and Skip work and persist |
+| 7 | Poster and streamed progress | 5 | Grid/List and the working view follow the approved design |
+| 8 | Tickets and Saved Concerts | 7 | Save works from the Ticket dialog and persists |
 | 9 | Home with nearby Concerts | 3, 7 | Useful page before any Search |
 | 10 | Limits and abuse protection | 5 | Safe to expose publicly |
 | 11 | Last.fm and ListenBrainz Taste | 5 | Import a Taste by username |

@@ -4,8 +4,8 @@ import { SEARCH_EXAMPLES } from "@/lib/search-examples";
 
 type Props = {
   onExample: (text: string) => void;
-  // Every Search needs a bot check token, which arrives a moment after the page.
-  ready: boolean;
+  // A live Search needs a bot check token, which arrives a moment after the page.
+  ready: (example: string) => boolean;
 };
 
 export function SearchExamples({ onExample, ready }: Props) {
@@ -15,7 +15,11 @@ export function SearchExamples({ onExample, ready }: Props) {
       <ul className="home-examples">
         {SEARCH_EXAMPLES.map((example) => (
           <li key={example}>
-            <Button type="button" disabled={!ready} onClick={() => onExample(example)}>
+            <Button
+              type="button"
+              disabled={!ready(example)}
+              onClick={() => onExample(example)}
+            >
               {example}
             </Button>
           </li>

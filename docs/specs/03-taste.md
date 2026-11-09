@@ -27,7 +27,7 @@ Accept one Artist per line, comma-separated text, or a CSV with an obvious Artis
 
 ## Spotify OAuth
 
-[ADR 0003](../adr/0003-official-spotify-access-only.md) sets the rules. Details are in [the OAuth research](../research/07-spotify-oauth.md).
+[ADR 0003](../adr/0003-official-spotify-access-only.md) sets the rules.
 
 - Authorization Code flow, with the client secret on FastAPI.
 - Scopes: `user-top-read`, `user-follow-read` and `user-library-read`.

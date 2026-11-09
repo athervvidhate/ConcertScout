@@ -38,6 +38,10 @@ class TicketmasterError(Exception):
     """Ticketmaster failed. The message never holds the request URL, which carries the API key."""
 
 
+class ConcertNotFound(Exception):
+    """Ticketmaster has no such Concert, or it was cancelled."""
+
+
 def make_client(
     api_key: str, transport: httpx.AsyncBaseTransport | None = None
 ) -> httpx.AsyncClient:
@@ -161,6 +165,25 @@ async def _page(
     if on_page:
         on_page(concerts)
     return concerts, total
+
+
+async def find_concert(client: httpx.AsyncClient, redis: Redis, concert_id: str) -> Concert:
+    await limits.ticketmaster_call(redis)
+    try:
+        response = await client.get(f"/events/{concert_id}.json")
+        if response.status_code == 404:
+            raise ConcertNotFound
+        response.raise_for_status()
+        record: dict[str, Any] = response.json()
+        if record["dates"].get("status", {}).get("code") == "cancelled":
+            raise ConcertNotFound
+        return parse_concert(record)
+    except httpx.HTTPStatusError as exc:
+        raise TicketmasterError(f"status {exc.response.status_code}") from None
+    except httpx.HTTPError as exc:
+        raise TicketmasterError(type(exc).__name__) from None
+    except (KeyError, TypeError, ValueError) as exc:
+        raise TicketmasterError(f"unreadable response: {type(exc).__name__}") from None
 
 
 def parse_concerts(body: dict[str, Any]) -> list[Concert]:

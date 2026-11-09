@@ -60,7 +60,7 @@ uv run python -m evals.compare --before <batch> [<batch>...] --after <batch>
 
 This reads the Snapshots themselves and makes no calls, so it works across code changes that stop an old Snapshot replaying. For each Search it lists the Artists the model would put on the Poster, who was lost and who is new, with their scores. A Poster count hides this: stacking dates shrinks it without losing an Artist.
 
-Two runs of the same input differ too, so a change only means something if it is bigger than that noise. [The November 7 report](../validation/2026-11-07-ranker-stability.md) measures it. Nothing here says which run is better. That still takes human labels.
+Two runs of the same input differ too, so a change only means something if it is bigger than that noise. Nothing here says which run is better. That still takes human labels.
 
 ## Replay the evidence
 
@@ -74,4 +74,4 @@ The ordinary run reads completed human labels and replays recorded HTTP/model an
 
 Missing requests or a pipeline error produce a failed case rather than a silent quality score. No must labels means recall is not measurable; it does not mean100% recall. With no human reviews the runner says that none are judged. The paid `--live` modes use fresh model answers against the recorded sources; they are not offline runs. `--live ranker` keeps the recorded reading of the Search, so the shortlist cannot change under it.
 
-Run the app/contracts with `make check`. Transport tests use generic echo data and typed app-owned seams, not invented vendor response schemas. Real capture/replay evidence is recorded separately under `docs/validation/` without publishing third-party snapshots or secrets.
+Run the app/contracts with `make check`. Transport tests use generic echo data and typed app-owned seams, not invented vendor response schemas.

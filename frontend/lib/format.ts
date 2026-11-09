@@ -135,3 +135,7 @@ function headingDates(start?: string, end?: string): string | null {
 export function formatPosterHeading({ place, region, start, end, artists }: Interpreted): string {
   return [region ?? place, headingDates(start, end)].filter(Boolean).join(", ") || artists.join(", ");
 }
+
+export function countOf(count: number, noun: string): string {
+  return count === 1 ? `1 ${noun}` : `${count} ${noun}s`;
+}

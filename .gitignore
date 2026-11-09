@@ -88,3 +88,8 @@ playwright-report/
 
 # Vercel CLI link
 .vercel
+
+# Third-party design skills, installed locally for design work only
+.claude/skills/design-taste-frontend/
+.claude/skills/frontend-design/
+.claude/skills/impeccable/

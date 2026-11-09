@@ -75,6 +75,8 @@ class Services:
     redis: Redis
     model: Model
     turnstile: httpx.AsyncClient
+    jambase: httpx.AsyncClient | None = None
+    jambase_days: int = 90
 
 
 async def find_artist_profile(name: str, services: Services) -> ArtistProfile:

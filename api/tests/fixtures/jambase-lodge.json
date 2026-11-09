@@ -1,0 +1,1035 @@
+{
+  "success": true,
+  "pagination": {
+    "page": 1,
+    "perPage": 100,
+    "totalItems": 8,
+    "totalPages": 1,
+    "nextPage": null,
+    "previousPage": null
+  },
+  "events": [
+    {
+      "@type": "Concert",
+      "name": "Hit the Lights at Lodge Room",
+      "identifier": "jambase:17324221",
+      "url": "https://www.jambase.com/show/hit-the-lights-lodge-room-20261108",
+      "image": "https://www.jambase.com/wp-content/uploads/2017/04/hit-the-lights-hit-the-lights-f941a1ca-3cd3-4c42-ada6-172177f7d097_79351_TABLET_LANDSCAPE_16_9-1480x832.jpg",
+      "sameAs": [],
+      "datePublished": "2026-10-29T15:02:59Z",
+      "dateModified": "2026-10-29T15:03:00Z",
+      "eventStatus": "scheduled",
+      "startDate": "2026-11-08T20:00:00",
+      "endDate": "2026-11-08",
+      "previousStartDate": "",
+      "doorTime": "19:00:00",
+      "location": {
+        "@type": "Venue",
+        "name": "Lodge Room",
+        "identifier": "jambase:3816603",
+        "url": "https://www.jambase.com/venue/lodge-room",
+        "image": "https://www.jambase.com/wp-content/uploads/2022/11/lodge-room-1668645313-1480x832.png",
+        "datePublished": "2017-11-16T20:51:08Z",
+        "dateModified": "2026-11-07T09:00:41Z",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "104 N. Ave 56, 2nd Floor",
+          "addressLocality": "Los Angeles",
+          "postalCode": "90042",
+          "addressRegion": {
+            "@type": "State",
+            "identifier": "US-CA",
+            "name": "California",
+            "alternateName": "CA"
+          },
+          "addressCountry": {
+            "@type": "Country",
+            "identifier": "US",
+            "name": "United States",
+            "alternateName": "USA"
+          },
+          "x-streetAddress2": "",
+          "x-timezone": "America/Los_Angeles",
+          "x-jamBaseMetroId": 3,
+          "x-jamBaseCityId": 4227404
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": 34.1091,
+          "longitude": -118.1946
+        },
+        "sameAs": [
+          {
+            "@type": "URL",
+            "identifier": "officialSite",
+            "url": "https://www.lodgeroomhlp.com/"
+          }
+        ],
+        "maximumAttendeeCapacity": null,
+        "x-isPermanentlyClosed": false,
+        "x-numUpcomingEvents": 63
+      },
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Hit the Lights Los Angeles Tickets on Venue Website",
+          "identifier": "jambase:0",
+          "url": "https://www.lodgeroomhlp.com/?utm_source=jambase",
+          "datePublished": "2026-10-29T15:02:59Z",
+          "dateModified": "2026-10-29T15:03:00Z",
+          "category": "ticketingLinkPrimary",
+          "priceSpecification": {},
+          "seller": {
+            "@type": "Organization",
+            "name": "Venue Website",
+            "identifier": "ticket-provider",
+            "disambiguatingDescription": "eventTicketVendorPrimary"
+          },
+          "validFrom": "2026-10-29T15:02:59Z",
+          "x-spansDays": 1
+        }
+      ],
+      "performer": [
+        {
+          "@type": "MusicGroup",
+          "name": "Hit the Lights",
+          "identifier": "jambase:44444",
+          "url": "https://www.jambase.com/band/hit-the-lights",
+          "image": "https://www.jambase.com/wp-content/uploads/2017/04/hit-the-lights-hit-the-lights-f941a1ca-3cd3-4c42-ada6-172177f7d097_79351_TABLET_LANDSCAPE_16_9-1480x832.jpg",
+          "datePublished": "2015-06-21T08:41:38Z",
+          "dateModified": "2026-11-07T09:00:41Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 6,
+          "genre": [
+            "punk"
+          ],
+          "x-performanceDate": "2026-11-08",
+          "x-performanceRank": 1,
+          "x-isHeadliner": true,
+          "x-dateIsConfirmed": true
+        },
+        {
+          "@type": "MusicGroup",
+          "name": "Forever Came Calling",
+          "identifier": "jambase:45213",
+          "url": "https://www.jambase.com/band/forever-came-calling",
+          "image": "https://www.jambase.com/wp-content/uploads/2023/09/forever-came-calling-1480x832.png",
+          "datePublished": "2015-06-21T08:52:47Z",
+          "dateModified": "2026-11-06T09:00:57Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 6,
+          "genre": [
+            "punk"
+          ],
+          "x-performanceDate": "2026-11-08",
+          "x-performanceRank": 2,
+          "x-isHeadliner": false,
+          "x-dateIsConfirmed": true
+        },
+        {
+          "@type": "MusicGroup",
+          "name": "Fox Royale",
+          "identifier": "jambase:7794834",
+          "url": "https://www.jambase.com/band/fox-royale",
+          "image": "https://www.jambase.com/wp-content/uploads/2021/08/jambase-default-band-image-bw-1480x832.png",
+          "datePublished": "2021-07-30T21:57:39Z",
+          "dateModified": "2026-11-07T09:00:41Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 6,
+          "genre": [],
+          "x-performanceDate": "2026-11-08",
+          "x-performanceRank": 3,
+          "x-isHeadliner": false,
+          "x-dateIsConfirmed": true
+        }
+      ],
+      "eventAttendanceMode": "live",
+      "isAccessibleForFree": false,
+      "x-streamIds": [],
+      "x-headlinerInSupport": false,
+      "x-promoImage": "",
+      "x-customTitle": "",
+      "x-subtitle": ""
+    },
+    {
+      "@type": "Concert",
+      "name": "The Tallest Man on Earth at Lodge Room",
+      "identifier": "jambase:16390229",
+      "url": "https://www.jambase.com/show/the-tallest-man-on-earth-lodge-room-20261111",
+      "image": "https://www.jambase.com/wp-content/uploads/2026/08/tallest-man-on-earth-2026-press-anton-corbijn-1480x832.jpg",
+      "sameAs": [],
+      "datePublished": "2026-05-27T15:08:44Z",
+      "dateModified": "2026-07-10T13:17:02Z",
+      "eventStatus": "scheduled",
+      "startDate": "2026-11-11T20:00:00",
+      "endDate": "2026-11-11",
+      "previousStartDate": "",
+      "doorTime": "19:00:00",
+      "location": {
+        "@type": "Venue",
+        "name": "Lodge Room",
+        "identifier": "jambase:3816603",
+        "url": "https://www.jambase.com/venue/lodge-room",
+        "image": "https://www.jambase.com/wp-content/uploads/2022/11/lodge-room-1668645313-1480x832.png",
+        "datePublished": "2017-11-16T20:51:08Z",
+        "dateModified": "2026-11-07T09:00:41Z",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "104 N. Ave 56, 2nd Floor",
+          "addressLocality": "Los Angeles",
+          "postalCode": "90042",
+          "addressRegion": {
+            "@type": "State",
+            "identifier": "US-CA",
+            "name": "California",
+            "alternateName": "CA"
+          },
+          "addressCountry": {
+            "@type": "Country",
+            "identifier": "US",
+            "name": "United States",
+            "alternateName": "USA"
+          },
+          "x-streetAddress2": "",
+          "x-timezone": "America/Los_Angeles",
+          "x-jamBaseMetroId": 3,
+          "x-jamBaseCityId": 4227404
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": 34.1091,
+          "longitude": -118.1946
+        },
+        "sameAs": [
+          {
+            "@type": "URL",
+            "identifier": "officialSite",
+            "url": "https://www.lodgeroomhlp.com/"
+          }
+        ],
+        "maximumAttendeeCapacity": null,
+        "x-isPermanentlyClosed": false,
+        "x-numUpcomingEvents": 63
+      },
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "The Tallest Man on Earth Los Angeles Tickets on Ticketing Site",
+          "identifier": "jambase:16390233",
+          "url": "https://www.lodgeroomhlp.com/shows/the-tallest-man-on-earth/",
+          "datePublished": "2026-05-27T15:08:45Z",
+          "dateModified": "2026-05-27T15:08:46Z",
+          "category": "ticketingLinkPrimary",
+          "priceSpecification": {},
+          "seller": {
+            "@type": "Organization",
+            "name": "Ticketing Site",
+            "identifier": "ticket-provider",
+            "disambiguatingDescription": "eventTicketVendorPrimary"
+          },
+          "validFrom": "2026-05-27T15:08:45Z",
+          "x-spansDays": 1
+        }
+      ],
+      "performer": [
+        {
+          "@type": "MusicGroup",
+          "name": "The Tallest Man on Earth",
+          "identifier": "jambase:45813",
+          "url": "https://www.jambase.com/band/the-tallest-man-on-earth",
+          "image": "https://www.jambase.com/wp-content/uploads/2026/08/tallest-man-on-earth-2026-press-anton-corbijn-1480x832.jpg",
+          "datePublished": "2015-06-21T09:03:37Z",
+          "dateModified": "2026-11-07T18:51:46Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 15,
+          "genre": [
+            "folk",
+            "indie"
+          ],
+          "x-performanceDate": "2026-11-11",
+          "x-performanceRank": 1,
+          "x-isHeadliner": true,
+          "x-dateIsConfirmed": true
+        }
+      ],
+      "eventAttendanceMode": "live",
+      "isAccessibleForFree": false,
+      "x-streamIds": [],
+      "x-headlinerInSupport": false,
+      "x-promoImage": "",
+      "x-customTitle": "",
+      "x-subtitle": ""
+    },
+    {
+      "@type": "Concert",
+      "name": "The Tallest Man on Earth at Lodge Room",
+      "identifier": "jambase:16390238",
+      "url": "https://www.jambase.com/show/the-tallest-man-on-earth-lodge-room-20261112",
+      "image": "https://www.jambase.com/wp-content/uploads/2026/08/tallest-man-on-earth-2026-press-anton-corbijn-1480x832.jpg",
+      "sameAs": [],
+      "datePublished": "2026-05-27T15:09:20Z",
+      "dateModified": "2026-07-10T13:17:02Z",
+      "eventStatus": "scheduled",
+      "startDate": "2026-11-12T20:00:00",
+      "endDate": "2026-11-12",
+      "previousStartDate": "",
+      "doorTime": "19:00:00",
+      "location": {
+        "@type": "Venue",
+        "name": "Lodge Room",
+        "identifier": "jambase:3816603",
+        "url": "https://www.jambase.com/venue/lodge-room",
+        "image": "https://www.jambase.com/wp-content/uploads/2022/11/lodge-room-1668645313-1480x832.png",
+        "datePublished": "2017-11-16T20:51:08Z",
+        "dateModified": "2026-11-07T09:00:41Z",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "104 N. Ave 56, 2nd Floor",
+          "addressLocality": "Los Angeles",
+          "postalCode": "90042",
+          "addressRegion": {
+            "@type": "State",
+            "identifier": "US-CA",
+            "name": "California",
+            "alternateName": "CA"
+          },
+          "addressCountry": {
+            "@type": "Country",
+            "identifier": "US",
+            "name": "United States",
+            "alternateName": "USA"
+          },
+          "x-streetAddress2": "",
+          "x-timezone": "America/Los_Angeles",
+          "x-jamBaseMetroId": 3,
+          "x-jamBaseCityId": 4227404
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": 34.1091,
+          "longitude": -118.1946
+        },
+        "sameAs": [
+          {
+            "@type": "URL",
+            "identifier": "officialSite",
+            "url": "https://www.lodgeroomhlp.com/"
+          }
+        ],
+        "maximumAttendeeCapacity": null,
+        "x-isPermanentlyClosed": false,
+        "x-numUpcomingEvents": 63
+      },
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "The Tallest Man on Earth Los Angeles Tickets on Ticketing Site",
+          "identifier": "jambase:16390240",
+          "url": "https://www.lodgeroomhlp.com/shows/the-tallest-man-on-earth-2/",
+          "datePublished": "2026-05-27T15:09:21Z",
+          "dateModified": "2026-05-27T15:09:22Z",
+          "category": "ticketingLinkPrimary",
+          "priceSpecification": {},
+          "seller": {
+            "@type": "Organization",
+            "name": "Ticketing Site",
+            "identifier": "ticket-provider",
+            "disambiguatingDescription": "eventTicketVendorPrimary"
+          },
+          "validFrom": "2026-05-27T15:09:21Z",
+          "x-spansDays": 1
+        }
+      ],
+      "performer": [
+        {
+          "@type": "MusicGroup",
+          "name": "The Tallest Man on Earth",
+          "identifier": "jambase:45813",
+          "url": "https://www.jambase.com/band/the-tallest-man-on-earth",
+          "image": "https://www.jambase.com/wp-content/uploads/2026/08/tallest-man-on-earth-2026-press-anton-corbijn-1480x832.jpg",
+          "datePublished": "2015-06-21T09:03:37Z",
+          "dateModified": "2026-11-07T18:51:46Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 15,
+          "genre": [
+            "folk",
+            "indie"
+          ],
+          "x-performanceDate": "2026-11-12",
+          "x-performanceRank": 1,
+          "x-isHeadliner": true,
+          "x-dateIsConfirmed": true
+        }
+      ],
+      "eventAttendanceMode": "live",
+      "isAccessibleForFree": false,
+      "x-streamIds": [],
+      "x-headlinerInSupport": false,
+      "x-promoImage": "",
+      "x-customTitle": "",
+      "x-subtitle": ""
+    },
+    {
+      "@type": "Concert",
+      "name": "Natural Child at Lodge Room",
+      "identifier": "jambase:17324147",
+      "url": "https://www.jambase.com/show/natural-child-lodge-room-20261113",
+      "image": "https://www.jambase.com/wp-content/uploads/2026/10/natural-child-8211-lodge-room-8211-20261113-1480x832.jpg",
+      "sameAs": [],
+      "datePublished": "2026-10-29T14:36:33Z",
+      "dateModified": "2026-10-29T14:36:35Z",
+      "eventStatus": "scheduled",
+      "startDate": "2026-11-13T20:00:00",
+      "endDate": "2026-11-13",
+      "previousStartDate": "",
+      "doorTime": "19:00:00",
+      "location": {
+        "@type": "Venue",
+        "name": "Lodge Room",
+        "identifier": "jambase:3816603",
+        "url": "https://www.jambase.com/venue/lodge-room",
+        "image": "https://www.jambase.com/wp-content/uploads/2022/11/lodge-room-1668645313-1480x832.png",
+        "datePublished": "2017-11-16T20:51:08Z",
+        "dateModified": "2026-11-07T09:00:41Z",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "104 N. Ave 56, 2nd Floor",
+          "addressLocality": "Los Angeles",
+          "postalCode": "90042",
+          "addressRegion": {
+            "@type": "State",
+            "identifier": "US-CA",
+            "name": "California",
+            "alternateName": "CA"
+          },
+          "addressCountry": {
+            "@type": "Country",
+            "identifier": "US",
+            "name": "United States",
+            "alternateName": "USA"
+          },
+          "x-streetAddress2": "",
+          "x-timezone": "America/Los_Angeles",
+          "x-jamBaseMetroId": 3,
+          "x-jamBaseCityId": 4227404
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": 34.1091,
+          "longitude": -118.1946
+        },
+        "sameAs": [
+          {
+            "@type": "URL",
+            "identifier": "officialSite",
+            "url": "https://www.lodgeroomhlp.com/"
+          }
+        ],
+        "maximumAttendeeCapacity": null,
+        "x-isPermanentlyClosed": false,
+        "x-numUpcomingEvents": 63
+      },
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Natural Child Los Angeles Tickets on Ticketing Site",
+          "identifier": "jambase:17324150",
+          "url": "https://www.lodgeroomhlp.com/shows/natural-child-4/",
+          "datePublished": "2026-10-29T14:36:34Z",
+          "dateModified": "2026-10-29T14:36:35Z",
+          "category": "ticketingLinkPrimary",
+          "priceSpecification": {},
+          "seller": {
+            "@type": "Organization",
+            "name": "Ticketing Site",
+            "identifier": "ticket-provider",
+            "disambiguatingDescription": "eventTicketVendorPrimary"
+          },
+          "validFrom": "2026-10-29T14:36:34Z",
+          "x-spansDays": 1
+        }
+      ],
+      "performer": [
+        {
+          "@type": "MusicGroup",
+          "name": "Natural Child",
+          "identifier": "jambase:48155",
+          "url": "https://www.jambase.com/band/natural-child",
+          "image": "https://www.jambase.com/wp-content/uploads/2021/08/jambase-default-band-image-bw-1480x832.png",
+          "datePublished": "2015-06-21T18:09:01Z",
+          "dateModified": "2026-10-29T15:04:03Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 5,
+          "genre": [
+            "indie",
+            "rock"
+          ],
+          "x-performanceDate": "2026-11-13",
+          "x-performanceRank": 1,
+          "x-isHeadliner": true,
+          "x-dateIsConfirmed": true
+        },
+        {
+          "@type": "MusicGroup",
+          "name": "Dizz Brew",
+          "identifier": "jambase:3964499",
+          "url": "https://www.jambase.com/band/dizz-brew",
+          "image": "https://www.jambase.com/wp-content/uploads/2021/08/jambase-default-band-image-bw-1480x832.png",
+          "datePublished": "2018-02-11T15:51:22Z",
+          "dateModified": "2026-10-29T14:36:35Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 1,
+          "genre": [],
+          "x-performanceDate": "2026-11-13",
+          "x-performanceRank": 2,
+          "x-isHeadliner": false,
+          "x-dateIsConfirmed": true
+        }
+      ],
+      "eventAttendanceMode": "live",
+      "isAccessibleForFree": false,
+      "x-streamIds": [],
+      "x-headlinerInSupport": false,
+      "x-promoImage": "",
+      "x-customTitle": "",
+      "x-subtitle": ""
+    },
+    {
+      "@type": "Concert",
+      "name": "Natural Child at Lodge Room",
+      "identifier": "jambase:17324226",
+      "url": "https://www.jambase.com/show/natural-child-lodge-room-20261114",
+      "image": "https://www.jambase.com/wp-content/uploads/2026/11/natural-child-8211-lodge-room-8211-20261114-1480x832.jpg",
+      "sameAs": [],
+      "datePublished": "2026-10-29T15:04:01Z",
+      "dateModified": "2026-10-29T15:04:03Z",
+      "eventStatus": "scheduled",
+      "startDate": "2026-11-14T20:00:00",
+      "endDate": "2026-11-14",
+      "previousStartDate": "",
+      "doorTime": "19:00:00",
+      "location": {
+        "@type": "Venue",
+        "name": "Lodge Room",
+        "identifier": "jambase:3816603",
+        "url": "https://www.jambase.com/venue/lodge-room",
+        "image": "https://www.jambase.com/wp-content/uploads/2022/11/lodge-room-1668645313-1480x832.png",
+        "datePublished": "2017-11-16T20:51:08Z",
+        "dateModified": "2026-11-07T09:00:41Z",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "104 N. Ave 56, 2nd Floor",
+          "addressLocality": "Los Angeles",
+          "postalCode": "90042",
+          "addressRegion": {
+            "@type": "State",
+            "identifier": "US-CA",
+            "name": "California",
+            "alternateName": "CA"
+          },
+          "addressCountry": {
+            "@type": "Country",
+            "identifier": "US",
+            "name": "United States",
+            "alternateName": "USA"
+          },
+          "x-streetAddress2": "",
+          "x-timezone": "America/Los_Angeles",
+          "x-jamBaseMetroId": 3,
+          "x-jamBaseCityId": 4227404
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": 34.1091,
+          "longitude": -118.1946
+        },
+        "sameAs": [
+          {
+            "@type": "URL",
+            "identifier": "officialSite",
+            "url": "https://www.lodgeroomhlp.com/"
+          }
+        ],
+        "maximumAttendeeCapacity": null,
+        "x-isPermanentlyClosed": false,
+        "x-numUpcomingEvents": 63
+      },
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Natural Child Los Angeles Tickets on Ticketing Site",
+          "identifier": "jambase:17359298",
+          "url": "https://www.lodgeroomhlp.com/shows/natural-child-5/",
+          "datePublished": "2026-11-05T17:02:53Z",
+          "dateModified": "2026-11-05T17:02:53Z",
+          "category": "ticketingLinkPrimary",
+          "priceSpecification": {},
+          "seller": {
+            "@type": "Organization",
+            "name": "Ticketing Site",
+            "identifier": "ticket-provider",
+            "disambiguatingDescription": "eventTicketVendorPrimary"
+          },
+          "validFrom": "2026-11-05T17:02:53Z",
+          "x-spansDays": 1
+        }
+      ],
+      "performer": [
+        {
+          "@type": "MusicGroup",
+          "name": "Natural Child",
+          "identifier": "jambase:48155",
+          "url": "https://www.jambase.com/band/natural-child",
+          "image": "https://www.jambase.com/wp-content/uploads/2021/08/jambase-default-band-image-bw-1480x832.png",
+          "datePublished": "2015-06-21T18:09:01Z",
+          "dateModified": "2026-10-29T15:04:03Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 5,
+          "genre": [
+            "indie",
+            "rock"
+          ],
+          "x-performanceDate": "2026-11-14",
+          "x-performanceRank": 1,
+          "x-isHeadliner": true,
+          "x-dateIsConfirmed": true
+        },
+        {
+          "@type": "MusicGroup",
+          "name": "Graffiti Phalico",
+          "identifier": "jambase:17324228",
+          "url": "https://www.jambase.com/band/graffiti-phalico",
+          "image": "https://www.jambase.com/wp-content/uploads/2021/08/jambase-default-band-image-bw-1480x832.png",
+          "datePublished": "2026-10-29T15:04:02Z",
+          "dateModified": "2026-10-29T15:04:03Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 1,
+          "genre": [],
+          "x-performanceDate": "2026-11-14",
+          "x-performanceRank": 2,
+          "x-isHeadliner": false,
+          "x-dateIsConfirmed": true
+        }
+      ],
+      "eventAttendanceMode": "live",
+      "isAccessibleForFree": false,
+      "x-streamIds": [],
+      "x-headlinerInSupport": false,
+      "x-promoImage": "",
+      "x-customTitle": "",
+      "x-subtitle": ""
+    },
+    {
+      "@type": "Concert",
+      "name": "Wrabel at Lodge Room",
+      "identifier": "jambase:17324231",
+      "url": "https://www.jambase.com/show/wrabel-lodge-room-20261115",
+      "image": "https://www.jambase.com/wp-content/uploads/2019/10/wrabel-ticketmaster-ram-1480x832.jpg",
+      "sameAs": [],
+      "datePublished": "2026-10-29T15:04:31Z",
+      "dateModified": "2026-10-29T15:04:32Z",
+      "eventStatus": "scheduled",
+      "startDate": "2026-11-15T20:00:00",
+      "endDate": "2026-11-15",
+      "previousStartDate": "",
+      "doorTime": "19:00:00",
+      "location": {
+        "@type": "Venue",
+        "name": "Lodge Room",
+        "identifier": "jambase:3816603",
+        "url": "https://www.jambase.com/venue/lodge-room",
+        "image": "https://www.jambase.com/wp-content/uploads/2022/11/lodge-room-1668645313-1480x832.png",
+        "datePublished": "2017-11-16T20:51:08Z",
+        "dateModified": "2026-11-07T09:00:41Z",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "104 N. Ave 56, 2nd Floor",
+          "addressLocality": "Los Angeles",
+          "postalCode": "90042",
+          "addressRegion": {
+            "@type": "State",
+            "identifier": "US-CA",
+            "name": "California",
+            "alternateName": "CA"
+          },
+          "addressCountry": {
+            "@type": "Country",
+            "identifier": "US",
+            "name": "United States",
+            "alternateName": "USA"
+          },
+          "x-streetAddress2": "",
+          "x-timezone": "America/Los_Angeles",
+          "x-jamBaseMetroId": 3,
+          "x-jamBaseCityId": 4227404
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": 34.1091,
+          "longitude": -118.1946
+        },
+        "sameAs": [
+          {
+            "@type": "URL",
+            "identifier": "officialSite",
+            "url": "https://www.lodgeroomhlp.com/"
+          }
+        ],
+        "maximumAttendeeCapacity": null,
+        "x-isPermanentlyClosed": false,
+        "x-numUpcomingEvents": 63
+      },
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Wrabel Los Angeles Tickets on Venue Website",
+          "identifier": "jambase:0",
+          "url": "https://www.lodgeroomhlp.com/?utm_source=jambase",
+          "datePublished": "2026-10-29T15:04:31Z",
+          "dateModified": "2026-10-29T15:04:32Z",
+          "category": "ticketingLinkPrimary",
+          "priceSpecification": {},
+          "seller": {
+            "@type": "Organization",
+            "name": "Venue Website",
+            "identifier": "ticket-provider",
+            "disambiguatingDescription": "eventTicketVendorPrimary"
+          },
+          "validFrom": "2026-10-29T15:04:31Z",
+          "x-spansDays": 1
+        }
+      ],
+      "performer": [
+        {
+          "@type": "MusicGroup",
+          "name": "Wrabel",
+          "identifier": "jambase:2858315",
+          "url": "https://www.jambase.com/band/wrabel",
+          "image": "https://www.jambase.com/wp-content/uploads/2019/10/wrabel-ticketmaster-ram-1480x832.jpg",
+          "datePublished": "2017-01-14T05:49:27Z",
+          "dateModified": "2026-10-29T15:04:33Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 1,
+          "genre": [
+            "indie",
+            "pop",
+            "rock"
+          ],
+          "x-performanceDate": "2026-11-15",
+          "x-performanceRank": 1,
+          "x-isHeadliner": true,
+          "x-dateIsConfirmed": true
+        },
+        {
+          "@type": "MusicGroup",
+          "name": "Hayley Warner",
+          "identifier": "jambase:9969712",
+          "url": "https://www.jambase.com/band/hayley-warner",
+          "image": "https://www.jambase.com/wp-content/uploads/2021/08/jambase-default-band-image-bw-1480x832.png",
+          "datePublished": "2023-02-27T20:59:37Z",
+          "dateModified": "2026-10-29T15:04:33Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 1,
+          "genre": [],
+          "x-performanceDate": "2026-11-15",
+          "x-performanceRank": 2,
+          "x-isHeadliner": false,
+          "x-dateIsConfirmed": true
+        }
+      ],
+      "eventAttendanceMode": "live",
+      "isAccessibleForFree": false,
+      "x-streamIds": [],
+      "x-headlinerInSupport": false,
+      "x-promoImage": "",
+      "x-customTitle": "",
+      "x-subtitle": ""
+    },
+    {
+      "@type": "Concert",
+      "name": "The Rock and Roll Playhouse at Lodge Room",
+      "identifier": "jambase:17324153",
+      "url": "https://www.jambase.com/show/the-rock-and-roll-playhouse-lodge-room-20261115",
+      "image": "https://www.jambase.com/wp-content/uploads/2026/10/the-rock-and-roll-playhouse-8211-lodge-room-8211-20261115-1480x832.jpg",
+      "sameAs": [],
+      "datePublished": "2026-10-29T14:37:22Z",
+      "dateModified": "2026-10-29T14:37:24Z",
+      "eventStatus": "scheduled",
+      "startDate": "2026-11-15T11:30:00",
+      "endDate": "2026-11-15",
+      "previousStartDate": "",
+      "doorTime": "10:30:00",
+      "location": {
+        "@type": "Venue",
+        "name": "Lodge Room",
+        "identifier": "jambase:3816603",
+        "url": "https://www.jambase.com/venue/lodge-room",
+        "image": "https://www.jambase.com/wp-content/uploads/2022/11/lodge-room-1668645313-1480x832.png",
+        "datePublished": "2017-11-16T20:51:08Z",
+        "dateModified": "2026-11-07T09:00:41Z",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "104 N. Ave 56, 2nd Floor",
+          "addressLocality": "Los Angeles",
+          "postalCode": "90042",
+          "addressRegion": {
+            "@type": "State",
+            "identifier": "US-CA",
+            "name": "California",
+            "alternateName": "CA"
+          },
+          "addressCountry": {
+            "@type": "Country",
+            "identifier": "US",
+            "name": "United States",
+            "alternateName": "USA"
+          },
+          "x-streetAddress2": "",
+          "x-timezone": "America/Los_Angeles",
+          "x-jamBaseMetroId": 3,
+          "x-jamBaseCityId": 4227404
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": 34.1091,
+          "longitude": -118.1946
+        },
+        "sameAs": [
+          {
+            "@type": "URL",
+            "identifier": "officialSite",
+            "url": "https://www.lodgeroomhlp.com/"
+          }
+        ],
+        "maximumAttendeeCapacity": null,
+        "x-isPermanentlyClosed": false,
+        "x-numUpcomingEvents": 63
+      },
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "The Rock and Roll Playhouse Los Angeles Tickets on Ticketing Site",
+          "identifier": "jambase:17324155",
+          "url": "https://www.lodgeroomhlp.com/shows/the-rock-and-roll-playhouse-plays-music-of-tom-petty-more-for-kids-2/",
+          "datePublished": "2026-10-29T14:37:23Z",
+          "dateModified": "2026-10-29T14:37:24Z",
+          "category": "ticketingLinkPrimary",
+          "priceSpecification": {},
+          "seller": {
+            "@type": "Organization",
+            "name": "Ticketing Site",
+            "identifier": "ticket-provider",
+            "disambiguatingDescription": "eventTicketVendorPrimary"
+          },
+          "validFrom": "2026-10-29T14:37:23Z",
+          "x-spansDays": 1
+        }
+      ],
+      "performer": [
+        {
+          "@type": "MusicGroup",
+          "name": "The Rock and Roll Playhouse",
+          "identifier": "jambase:14707653",
+          "url": "https://www.jambase.com/band/the-rock-and-roll-playhouse",
+          "image": "https://www.jambase.com/wp-content/uploads/2021/08/jambase-default-band-image-bw-1480x832.png",
+          "datePublished": "2025-07-24T16:11:09Z",
+          "dateModified": "2026-11-07T00:01:36Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 5,
+          "genre": [],
+          "x-performanceDate": "2026-11-15",
+          "x-performanceRank": 1,
+          "x-isHeadliner": true,
+          "x-dateIsConfirmed": true
+        }
+      ],
+      "eventAttendanceMode": "live",
+      "isAccessibleForFree": false,
+      "x-streamIds": [],
+      "x-headlinerInSupport": false,
+      "x-promoImage": "",
+      "x-customTitle": "",
+      "x-subtitle": ""
+    },
+    {
+      "@type": "Concert",
+      "name": "Jamila Woods at Lodge Room",
+      "identifier": "jambase:16876302",
+      "url": "https://www.jambase.com/show/jamila-woods-lodge-room-20261116",
+      "image": "https://www.jambase.com/wp-content/uploads/2019/10/jamila-woods-ticketmaster-ram-1480x832.jpg",
+      "sameAs": [],
+      "datePublished": "2026-08-12T19:24:08Z",
+      "dateModified": "2026-10-29T15:04:59Z",
+      "eventStatus": "scheduled",
+      "startDate": "2026-11-16T20:00:00",
+      "endDate": "2026-11-16",
+      "previousStartDate": "",
+      "doorTime": "19:00:00",
+      "location": {
+        "@type": "Venue",
+        "name": "Lodge Room",
+        "identifier": "jambase:3816603",
+        "url": "https://www.jambase.com/venue/lodge-room",
+        "image": "https://www.jambase.com/wp-content/uploads/2022/11/lodge-room-1668645313-1480x832.png",
+        "datePublished": "2017-11-16T20:51:08Z",
+        "dateModified": "2026-11-07T09:00:41Z",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "104 N. Ave 56, 2nd Floor",
+          "addressLocality": "Los Angeles",
+          "postalCode": "90042",
+          "addressRegion": {
+            "@type": "State",
+            "identifier": "US-CA",
+            "name": "California",
+            "alternateName": "CA"
+          },
+          "addressCountry": {
+            "@type": "Country",
+            "identifier": "US",
+            "name": "United States",
+            "alternateName": "USA"
+          },
+          "x-streetAddress2": "",
+          "x-timezone": "America/Los_Angeles",
+          "x-jamBaseMetroId": 3,
+          "x-jamBaseCityId": 4227404
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": 34.1091,
+          "longitude": -118.1946
+        },
+        "sameAs": [
+          {
+            "@type": "URL",
+            "identifier": "officialSite",
+            "url": "https://www.lodgeroomhlp.com/"
+          }
+        ],
+        "maximumAttendeeCapacity": null,
+        "x-isPermanentlyClosed": false,
+        "x-numUpcomingEvents": 63
+      },
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Jamila Woods Los Angeles Tickets on Venue Website",
+          "identifier": "jambase:0",
+          "url": "https://www.lodgeroomhlp.com/?utm_source=jambase",
+          "datePublished": "2026-08-12T19:24:08Z",
+          "dateModified": "2026-10-29T15:04:59Z",
+          "category": "ticketingLinkPrimary",
+          "priceSpecification": {},
+          "seller": {
+            "@type": "Organization",
+            "name": "Venue Website",
+            "identifier": "ticket-provider",
+            "disambiguatingDescription": "eventTicketVendorPrimary"
+          },
+          "validFrom": "2026-08-12T19:24:08Z",
+          "x-spansDays": 1
+        },
+        {
+          "@type": "Offer",
+          "name": "Jamila Woods Los Angeles Tickets on SeatGeek",
+          "identifier": "jambase:16898046",
+          "url": "https://seatgeek.pxf.io/c/252938/1756891/20501?url=https%3A%2F%2Fseatgeek.com%2Fjamila-woods-tickets%2Flos-angeles-california-lodge-room-2026-11-16-8-pm%2Fconcert%2F18477967&utm_source=jambase",
+          "datePublished": "2026-08-17T18:55:21Z",
+          "dateModified": "2026-08-17T18:55:23Z",
+          "category": "ticketingLinkSecondary",
+          "priceSpecification": {},
+          "seller": {
+            "@type": "Organization",
+            "name": "SeatGeek",
+            "identifier": "seatgeek",
+            "disambiguatingDescription": "eventTicketVendorSecondary"
+          },
+          "validFrom": "2026-08-17T18:55:21Z",
+          "x-spansDays": 1
+        },
+        {
+          "@type": "Offer",
+          "name": "Jamila Woods Los Angeles Tickets on StubHub",
+          "identifier": "jambase:16898043",
+          "url": "https://stubhub.prf.hn/click/camref:1011l9QnS/destination:https://www.stubhub.com/jamila-woods-los-angeles-tickets-11-16-2026/event/161818349/?utm_source=jambase",
+          "datePublished": "2026-08-17T18:55:21Z",
+          "dateModified": "2026-08-17T18:55:23Z",
+          "category": "ticketingLinkSecondary",
+          "priceSpecification": {},
+          "seller": {
+            "@type": "Organization",
+            "name": "StubHub",
+            "identifier": "stubhub",
+            "disambiguatingDescription": "eventTicketVendorSecondary"
+          },
+          "validFrom": "2026-08-17T18:55:21Z",
+          "x-spansDays": 1
+        },
+        {
+          "@type": "Offer",
+          "name": "Jamila Woods Los Angeles Tickets on Viagogo",
+          "identifier": "jambase:16898045",
+          "url": "https://viagogo.prf.hn/click/camref:1100luJMS/destination:https://www.viagogo.com/E-161818349?utm_source=jambase",
+          "datePublished": "2026-08-17T18:55:21Z",
+          "dateModified": "2026-08-17T18:55:23Z",
+          "category": "ticketingLinkSecondary",
+          "priceSpecification": {},
+          "seller": {
+            "@type": "Organization",
+            "name": "Viagogo",
+            "identifier": "viagogo",
+            "disambiguatingDescription": "eventTicketVendorSecondary"
+          },
+          "validFrom": "2026-08-17T18:55:21Z",
+          "x-spansDays": 1
+        }
+      ],
+      "performer": [
+        {
+          "@type": "MusicGroup",
+          "name": "Jamila Woods",
+          "identifier": "jambase:2508648",
+          "url": "https://www.jambase.com/band/jamila-woods",
+          "image": "https://www.jambase.com/wp-content/uploads/2019/10/jamila-woods-ticketmaster-ram-1480x832.jpg",
+          "datePublished": "2016-06-21T16:17:03Z",
+          "dateModified": "2026-09-26T08:01:08Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 6,
+          "genre": [
+            "hip-hop-rap",
+            "indie",
+            "rhythm-and-blues-soul"
+          ],
+          "x-performanceDate": "2026-11-16",
+          "x-performanceRank": 1,
+          "x-isHeadliner": true,
+          "x-dateIsConfirmed": true
+        },
+        {
+          "@type": "MusicGroup",
+          "name": "Kiah Victoria",
+          "identifier": "jambase:4014139",
+          "url": "https://www.jambase.com/band/kiah-victoria",
+          "image": "https://www.jambase.com/wp-content/uploads/2021/08/jambase-default-band-image-bw-1480x832.png",
+          "datePublished": "2018-02-28T18:33:05Z",
+          "dateModified": "2026-10-29T15:05:00Z",
+          "x-bandOrMusician": "band",
+          "x-numUpcomingEvents": 1,
+          "genre": [],
+          "x-performanceDate": "2026-11-16",
+          "x-performanceRank": 2,
+          "x-isHeadliner": false,
+          "x-dateIsConfirmed": true
+        }
+      ],
+      "eventAttendanceMode": "live",
+      "isAccessibleForFree": false,
+      "x-streamIds": [],
+      "x-headlinerInSupport": false,
+      "x-promoImage": "",
+      "x-customTitle": "",
+      "x-subtitle": ""
+    }
+  ]
+}

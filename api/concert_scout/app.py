@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Literal
 
 import httpx
-from fastapi import Depends, FastAPI, Header, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -16,7 +16,18 @@ from pydantic_ai.models import Model
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from concert_scout import cache, feedback, interpreter, limits, security, spotify, warm
+from concert_scout import (
+    accounts,
+    cache,
+    feedback,
+    home,
+    interpreter,
+    limits,
+    security,
+    spotify,
+    sync,
+    warm,
+)
 from concert_scout.config import Settings
 from concert_scout.models import ArtistProfiles, ImportedTaste, Place, SearchError
 from concert_scout.pipeline import (
@@ -28,11 +39,13 @@ from concert_scout.pipeline import (
 from concert_scout.security import Refused, SecurityHeaders
 from concert_scout.sources import (
     geocoder,
+    jambase,
     jev,
     lastfm,
     listenbrainz,
     musicbrainz,
     spotify_catalog,
+    supabase,
     ticketmaster,
 )
 from concert_scout.sources.spotify import SpotifyError
@@ -98,6 +111,10 @@ def make_services(
         redis=redis or cache.make_client(settings.redis_url),
         model=model or interpreter.make_model(settings.anthropic_api_key.get_secret_value()),
         turnstile=security.make_turnstile_client(transport),
+        jambase=jambase.make_client(settings.jbd_api_key.get_secret_value(), transport)
+        if settings.jbd_api_key
+        else None,
+        jambase_days=settings.jambase_days,
     )
 
 
@@ -136,11 +153,18 @@ def create_app(
 ) -> FastAPI:
     settings = settings or Settings()  # pyright: ignore[reportCallIssue]
     services = make_services(settings, transport, redis, model)
+    accounts_client = (
+        supabase.make_client(settings.supabase_url, transport)
+        if settings.supabase_url and settings.accounts_enabled
+        else None
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         yield
         await services.ticketmaster.aclose()
+        if services.jambase:
+            await services.jambase.aclose()
         await services.geocoder.aclose()
         await services.musicbrainz.aclose()
         await services.listenbrainz.aclose()
@@ -151,15 +175,17 @@ def create_app(
             await services.spotify_catalog.aclose()
         await services.turnstile.aclose()
         await services.redis.aclose()
+        if accounts_client:
+            await accounts_client.aclose()
 
     app = FastAPI(title="Concert Scout", lifespan=lifespan)
     app.add_middleware(SecurityHeaders)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_credentials=True,
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "Authorization"],
     )
 
     async def limit_visitor(request: Request, bucket: str, limit: int) -> None:
@@ -212,6 +238,9 @@ def create_app(
             return _failure(422, SearchError(code="invalid_search", message=ASK_FOR_A_SEARCH))
         if request.url.path == "/artist":
             return _failure(422, SearchError(code="invalid_artist", message="Choose an Artist."))
+        if request.url.path.startswith(accounts.PREFIX):
+            message = "That is not a Concert you can save."
+            return _failure(422, SearchError(code="invalid_save", message=message))
         if request.url.path.startswith("/taste/"):
             return _failure(422, SearchError(code="invalid_username", message="Enter a username."))
         return _failure(422, SearchError(code="invalid_place", message="Choose a place."))
@@ -234,22 +263,47 @@ def create_app(
         spotify.router(settings, services.redis, services.ticketmaster, services.geocoder)
     )
     app.include_router(feedback.router(settings, services.redis, transport))
+    if accounts_client:
+        app.include_router(
+            accounts.router(settings, accounts_client, services.redis, services.ticketmaster)
+        )
 
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    if settings.cron_secret:
-        expected = f"Bearer {settings.cron_secret.get_secret_value()}"
+    @app.get("/examples", response_model=home.Examples, response_model_exclude_none=True)
+    async def examples() -> home.Examples:
+        return await home.read(services.redis, dt.datetime.now(dt.UTC).date())
 
-        # Vercel's scheduler calls this with the project's CRON_SECRET. It spends no model money.
-        @app.get("/warm", include_in_schema=False)
-        async def warm_cache(
-            authorization: Annotated[str, Header()] = "",
-        ) -> list[warm.Warmed]:
-            if not hmac.compare_digest(authorization.encode(), expected.encode()):
-                raise Refused(401, "not_scheduler", "Only the scheduler can warm the cache.")
-            return await warm.warm(services, dt.datetime.now(dt.UTC))
+    if settings.cron_secret:
+        expected = f"Bearer {settings.cron_secret.get_secret_value()}".encode()
+
+        async def scheduler_only(authorization: Annotated[str, Header()] = "") -> None:
+            if not hmac.compare_digest(authorization.encode(), expected):
+                raise Refused(401, "not_scheduler", "Only the scheduler can run this job.")
+
+        scheduled = APIRouter(dependencies=[Depends(scheduler_only)], include_in_schema=False)
+
+        # Only this authenticated job builds the public example Posters.
+        @scheduled.get("/warm")
+        async def warm_cache() -> list[warm.Warmed]:
+            if accounts_client and settings.supabase_secret_key:
+                try:
+                    await supabase.keep_awake(accounts_client, settings.supabase_secret_key)
+                except supabase.SupabaseError as exc:
+                    logger.warning("Supabase keep-awake failed: %s", exc)
+            warmed = await warm.warm(services, dt.datetime.now(dt.UTC))
+            if settings.search_enabled:
+                await home.refresh(services)
+            return warmed
+
+        # Once a day: the JamBase Catalog, then MusicBrainz IDs.
+        @scheduled.get("/sync")
+        async def sync_catalog() -> list[sync.Step]:
+            return await sync.run(services, dt.datetime.now(dt.UTC))
+
+        app.include_router(scheduled)
 
     @app.get("/artist", response_model=ArtistProfiles, response_model_exclude_none=True)
     async def artist(

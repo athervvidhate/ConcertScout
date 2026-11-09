@@ -1,3 +1,4 @@
+import { SourceLink } from "@/components/concert-source";
 import { formatConcertTime, formatMonthDay, presaleLine } from "@/lib/format";
 import type { Concert } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
@@ -29,9 +30,9 @@ export function Listing({ concert, artist, href, note, anywhere = false }: Props
         <span />
       )}
       <div className="listing-what">
-        <a className="listing-artist" href={href ?? concert.url} target="_blank" rel="noopener noreferrer">
+        <SourceLink className="listing-artist" href={href ?? concert.url}>
           {name}
-        </a>
+        </SourceLink>
         {title && <p>{title}</p>}
         {note && <p className="listing-note">{note}</p>}
       </div>
@@ -40,15 +41,13 @@ export function Listing({ concert, artist, href, note, anywhere = false }: Props
         <p>{[city, formatConcertTime(concert)].filter(Boolean).join(" at ")}</p>
         {presale && <p className="listing-note">{presale}</p>}
       </div>
-      <a
+      <SourceLink
         className="listing-tickets"
         href={concert.url}
-        target="_blank"
-        rel="noopener noreferrer"
         aria-label={`Tickets for ${concert.name}`}
       >
         Tickets
-      </a>
+      </SourceLink>
     </li>
   );
 }

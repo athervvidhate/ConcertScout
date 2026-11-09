@@ -4,7 +4,7 @@ Concert Scout finds concerts a person would want to see, from their taste and wh
 
 We rebuild in place in this repo. The old ADK app, its v0 frontend and its deployment scripts all go. Nothing stays for compatibility.
 
-Terms follow [GLOSSARY.md](../../GLOSSARY.md). Choices with lasting trade-offs live in [the ADRs](../adr/), and the evidence lives in [the research notes](../research/).
+Terms follow [GLOSSARY.md](../../GLOSSARY.md). Choices with lasting trade-offs live in [the ADRs](../adr/).
 
 ## Specs
 
@@ -30,8 +30,8 @@ Terms follow [GLOSSARY.md](../../GLOSSARY.md). Choices with lasting trade-offs l
 | Models | Claude Haiku 5.5 (`claude-haiku-5-5`) reads the Search and writes reasons. Typesafe Jev (`jev-1.14.0`) grades the shortlist |
 | Agent library | Pydantic AI, with Pydantic Evals and OpenTelemetry |
 | Model calls per Search | Three: the interpreter, Jev grades and Haiku reasons |
-| Concert data | Ticketmaster Discovery only |
-| Accounts | None in this rebuild. Saved Concerts live in the browser |
+| Concert data | Ticketmaster Discovery, plus a national JamBase catalog synced daily |
+| Accounts | Optional, on Supabase, with Google or email and password. They sync Saved Concerts ([ADR 0004](../adr/0004-optional-accounts-on-supabase.md)). Guests save in the browser |
 | Streaming | SSE directly from the browser to FastAPI |
 | Money | $10-15 a month in total, no affiliate links, no ads |
 | Development | Local, run like a production server |
@@ -46,17 +46,22 @@ Browser (Next.js)
 FastAPI service
    |-- interpreter (Haiku): Search text to structured request
    |-- geocoder
-   |-- Concert pool: Ticketmaster, cached in Redis
+   |-- Concert pool: Ticketmaster and the JamBase catalog, cached in Redis
    |-- Artist matching: MusicBrainz, ListenBrainz, Last.fm
    |-- ranker: Jev grades each ID, Haiku explains the Poster
    `-- code fills in facts from the source record
+
+Browser (Next.js) --sign-in--> Supabase Auth
+   |  /account, with the Supabase access token
+   v
+FastAPI service --> Supabase Postgres (Saved Concerts, row-level security)
 ```
 
 ## Out of scope
 
-Accounts, chat, other Concert sources, buying tickets inside the app, ads, and any paid tier.
+Chat, other Concert sources, buying tickets inside the app, ads, and any paid tier.
 
 ## Open items
 
-- Genre matching needs tuning against judged Searches. [The spike](../research/12-candidate-matching-spike.md) found it strong for country and punk and weak for electronic.
+- Genre matching needs tuning against judged Searches. It is strong for country and punk and weak for electronic.
 - The per-visitor limit is set from measured cost, not guessed. See [05-platform](05-platform.md).

@@ -1,9 +1,18 @@
 import { Pointer } from "lucide-react";
-import Image from "next/image";
-import { Fragment } from "react";
+import { Fragment, useId, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 
 import { ArtistPanel } from "@/components/artist-panel";
-import { byVenue, formatDate, formatDayShort, formatMonthDay, formatConcertTime, formatPrice, presaleLine } from "@/lib/format";
+import { ConcertPhoto, SourceLink } from "@/components/concert-source";
+import {
+  byVenue,
+  formatDate,
+  formatDayShort,
+  formatMonthDay,
+  formatConcertTime,
+  formatPrice,
+  presaleLine,
+} from "@/lib/format";
 import type { Concert, Recommendation } from "@/lib/search";
 
 export function nameOf({ concert }: Recommendation): string {
@@ -14,7 +23,10 @@ function Price({ text }: { text: string }) {
   const parts = text.split(" to ");
   const longest = Math.max(...parts.map((part) => part.length));
   return (
-    <span className="price" style={{ fontSize: `min(46px, ${140 / longest}cqw)` }}>
+    <span
+      className="price"
+      style={{ fontSize: `min(46px, ${140 / longest}cqw)` }}
+    >
       {parts.map((part, index) => (
         <Fragment key={part + index}>
           {index > 0 && <span className="price-to"> to </span>}
@@ -30,38 +42,59 @@ function placeOf({ venue, city, region }: Concert): string {
 }
 
 function OtherDates({ concerts }: { concerts: Concert[] }) {
-  const count = concerts.length === 1 ? "1 more date" : `${concerts.length} more dates`;
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const reduced = useReducedMotion();
+  const count =
+    concerts.length === 1 ? "1 more date" : `${concerts.length} more dates`;
   return (
-    <details className="other-dates">
-      <summary>{count}</summary>
-      <ul className="other-venues">
-        {byVenue(concerts).map((shows) => {
-          const { id, venue, city, region } = shows[0];
-          return (
-            <li key={id}>
-              <p className="other-place">{[city, region].filter(Boolean).join(", ")}</p>
-              {venue && <p className="other-venue">{venue}</p>}
-              <ul className="other-chips">
-                {shows.map((concert) => (
-                  <li key={concert.id}>
-                    <a
-                      href={concert.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Tickets for ${[concert.date && formatDate(concert.date), placeOf(concert)].filter(Boolean).join(", ")}`}
-                    >
-                      {concert.date
-                        ? `${formatDayShort(concert.date)} ${formatMonthDay(concert.date)}`
-                        : "Tickets"}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </li>
-          );
-        })}
-      </ul>
-    </details>
+    <div className="other-dates" data-expanded={open}>
+      <button
+        className="other-toggle"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen(!open)}
+      >
+        {count}
+      </button>
+      <motion.div
+        id={id}
+        className="other-content"
+        inert={!open}
+        aria-hidden={!open}
+        initial={false}
+        animate={{ height: open ? "auto" : 0, opacity: open ? 1 : 0 }}
+        transition={{ duration: reduced ? 0 : 0.5, ease: [0.22, 0.8, 0.2, 1] }}
+      >
+        <ul className="other-venues">
+          {byVenue(concerts).map((shows) => {
+            const { id, venue, city, region } = shows[0];
+            return (
+              <li key={id}>
+                <p className="other-place">
+                  {[city, region].filter(Boolean).join(", ")}
+                </p>
+                {venue && <p className="other-venue">{venue}</p>}
+                <ul className="other-chips">
+                  {shows.map((concert) => (
+                    <li key={concert.id}>
+                      <SourceLink
+                        href={concert.url}
+                        aria-label={`Tickets for ${[concert.date && formatDate(concert.date), placeOf(concert)].filter(Boolean).join(", ")}`}
+                      >
+                        {concert.date
+                          ? `${formatDayShort(concert.date)} ${formatMonthDay(concert.date)}`
+                          : "Tickets"}
+                      </SourceLink>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            );
+          })}
+        </ul>
+      </motion.div>
+    </div>
   );
 }
 
@@ -71,9 +104,16 @@ type TicketProps = {
   // Shown once, on a visitor's first Ticket, because the name doesn't look like a button.
   artistHint?: boolean;
   onArtistOpen?: () => void;
+  hidePhoto?: boolean;
 };
 
-export function Ticket({ recommendation, rank, artistHint, onArtistOpen }: TicketProps) {
+export function Ticket({
+  recommendation,
+  rank,
+  artistHint,
+  onArtistOpen,
+  hidePhoto,
+}: TicketProps) {
   const { concert, reason, also = [] } = recommendation;
   const details = [
     placeOf(concert),
@@ -84,15 +124,21 @@ export function Ticket({ recommendation, rank, artistHint, onArtistOpen }: Ticke
 
   return (
     <article className="ticket" data-color={rank % 5}>
-      {concert.image && (
-        <div className="ticket-photo">
-          {/* Ticketmaster already sizes these, so nothing is resized here. */}
-          <Image src={concert.image} alt="" fill unoptimized draggable={false} />
-        </div>
+      {!hidePhoto && (
+        <ConcertPhoto
+          concert={concert}
+          className="ticket-photo"
+          sizes="(max-width: 600px) 100vw, 800px"
+          draggable={false}
+        />
       )}
       <div className="ticket-main">
         {concert.date && (
-          <time className="date" dateTime={concert.date} aria-label={formatDate(concert.date)}>
+          <time
+            className="date"
+            dateTime={concert.date}
+            aria-label={formatDate(concert.date)}
+          >
             {formatMonthDay(concert.date)}
           </time>
         )}
@@ -111,16 +157,10 @@ export function Ticket({ recommendation, rank, artistHint, onArtistOpen }: Ticke
         {also.length > 0 && <OtherDates concerts={also} />}
       </div>
       <div className="ticket-stub">
-        <span>Admit one</span>
         {concert.price && <Price text={formatPrice(concert.price, true)} />}
-        <a
-          href={concert.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={`Tickets for ${concert.name}`}
-        >
+        <SourceLink href={concert.url} aria-label={`Tickets for ${concert.name}`}>
           Tickets
-        </a>
+        </SourceLink>
       </div>
     </article>
   );

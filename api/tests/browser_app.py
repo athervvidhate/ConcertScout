@@ -1,4 +1,5 @@
-"""E2E-only composition: production API/pipeline, real isolated Redis, domain adapter fixtures.
+"""E2E-only composition: production API/pipeline, real isolated Redis, the local Supabase stack
+and domain adapter fixtures.
 
 No production flag enables this. Never import this module from the application package.
 """
@@ -20,6 +21,7 @@ from pydantic import SecretStr
 from concert_scout.app import create_app
 from concert_scout.sources import resend
 from concert_scout.sources.spotify import Client, Credentials, SpotifyArtist, not_allowed
+from tests import supabase_stack
 from tests.contracts import contract_model, forbidden_http, install_sources, settings_with
 
 patch = pytest.MonkeyPatch()
@@ -96,8 +98,12 @@ app = create_app(
         spotify_client_secret=SecretStr("test-secret"),
         spotify_encryption_key=SecretStr(Fernet.generate_key().decode()),
         spotify_redirect_uri="http://127.0.0.1:8146/auth/spotify/callback",
+        supabase_url=supabase_stack.URL,
+        supabase_publishable_key=supabase_stack.PUBLISHABLE_KEY,
+        supabase_secret_key=SecretStr(supabase_stack.secret_key()),
     ),
-    httpx.MockTransport(forbidden_http),
+    # Accounts use the real local Supabase stack; every vendor stays forbidden.
+    supabase_stack.stack_transport(httpx.MockTransport(forbidden_http)),
     model=contract_model(),
 )
 original_lifespan = app.router.lifespan_context

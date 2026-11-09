@@ -6,6 +6,7 @@ All development runs on this computer, set up like a real server. Nothing depend
 
 - FastAPI under `uvicorn` in production mode on `127.0.0.1:8000`. No reload, and debug off.
 - Real Redis locally.
+- A local Supabase stack in Docker for accounts: Postgres, Auth, the Data API and a Mailpit inbox at `http://127.0.0.1:54324`. On a Mac, run Docker through Colima (`brew install colima docker`, then `colima start`). The Supabase CLI is pinned in the frontend's dev dependencies, and `supabase/` holds its config, migrations and email templates.
 - Real rate limits, CORS and spend counter, on by default.
 - Next.js production build served on port 3000 when testing a full run, with `next dev` for UI work.
 - Settings come from environment variables through `pydantic-settings`. `.env.example` lists every one.
@@ -26,7 +27,8 @@ The browser calls FastAPI directly ([ADR 0001](../adr/0001-separate-python-agent
 | Rate limit | Per client IP in Redis, hashed, read from the header named by `CLIENT_IP_HEADER`. Uvicorn runs with `--no-proxy-headers`, because otherwise it trusts a forged `X-Forwarded-For` from a local peer before the app sees it |
 | Bot check | Cloudflare Turnstile token on `/search`, with test keys locally |
 | Input | Search text capped at 500 characters, Taste lists at 100 names |
-| Secrets | Server only. The frontend receives none |
+| Secrets | Server only. The frontend receives none. The Supabase publishable key is public by design |
+| Accounts | `/account` routes accept only a Supabase access token whose signature, issuer, audience, role and expiry check out against the project's published keys. The owner is always the token's subject. Row-level security covers every account table, and browsers cannot insert or update rows |
 | Errors | Clients get a code and a message, never a stack trace |
 | Headers | CSP, HSTS, `X-Content-Type-Options` and `Referrer-Policy` |
 | Outbound | HTTP clients have timeouts and retries with backoff |
