@@ -90,7 +90,7 @@ test("photo bookmark and Ticket toggle the same saved Concert without opening or
   ).toBeVisible();
 });
 
-test("eight dates unfold within the viewport without enlarging the photo or scrolling the details", async ({
+test("eight dates swap in without resizing the Ticket, its photo or scrolling", async ({
   page,
 }, info) => {
   const body = [
@@ -115,71 +115,53 @@ test("eight dates unfold within the viewport without enlarging the photo or scro
     .click();
   const sheet = page.locator(".ticket-dialog");
   await expect(sheet).toHaveAttribute("data-motion-phase", "open");
-  const before = await sheet.boundingBox(),
-    photo = await page.locator(".dialog-photo").boundingBox();
-  await sheet
-    .getByRole("button", { name: "8 more dates", exact: true })
-    .click();
-  // Sample the actual frame on successive paints, rather than only its final geometry.
-  const heights = await sheet.evaluate(async (e) => {
-    const values: number[] = [];
+  const before = (await sheet.boundingBox())!,
+    photo = (await page.locator(".dialog-photo").boundingBox())!;
+  const more = sheet.getByRole("button", { name: "8 more dates", exact: true });
+  await more.click();
+  // Sample every paint while the dates swap in: the Ticket and its photograph never change size.
+  const frames = await sheet.evaluate(async (e) => {
+    const image = e.querySelector(".dialog-photo")!;
+    const values: number[][] = [];
     const until = performance.now() + 700;
     while (performance.now() < until) {
-      values.push(e.getBoundingClientRect().height);
+      const a = e.getBoundingClientRect(),
+        b = image.getBoundingClientRect();
+      values.push([a.height, b.width, b.height]);
       await new Promise(requestAnimationFrame);
     }
     return values;
   });
-  const after = await sheet.boundingBox(),
-    afterPhoto = await page.locator(".dialog-photo").boundingBox();
-  expect(afterPhoto!.width).toBeCloseTo(photo!.width, 0);
-  expect(afterPhoto!.height).toBeLessThanOrEqual(photo!.height + 1);
-  if (info.project.name === "desktop") {
-    expect(afterPhoto!.height).toBeCloseTo(photo!.height, 0);
-    expect(after!.height).toBeGreaterThan(before!.height + 40);
-    // Smooth means several painted frames between closed and open, not one jump. Count frames
-    // rather than limiting the step per frame, which fails whenever a busy machine drops a frame.
-    expect(
-      heights.filter(
-        (height) => height > before!.height + 5 && height < after!.height - 5,
-      ).length,
-    ).toBeGreaterThanOrEqual(3);
+  for (const [height, width, photoHeight] of frames) {
+    expect(Math.abs(width - photo.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(photoHeight - photo.height)).toBeLessThanOrEqual(1);
+    if (info.project.name === "desktop")
+      expect(Math.abs(height - before.height)).toBeLessThanOrEqual(1);
   }
+  const back = sheet.getByRole("button", { name: /^Back to/ });
+  await expect(back).toBeFocused();
   await expect(sheet.locator(".other-chips a")).toHaveCount(8);
   await expect(sheet.locator(".other-chips a").last()).toBeInViewport();
   await expect(
     sheet.getByRole("button", { name: "Save", exact: true }),
   ).toBeInViewport();
-  expect(
-    await sheet
-      .locator(".dialog-details")
-      .evaluate((e) => e.scrollHeight - e.clientHeight),
-  ).toBeLessThanOrEqual(1);
+  if (info.project.name === "desktop")
+    for (const pane of [".dialog-details", ".ticket-main"])
+      expect(
+        await sheet
+          .locator(pane)
+          .evaluate((e) => e.scrollHeight - e.clientHeight),
+      ).toBeLessThanOrEqual(1);
   await expect(
     sheet.getByRole("button", { name: "Close Ticket" }),
   ).toBeInViewport();
-  await page.screenshot({ path: info.outputPath("expanded-dates.png") });
-  await sheet
-    .getByRole("button", { name: "8 more dates", exact: true })
-    .click();
-  await expect
-    .poll(async () =>
-      Math.abs((await sheet.boundingBox())!.height - before!.height),
-    )
-    .toBeLessThanOrEqual(1);
-  await expect
-    .poll(
-      async () => (await sheet.locator(".other-content").boundingBox())!.height,
-    )
-    .toBeLessThan(1);
-  // A clipped descendant still has a DOM box; prove it is out of keyboard navigation.
-  await page.keyboard.press("Tab");
-  await expect(
-    sheet.getByRole("link", {
-      name: `Tickets for ${calvin.poster.recommendations[0].concert.name}`,
-      exact: true,
-    }),
-  ).toBeFocused();
+  await page.screenshot({ path: info.outputPath("dates.png") });
+  await back.click();
+  await expect(more).toBeFocused();
+  await expect(sheet.locator(".other-chips a")).toHaveCount(0);
+  expect(
+    Math.abs((await sheet.boundingBox())!.height - before.height),
+  ).toBeLessThanOrEqual(1);
   await page.keyboard.press("Escape");
   await expect(sheet).toHaveCount(0);
 });

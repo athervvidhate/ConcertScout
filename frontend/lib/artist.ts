@@ -18,6 +18,14 @@ export function spotifyHref({ name, spotify_url }: ArtistProfile): string {
   return spotify_url ?? `https://open.spotify.com/search/${encodeURIComponent(name)}`;
 }
 
+const ARTIST_PAGE = /^https:\/\/open\.spotify\.com\/artist\/([A-Za-z0-9]{22})$/;
+
+/** Spotify's player for the Artist's exact page, or null when there is no such page. */
+export function previewSrc({ spotify_url }: ArtistProfile): string | null {
+  const id = spotify_url?.match(ARTIST_PAGE)?.[1];
+  return id ? `https://open.spotify.com/embed/artist/${id}` : null;
+}
+
 type Loaded = { name: string; profiles: ArtistProfile[] };
 
 function blank(name: string): ArtistProfile[] {

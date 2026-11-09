@@ -18,6 +18,7 @@ export default function PrivacyPage() {
         <p>Browser location is requested only when you press the location button. Coordinates go to the API for any Search that names no place and for your Spotify shelf, and stay on this device until you press Forget my location or clear site storage. The app does not infer a place from your IP address. Ticketmaster receives a rounded search point or a state filter.</p>
         <h2>Artist details</h2>
         <p>Opening an Artist sends their name to Last.fm and to Spotify’s public catalog to show their details and page. This uses the app’s own credentials, not your accounts.</p>
+        <p>Nothing loads from Spotify until you press Listen. Then the Preview is Spotify’s own player, shown in a frame. Your browser contacts Spotify, which sees your IP address and sets cookies and similar technologies on your device, and may allow its own partners to do the same. Their use is governed by <a href="https://www.spotify.com/legal/privacy-policy/" target="_blank" rel="noopener noreferrer">Spotify’s privacy policy</a> and <a href="https://www.spotify.com/legal/cookies-policy/" target="_blank" rel="noopener noreferrer">cookie policy</a>, which explain how to manage them. Spotify does not receive your Concert Scout Searches or Taste, and no connected Spotify account is involved. Your browser’s cookie settings can block these cookies; the Preview may then not play.</p>
         <h2>Data sources</h2>
         <p>
           Concert and Artist data comes from{" "}

@@ -285,6 +285,22 @@ body:has(.information)::before { animation:none; opacity:.35; }
 .artist-panel li { min-height:30px; }
 .artist-panel .artist-spotify { justify-self:start; align-self:flex-start; display:inline-flex; align-items:center; min-height:48px; padding:0 18px; border-radius:8px; font-weight:700; text-decoration:none; }
 .artist-missing { opacity:.8; }
+/* Listen lays Spotify's player over the photograph, in the same box, so nothing around it moves. */
+.ticket-media { position:relative; }
+.listen-stage { position:absolute; inset:0; z-index:2; display:grid; padding:12px; background:#121212; color:#fff; }
+.listen-stage p { align-self:center; margin:0; padding:0 16px; text-align:center; font-size:15px; }
+.listen-stage a { color:#fff; text-decoration:underline; }
+.listen-player { display:block; width:100%; height:100%; min-width:280px; min-height:352px; border:0; border-radius:12px; }
+/* Spotify's player needs 352px; a short photograph grows once to hold it. */
+.ticket-media:has(.listen-stage),.dialog-media:has(.listen-stage) { min-height:376px; }
+.ticket-pills { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
+.ticket-pill { display:inline-flex; align-items:center; gap:6px; min-height:44px; padding:0 16px; border:1px solid var(--line-2); border-radius:999px; background:var(--surface); color:var(--ink); font:600 15px var(--font-ui),sans-serif; cursor:pointer; transition:background .2s,color .2s; }
+.ticket-pill:hover { background:var(--soft); }
+.ticket-pill svg { flex:none; }
+.ticket-pill[aria-pressed=true] { background:var(--ink); border-color:var(--ink); color:var(--surface); }
+.ticket-pill[aria-pressed] svg { fill:currentColor; }
+.ticket-back { display:inline-flex; align-items:center; gap:4px; min-height:44px; padding:0; border:0; background:none; color:var(--ink-2); font:650 15px var(--font-ui),sans-serif; cursor:pointer; }
+.ticket .dates-heading { color:var(--accent-ink); font-weight:650; margin:0 0 12px; }
 .artist-listeners { font:800 22px var(--font-ui),monospace; }
 .artist-tags { display:flex; flex-wrap:wrap; gap:6px; margin:0; padding:0; list-style:none; }
 .artist-tags li { min-height:0; padding:3px 10px; border:1px solid var(--line); border-radius:999px; font-size:15px; }
@@ -380,7 +396,7 @@ button:disabled { opacity:.6; cursor:default; }
 .ticket-dialog[data-starting-style],.ticket-dialog[data-ending-style] { opacity:0; }
 .dialog-photo { position:relative; background:var(--photo-bg); }
 .dialog-details { min-width:0; }
-.ticket-dialog:not(:has(.dialog-photo)) { grid-template-columns:1fr; max-width:620px; }
+.ticket-dialog:not(:has(.dialog-media)) { grid-template-columns:1fr; max-width:620px; }
 .dialog-close { position:absolute; top:12px; right:12px; z-index:5; display:grid; place-items:center; width:44px; height:44px; border:1px solid var(--line); border-radius:50%; background:var(--surface); color:var(--ink); }
 .ticket { color:var(--ink); background:var(--surface); text-align:left; overflow-wrap:anywhere; }
 .ticket-photo { position:relative; height:220px; overflow:hidden; border-radius:16px 16px 0 0; }
@@ -398,11 +414,8 @@ button:disabled { opacity:.6; cursor:default; }
 .artist-name { padding:0; border:0; background:none; color:inherit; font:inherit; text-align:left; text-decoration:underline; text-decoration-color:var(--line-2); text-underline-offset:.12em; cursor:pointer; }
 .artist-name:hover { text-decoration-color:currentColor; }
 .ticket .artist-hint { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-2); margin:0 0 16px; }
-.other-dates { margin:16px 0; font-size:14px; }
-.other-toggle { display:flex; align-items:center; min-height:44px; padding:0; border:0; background:none; text-decoration:underline; }
-.other-content { overflow:hidden; }
-.other-dates ul { list-style:none; padding:0; margin:0; }
-.other-venues { display:grid; gap:16px; }
+.other-venues,.other-venues ul { list-style:none; padding:0; margin:0; }
+.other-venues { display:grid; gap:16px; font-size:14px; }
 .ticket .other-place { margin:0; font-weight:600; }
 .ticket .other-venue { font-size:14px; color:var(--ink-2); }
 .other-chips { display:flex; flex-wrap:wrap; gap:6px; }
@@ -605,10 +618,13 @@ button:disabled { opacity:.6; cursor:default; }
 .card-save[aria-busy=true] { opacity:.65; }
 .concerts-list .card-save { top:32px; right:8px; }
 /* The sheet follows the animated dates. The photograph keeps its opening size. */
+/* A Ticket keeps one size: Listen and the dates swap in place of what they replace. */
 .ticket-dialog { grid-template-rows:minmax(0,1fr); overflow:hidden; }
-.dialog-media { display:grid; align-items:center; min-height:0; background:var(--photo-bg); overflow:hidden; }
-.dialog-photo { min-height:0; height:var(--ticket-photo-height,400px); width:100%; }
-.dialog-details { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; gap:0 12px; min-height:0; padding:28px; overflow-y:auto; overscroll-behavior:contain; }
+.ticket-dialog:has(.dialog-media) { height:min(560px,calc(100svh - 48px)); }
+.dialog-media { position:relative; min-height:0; background:var(--photo-bg); overflow:hidden; }
+.dialog-photo { position:absolute; inset:0; }
+.dialog-details { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:minmax(0,1fr); gap:0 12px; min-height:0; padding:28px; }
+.dialog-details .ticket-main { min-height:0; overflow-y:auto; }
 .dialog-details .ticket { display:contents; }
 .dialog-details .ticket-main,.dialog-details .decision-status { grid-column:1/-1; }
 .dialog-details .ticket-stub { margin:4px 0 0; }
@@ -618,10 +634,14 @@ button:disabled { opacity:.6; cursor:default; }
 .ticket-dialog .ticket h2 { padding-right:20px; }
 .solo-photo { align-self:start; height:540px; }
 @media(max-width:800px) {
- .ticket-dialog:has(.dialog-photo) { grid-template-rows:auto minmax(0,1fr); }
+ .ticket-dialog:has(.dialog-media) { height:auto; grid-template-rows:auto minmax(0,1fr); }
+ .dialog-details { grid-template-rows:auto; }
  .dialog-photo img { object-position:center 20%; }
- .dialog-photo { aspect-ratio:auto; height:min(var(--ticket-photo-height,220px),26svh); max-height:none; transition:height .5s var(--ease); }
- .ticket-dialog:has(.other-dates[data-expanded=true]) .dialog-photo { height:min(120px,15svh); }
+ .dialog-media { transition:min-height .35s var(--ease); }
+ .dialog-photo { position:relative; inset:auto; width:100%; height:min(220px,26svh); max-height:none; }
+ /* Close sits over the photograph on phones; the player starts below it, never under it. */
+ .dialog-media .listen-stage { padding-top:68px; }
+ .dialog-media:has(.listen-stage) { min-height:432px; }
  .solo-photo { height:auto; }
 }
 @media(max-width:640px) {
@@ -634,10 +654,9 @@ button:disabled { opacity:.6; cursor:default; }
  .ticket-dialog .ticket .other-place { margin-bottom:2px; }
  .ticket-dialog .ticket .other-venue { font-size:12px; margin-bottom:8px; }
  .ticket-dialog .other-chips a { font-size:13px; padding:6px 10px; }
- .ticket-dialog .other-dates { margin:8px 0 12px; }
  .ticket-dialog .dialog-close { top:8px; right:8px; }
 }
-@media(prefers-reduced-motion:reduce) { .dialog-photo { transition:none; } }
+@media(prefers-reduced-motion:reduce) { .dialog-media { transition:none; } }
 
 .hero-flap .split-flap-digit::before { content:none; display:none; }
 
