@@ -40,6 +40,8 @@ The reason comes from the ranker. Every other fact comes from the source record,
 
 The visitor saves from the Ticket. Saving leaves it open and confirms where it was kept. The dialog closes with its close button, Escape or the backdrop and returns focus to the Concert that opened it. Skip, dragging and the one-by-one deck were removed by the owner's decision on November 7, 2026. Every action works from the keyboard.
 
+A Ticket and each Saved Concert offer "Add to calendar", which downloads one `.ics` file built in the browser with no request. It carries the Lineup, venue, source link and start time on the venue's clock (`TZID`), all from the source record. A Concert with no start time becomes an all-day event on its date, and none gets an end time, because the source reports none.
+
 ## Shared Posters
 
 A Poster or a single Ticket can be shared by link. The Share button uses the browser's share sheet where there is one and copies the link otherwise. A link names a Shared Poster, which anyone can open on any device without a Search, a model call or a sign-in, and a Ticket link opens that Poster with the Ticket open.

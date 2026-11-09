@@ -339,7 +339,9 @@ button:disabled { opacity:.6; cursor:default; }
 .search-bar input { min-width:0; width:100%; min-height:54px; padding:8px; border:0; outline:none; background:none; font-size:18px; text-overflow:ellipsis; }
 .search-bar input::placeholder { color:var(--ink-2); }
 .search-bar button { min-height:52px; padding:0 22px; border:0; border-radius:16px; background:var(--ink); color:var(--surface); font-weight:650; }
-.search-bar.ready button[type=submit],.primary { background:var(--accent); color:var(--on-accent); }
+.search-bar.ready button[type=submit],.calendar-action { display:inline-flex; justify-content:center; align-items:center; gap:8px; min-height:48px; padding:12px 22px; border:1px solid var(--line-2); border-radius:999px; background:var(--surface); color:var(--ink); font-weight:650; cursor:pointer; transition:background .2s; }
+.calendar-action:hover { background:var(--sunk); }
+.primary { background:var(--accent); color:var(--on-accent); }
 .search-bar .locate { display:grid; place-items:center; width:46px; height:52px; padding:0; background:none; color:var(--ink-2); }
 .search-bar .locate[data-located],.search-bar .locate:hover { background:var(--soft); color:var(--label); }
 .pitch { margin:16px auto 0; }
@@ -630,6 +632,7 @@ button:disabled { opacity:.6; cursor:default; }
 .dialog-details .ticket-stub { margin:4px 0 0; }
 .dialog-details .dialog-actions { margin:4px 0 0; align-self:end; }
 .dialog-details .ticket-stub a,.dialog-details .save-action { width:100%; }
+.dialog-details > .calendar-action { grid-column:1/-1; min-height:44px; margin-top:8px; padding-block:8px; }
 .dialog-details .decision-status:empty { display:none; }
 .ticket-dialog .ticket h2 { padding-right:20px; }
 .solo-photo { align-self:start; height:540px; }
