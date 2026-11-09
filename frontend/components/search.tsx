@@ -61,10 +61,17 @@ export function Search() {
     elsewhere,
     error,
     retryable,
+    resumed,
     search,
     clear,
     showExample,
   } = useSearch();
+  // A reloaded Search puts its words back in the box once.
+  const [restoredText, setRestoredText] = useState(false);
+  if (resumed && !restoredText) {
+    setRestoredText(true);
+    setText(searched);
+  }
   const showPoster = phase === "searching" || hasPoster;
   // Home holds everything that isn't about a Search, so a Search replaces all of it.
   const home = phase === "idle";
@@ -279,6 +286,7 @@ export function Search() {
         {home && (
           <motion.div
             key="home-intro"
+            className="home-intro"
             initial={
               returningHome ? { opacity: 0, y: reduced ? 0 : 20 } : false
             }
@@ -378,6 +386,7 @@ export function Search() {
               candidates={candidates}
               recommendations={recommendations}
               searching={phase === "searching"}
+              resumed={resumed}
               hasPoster={hasPoster}
               status={status}
               step={step}

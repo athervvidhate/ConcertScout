@@ -48,11 +48,11 @@ The public entrypoint refuses to start with unencrypted or unauthenticated Redis
 
 Upstash holds the public cache, hashed limits, encrypted Spotify sessions and recorded spend. Keep its TLS connection private, select a region near the function and use the free tier or a deliberate budget cap. A stopped/reset database loses spend history; do not reset it as a way to clear a visitor limit. API spend guards use recorded usage, not a hard reservation against concurrent calls. Use the Anthropic and Typesafe accounts' spend controls as well.
 
-## Preview connections
+## No preview deployments
 
-Configure `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_TURNSTILE_SITE_KEY` explicitly for Preview as well as Production. The build refuses missing API URLs, invalid or local API bases and published bot-test keys when `VERCEL=1` outside Vercel development mode; local development and the isolated browser suite retain their local/test configuration. This validation runs during the build and adds no work to a Search.
+`frontend/vercel.json` lets Vercel deploy only `main`, which goes to Production. Other branches build nothing: the API's CORS allows only `https://concertscout.app`, so a preview could not Search anyway. GitHub CI runs the browser suite on every PR instead.
 
-For a preview using the existing public API, allow that exact frontend origin in the API's `CORS_ORIGINS` and the hostname on the matching Turnstile widget. Preserve existing allowed origins, real bot verification and spend/visitor limits. Rebuild after changing public frontend values and redeploy the existing API revision after changing its runtime allowlist. A green frontend build and local browser suite do not prove those deployed connections work: check the real preview's endpoint, CORS preflight and one complete Search through the real widget.
+The build refuses missing API URLs, invalid or local API bases and published bot-test keys when `VERCEL=1` outside Vercel development mode; local development and the isolated browser suite retain their local/test configuration. This validation runs during the build and adds no work to a Search.
 
 ## Accounts on Supabase
 
@@ -77,13 +77,13 @@ For a preview using the existing public API, allow that exact frontend origin in
 ## Deploying
 
 - API: run `vercel deploy --prod --yes -p concert-scout-api` from `api/`. `api/.vercelignore` keeps `.env`, tests and Snapshots out of the upload, because the CLI does not read `.gitignore`.
-- Frontend: `concert-scout-ai` is connected to Git, and Vercel blocks CLI uploads from it on a commit-author check. Push the branch, then run `vercel redeploy <its Git preview URL> --environment production`. The redeploy rebuilds with production settings.
+- Frontend: `concert-scout-ai` is connected to Git, and Vercel blocks CLI uploads from it on a commit-author check. Merging into `main` deploys Production.
 
 ## Inventory and current evidence — November 6, 2026
 
 Read-only `vercel project ls` and `project inspect` under `atherv-vs-projects` found:
 
-- `concert-scout-ai`: frontend root `frontend`, Node 22, existing production alias `concert-scout-ai-git-main-atherv-vs-projects.vercel.app`. It is also building current PR previews; build success is not a full public Search check.
+- `concert-scout-ai`: frontend root `frontend`, Node 22, existing production alias `concert-scout-ai-git-main-atherv-vs-projects.vercel.app`. Since November 9 it deploys only `main`.
 - `v0-concert-scout-frontend`: project exists, no production deployments listed; it still needs reviewed deletion and verification of historical URLs.
 - `concert-scout-coldstart`: not found in this scope. No project was deleted.
 - `portfolio`: serves `https://atherv.com`; unrelated and must remain unchanged.

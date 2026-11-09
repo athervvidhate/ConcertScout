@@ -41,6 +41,7 @@ type Props = {
   recommendations: Recommendation[];
   hasPoster: boolean;
   searching: boolean;
+  resumed?: boolean;
   status: string | null;
   step?: string | null;
   onWiderDates?: () => void;
@@ -52,6 +53,7 @@ export function Poster({
   recommendations,
   hasPoster,
   searching,
+  resumed = false,
   status,
   step,
   onWiderDates,
@@ -60,7 +62,9 @@ export function Poster({
 }: Props) {
   const reduced = useReducedMotion();
   const [cached] = useState(!searching && hasPoster);
-  const [stage, setStage] = useState<"working" | "picks" | "poster">("working");
+  const [stage, setStage] = useState<"working" | "picks" | "poster">(
+    resumed ? "poster" : "working",
+  );
   const [view, setView] = useState<View>(() => {
     try {
       return localStorage.getItem(VIEW_KEY) === "list" ? "list" : "grid";
@@ -72,7 +76,8 @@ export function Poster({
   const root = useRef<HTMLElement>(null);
   const source = useRef<HTMLElement>(null);
   const frames = useRef(new Map<string, NameFrame>());
-  const revealed = useRef(false);
+  // A reloaded Poster has been seen, so it rises like a view change instead of replaying the narrowing.
+  const revealed = useRef(resumed);
   const [selected, setSelected] = useState(0);
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -104,7 +109,7 @@ export function Poster({
   }, [notice, pending.size]);
 
   useEffect(() => {
-    if (!hasPoster) return;
+    if (!hasPoster || resumed) return;
     const scope = new Choreography();
     void (async () => {
       // Live Searches have already shown candidates; cached Posters replay their narrowing.
@@ -118,7 +123,7 @@ export function Poster({
       setStage("poster");
     })();
     return () => scope.cancel();
-  }, [hasPoster, candidates, recommendations.length, reduced, cached]); // `searching` finishing must not restart the presentation.
+  }, [hasPoster, candidates, recommendations.length, reduced, cached, resumed]); // `searching` finishing must not restart the presentation.
 
   useLayoutEffect(() => {
     if (stage !== "poster" || !results || results.dataset.view !== view) return;

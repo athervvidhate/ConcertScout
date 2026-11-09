@@ -40,6 +40,7 @@ main{position:relative;padding:0 var(--gutter)}
 .send{flex:none;display:inline-flex;align-items:center;justify-content:center;gap:0;height:56px;min-width:56px;padding:0 17px;border:0;border-radius:16px;background:var(--ink);color:var(--surface);transition:background .3s var(--ease),gap .45s var(--spring),padding .45s var(--spring),transform .15s}
 .send svg{width:22px;height:22px;transition:transform .3s var(--ease)}
 .send:hover svg{transform:translateX(3px)}.send:active{transform:scale(.96)}
+html[data-search-kept] :is(.headline,.home-intro,.home-guide){display:none}
 .pitch{max-width:560px;text-align:center;font-size:15.5px;line-height:1.5;color:var(--ink-2)}
 
 /* Compact composer once a Search runs */
