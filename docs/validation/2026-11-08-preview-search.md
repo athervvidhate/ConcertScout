@@ -18,11 +18,10 @@ The shared T3 browser stopped at Vercel login. The documented authenticated Verc
 
 The configuration regressions initially failed: 11 invalid hosted configurations were accepted, and a subsequent local-Vercel regression caught an overly broad guard before its development exemption was added. The final suite covers 13 cases. A real hosted-mode build using the proposed public API and widget settings succeeded. Frontend lint, types and all 76 data/configuration tests passed. The previous application's 96 browser journeys and five checks passed on `a596a1c`; those results do not prove deployed preview connectivity. No runtime UI or API source changed in this repair.
 
-## Exact remote changes awaiting approval
+## Remote changes applied
 
-1. On `concert-scout-ai`, for the `fluid-search-redesign` Preview branch, set `NEXT_PUBLIC_API_URL=https://api.concertscout.app` and set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` to the existing production widget's **public** key. Rebuild this preview after the values are set.
-2. On the matching Turnstile widget, verify that `concert-scout-ai-git-fluid-search-redesign-atherv-vs-projects.vercel.app` is an allowed hostname; add that exact hostname if needed. Retain real verification.
-3. On `concert-scout-api`, append `https://concert-scout-ai-git-fluid-search-redesign-atherv-vs-projects.vercel.app` to the existing exact `CORS_ORIGINS` list, preserving all existing origins. Redeploy the currently deployed API revision to apply the runtime setting, without promoting this branch's API source.
-4. Verify the preview's real API target, allowed preflight, matching real widget, progressive Search-to-Poster and source Ticket links. Verify that the production origin remains allowed and an unrelated origin is still refused. Real hosted Search acceptance remains pending until these changes are approved and applied.
+With the owner's approval, the `fluid-search-redesign` Preview branch has `NEXT_PUBLIC_API_URL=https://api.concertscout.app` and the production widget's public key. The Turnstile widget allows the preview hostname. The API's `CORS_ORIGINS` adds the exact preview origin, and the deployed API revision was redeployed without promoting this branch's API source.
 
-The [handoff](../development/ui-redesign-handoff.md) explicitly requires the owner's go-ahead for deployment and environment changes. No remote configuration, DNS or deployment change has been applied as part of this incident diagnosis. Auth/account/Spotify rollout remains separate from this Search connection repair.
+The rebuilt preview bundle targets `https://api.concertscout.app` with the real widget key. Preflight `/search` returns 200 for the preview and production origins and 400 for an unrelated origin.
+
+The production API still runs the older source. It has no `/examples` route (404), so the preview's home strip and cached example Posters stay empty until this branch's API is deployed. Typed Searches use the unchanged Search contract. Only the branch alias is allowed: a per-deployment `concert-scout-*.vercel.app` URL fails CORS and the widget's hostname check.
