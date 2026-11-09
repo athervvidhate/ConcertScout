@@ -11,6 +11,7 @@ import {
   streamSearch,
   UNREACHABLE,
 } from "@/lib/search";
+import { forgetSearch, keepSearch, readSearch } from "@/lib/search-session";
 
 export type SearchState = {
   phase: "idle" | "searching" | "finished";
@@ -23,9 +24,13 @@ export type SearchState = {
   candidates: Candidates | null;
   recommendations: Recommendation[];
   hasPoster: boolean;
+  // Names this Poster to the server, which alone can turn it into a Shared Poster.
+  searchId: string | null;
   elsewhere: Elsewhere | null;
   error: string | null;
   retryable: boolean;
+  // Restored after a reload, so the Poster shows at once instead of replaying its reveal.
+  resumed: boolean;
 };
 
 const IDLE: SearchState = {
@@ -38,18 +43,49 @@ const IDLE: SearchState = {
   candidates: null,
   recommendations: [],
   hasPoster: false,
+  searchId: null,
   elsewhere: null,
   error: null,
   retryable: true,
+  resumed: false,
 };
 
 const DROPPED = "The connection dropped before the Search finished.";
+const RELOADED = "The page reloaded before the Search finished.";
+
+// A stream cannot continue across a reload, so an unfinished Search becomes a retry.
+function resume(kept: SearchState): SearchState {
+  if (kept.phase !== "searching") return { ...kept, resumed: true };
+  return {
+    ...kept,
+    phase: "finished",
+    status: null,
+    step: null,
+    error: kept.hasPoster ? null : RELOADED,
+    retryable: true,
+    resumed: true,
+  };
+}
 
 export function useSearch() {
   const [state, setState] = useState(IDLE);
   const current = useRef<AbortController | null>(null);
 
   useEffect(() => () => current.current?.abort(), []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const kept = readSearch<SearchState>();
+      if (kept?.run) setState(resume(kept));
+      else forgetSearch();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Only a Search or an example counts runs, so the first idle render never erases a kept one.
+  useEffect(() => {
+    if (state.run) keepSearch(state);
+  }, [state]);
 
   const search = useCallback(
     async (
@@ -95,6 +131,8 @@ export function useSearch() {
               hasPoster: true,
               recommendations: data.recommendations,
             }));
+          } else if (event === "shareable") {
+            setState((state) => ({ ...state, searchId: data.search_id }));
           } else if (event === "elsewhere") {
             setState((state) => ({ ...state, elsewhere: data }));
           } else if (event === "done") {
@@ -128,6 +166,7 @@ export function useSearch() {
 
   const clear = useCallback(() => {
     current.current?.abort();
+    forgetSearch();
     setState(IDLE);
   }, []);
 

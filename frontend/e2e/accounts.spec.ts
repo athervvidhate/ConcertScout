@@ -2,6 +2,10 @@ import { execFileSync } from "node:child_process";
 
 import { type Browser, expect, type Page, test } from "@playwright/test";
 
+// Accounts are behavior, not layout: one width, and reduced motion skips the Poster's holds.
+test.use({ reducedMotion: "reduce" });
+test.skip(({ isMobile }) => isMobile, "Width does not change account behavior");
+
 // The local Supabase stack from `make supabase`. Its keys come from the running stack.
 const SUPABASE = "http://127.0.0.1:54321";
 const status = execFileSync(

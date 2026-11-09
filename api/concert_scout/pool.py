@@ -1,6 +1,7 @@
 import asyncio
 import calendar
 import datetime as dt
+import logging
 from collections.abc import Sequence
 
 import httpx
@@ -9,9 +10,11 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from concert_scout import cache, catalog, clock
-from concert_scout.models import Concert, Place
-from concert_scout.names import normalize
-from concert_scout.sources import ticketmaster
+from concert_scout.models import Artist, Concert, Place
+from concert_scout.names import normalize, title_names
+from concert_scout.sources import musicbrainz, ticketmaster
+
+logger = logging.getLogger(__name__)
 
 CACHE_TTL = dt.timedelta(hours=6)
 ELSEWHERE_SIZE = 12
@@ -62,6 +65,7 @@ def date_window(
 
 async def find_concerts(
     client: httpx.AsyncClient,
+    names: httpx.AsyncClient,
     redis: Redis,
     place: Place | None,
     artists: Sequence[str],
@@ -74,6 +78,7 @@ async def find_concerts(
 
     Chunks and lookups stay whole in the cache, so any date window can share them. `on_found`
     sees each page's Concerts in the window as they arrive, so later steps can start early.
+    `names` is the MusicBrainz client that confirms Artists read from titles.
     """
     first, last = date_window(start, end, now.date())
     state = (
@@ -111,6 +116,7 @@ async def find_concerts(
     from_seeds = [c for group in seeds for c in group if _ahead(c, start, seed_last, now)]
     from_pool = [c for group in chunks for c in group if _ahead(c, start, last, now)]
     primary = list({c.id: c for c in [*from_seeds, *from_pool]}.values())
+    primary = await _read_titles(names, redis, primary)
     # The JamBase catalog is local, so this never waits on JamBase.
     extra = await catalog.concerts_near(redis, place, start, end, now) if place else []
     merged = merge_sources(primary, extra)
@@ -237,6 +243,34 @@ async def _chunk(
     )
     await cache.write(redis, key, CachedConcerts(concerts=concerts), CACHE_TTL)
     return concerts
+
+
+async def _read_titles(
+    names: httpx.AsyncClient, redis: Redis, concerts: list[Concert]
+) -> list[Concert]:
+    """Give a Concert with no Lineup the Artists its title bills that MusicBrainz confirms.
+
+    A name it cannot confirm stays out, so a Concert can still have no Lineup. It then keeps its
+    title as the Concert's name only. MusicBrainz is asked for a bounded number of new names,
+    soonest Concert first, and each answer is cached by name, so a repeated title costs no call
+    and the names left over are asked on a later Search.
+    """
+    titled = {c.id: title_names(c.name) for c in concerts if not c.artists}
+    wanted = [name for billed in titled.values() for name in billed]
+    if not wanted:
+        return concerts
+    try:
+        confirmed = await musicbrainz.confirm(names, redis, wanted)
+    except musicbrainz.MusicBrainzError as exc:
+        logger.warning("Reading titles failed: %s", exc)
+        return concerts
+
+    def lineup(concert: Concert) -> Concert:
+        billed = {normalize(n): n for n in titled.get(concert.id, []) if normalize(n) in confirmed}
+        artists = [Artist(name=name, mbid=confirmed[key]) for key, name in billed.items()]
+        return concert.model_copy(update={"artists": artists}) if artists else concert
+
+    return [lineup(concert) for concert in concerts]
 
 
 async def _artist(

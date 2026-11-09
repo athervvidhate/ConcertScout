@@ -1,5 +1,6 @@
 """Step 7: build the Poster. Every fact comes from the source record, never the model."""
 
+import datetime as dt
 import logging
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -19,8 +20,20 @@ NOTABLE_REASON = "Coming up nearby"
 MAX_STYLES = 3
 
 
+def upcoming(recommendations: Sequence[Recommendation], today: dt.date) -> list[Recommendation]:
+    """Drop Concerts that have passed, from a stored Poster that is read later."""
+    kept: list[Recommendation] = []
+    for pick in recommendations:
+        if pick.concert.date and pick.concert.date < today:
+            continue
+        also = [c for c in pick.also if not c.date or c.date >= today]
+        kept.append(pick.model_copy(update={"also": also}))
+    return kept
+
+
 def _headliner(concert: Concert) -> str:
-    return normalize(concert.artists[0].name if concert.artists else concert.name)
+    """The key that stacks one Artist's dates. A Concert with no Lineup stands alone."""
+    return normalize(concert.artists[0].name) if concert.artists else f"concert:{concert.id}"
 
 
 def _stacked(

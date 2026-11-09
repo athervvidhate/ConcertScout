@@ -134,11 +134,11 @@ class Status(BaseModel):
 
 
 class Interpreted(BaseModel):
-    place: str | None
-    region: str | None
-    radius_miles: int | None
-    start: dt.date | None
-    end: dt.date | None
+    place: str | None = None
+    region: str | None = None
+    radius_miles: int | None = None
+    start: dt.date | None = None
+    end: dt.date | None = None
     artists: list[str]
     genres: list[str]
 

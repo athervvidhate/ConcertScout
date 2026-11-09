@@ -6,12 +6,12 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Literal
 
 import httpx
-from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from pydantic_ai.models import Model
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
@@ -24,12 +24,20 @@ from concert_scout import (
     interpreter,
     limits,
     security,
+    share,
     spotify,
     sync,
     warm,
 )
 from concert_scout.config import Settings
-from concert_scout.models import ArtistProfiles, ImportedTaste, Place, SearchError
+from concert_scout.models import (
+    ArtistProfiles,
+    ImportedTaste,
+    Interpreted,
+    Place,
+    Poster,
+    SearchError,
+)
 from concert_scout.pipeline import (
     ASK_FOR_A_SEARCH,
     Services,
@@ -80,6 +88,18 @@ class SearchRequest(BaseModel):
     near: Coordinates | None = None
     # The browser's zone, so "this weekend" and "today" mean the visitor's own days.
     time_zone: Annotated[str, StringConstraints(max_length=64)]
+
+
+class ShareRequest(BaseModel):
+    """Only the ID of a Search the server answered. A Poster in the body is refused."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    search_id: Annotated[str, StringConstraints(pattern=share.SEARCH_ID)]
+
+
+class Shared(BaseModel):
+    id: str
 
 
 def _catalog_client(
@@ -236,6 +256,9 @@ def create_app(
     async def invalid_request(request: Request, _: RequestValidationError) -> JSONResponse:
         if request.url.path == "/search":
             return _failure(422, SearchError(code="invalid_search", message=ASK_FOR_A_SEARCH))
+        if request.url.path.startswith("/share"):
+            message = "That is not a Search you can share."
+            return _failure(422, SearchError(code="invalid_share", message=message))
         if request.url.path == "/artist":
             return _failure(422, SearchError(code="invalid_artist", message="Choose an Artist."))
         if request.url.path.startswith(accounts.PREFIX):
@@ -260,7 +283,13 @@ def create_app(
         return _failure(exc.status, SearchError(code=exc.code, message=exc.message))
 
     app.include_router(
-        spotify.router(settings, services.redis, services.ticketmaster, services.geocoder)
+        spotify.router(
+            settings,
+            services.redis,
+            services.ticketmaster,
+            services.musicbrainz,
+            services.geocoder,
+        )
     )
     app.include_router(feedback.router(settings, services.redis, transport))
     if accounts_client:
@@ -320,11 +349,48 @@ def create_app(
         await limit_visitor(request, "taste", limits.TASTE_PER_HOUR)
         return ImportedTaste(artists=await _top_artists(source, body.username, services))
 
+    @app.post("/share")
+    async def share_poster(request: Request, body: ShareRequest) -> Shared:
+        await limit_visitor(request, "share", limits.SHARES_PER_HOUR)
+        try:
+            return Shared(id=await share.promote(services.redis, body.search_id))
+        except share.NotFound:
+            message = "That Search is too old to share. Run it again."
+            raise Refused(404, "search_expired", message) from None
+
+    @app.get("/share/{share_id}", response_model=share.Made, response_model_exclude_none=True)
+    async def shared_poster(
+        share_id: Annotated[str, Path(pattern=share.SHARE_ID)],
+    ) -> share.Made:
+        try:
+            return await share.read(services.redis, share_id, dt.datetime.now(dt.UTC).date())
+        except share.NotFound:
+            message = "That Poster is not here. Its link may be wrong or older than 90 days."
+            raise Refused(404, "share_not_found", message) from None
+
     @app.post("/search", response_class=EventSourceResponse, dependencies=[Depends(guard_search)])
     async def search(search: SearchRequest) -> AsyncIterator[ServerSentEvent]:
         here = search.near
         near = Place(name="Near you", lat=here.lat, lon=here.lon) if here else None
+        reading: Interpreted | None = None
         async for event in run_search(search.text, search.taste, near, search.time_zone, services):
             yield event
+            if event.event == "interpreted":
+                reading = Interpreted.model_validate(event.data)
+            elif event.event == "poster":
+                poster = Poster.model_validate(event.data)
+                if poster.recommendations:
+                    made = share.Made(
+                        made=dt.datetime.now(dt.UTC).date(),
+                        interpreted=reading,
+                        recommendations=poster.recommendations,
+                    )
+                    try:
+                        search_id = await share.keep(services.redis, made)
+                    except RedisError as exc:
+                        # Without storage the Poster still shows. It just cannot be shared.
+                        logger.warning("Search not kept for sharing: %s", type(exc).__name__)
+                    else:
+                        yield ServerSentEvent(event="shareable", data={"search_id": search_id})
 
     return app

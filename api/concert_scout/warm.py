@@ -64,6 +64,7 @@ async def _warm_place(services: Services, name: str, now: dt.datetime) -> Warmed
             return Warmed(name, 0, 0, time.perf_counter() - started, "not found")
         concerts = await pool.find_concerts(
             services.ticketmaster,
+            services.musicbrainz,
             services.redis,
             place,
             [],

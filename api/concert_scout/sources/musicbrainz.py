@@ -1,5 +1,6 @@
 import datetime as dt
 import logging
+from collections.abc import Sequence
 from typing import Any
 
 import httpx
@@ -102,6 +103,36 @@ async def identify(
         raise MusicBrainzError(type(exc).__name__) from None
     except (KeyError, TypeError, ValueError) as exc:
         raise MusicBrainzError(f"unreadable response: {type(exc).__name__}") from None
+
+
+# A Search asks for at most this many batches of new title names, because MusicBrainz answers one
+# request a second and the Search waits. The names left over are asked on a later Search.
+TITLE_BATCHES = 2
+
+
+async def confirm(client: httpx.AsyncClient, redis: Redis, names: Sequence[str]) -> dict[str, str]:
+    """MusicBrainz IDs, by normalized name, for the names it holds by exact name (see `identify`).
+
+    A name it does not hold, or cannot tell from a namesake, is left out. Each answer is kept for
+    a week, so a name asked for before costs no call.
+    """
+    spellings: dict[str, str] = {}
+    for name in names:
+        spellings.setdefault(normalize(name), name)
+    keys = {key: f"title:{key}" for key in spellings}
+    cached = await cache.read_many(redis, list(keys.values()), SeedArtist)
+    mbids = {key: cached[stored].mbid for key, stored in keys.items() if stored in cached}
+    asked = [name for key, name in spellings.items() if key not in mbids]
+    for start in range(0, min(len(asked), TITLE_BATCHES * BATCH_SIZE), BATCH_SIZE):
+        settled = await identify(client, redis, asked[start : start + BATCH_SIZE])
+        answers = {normalize(name): mbid for name, mbid in settled.items()}
+        stored = {
+            f"title:{key}": SeedArtist(mbid=mbid, name=spellings[key])
+            for key, mbid in answers.items()
+        }
+        await cache.write_many(redis, stored, CACHE_TTL)
+        mbids |= answers
+    return {key: mbid for key, mbid in mbids.items() if mbid}
 
 
 def parse_batch(

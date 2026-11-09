@@ -16,6 +16,7 @@ import { AnimatedCount } from "@/components/animated-count";
 import { nameOf, Ticket } from "@/components/ticket";
 import { WorkingSearch } from "@/components/working-search";
 import { SaveButton } from "@/components/save-button";
+import { ShareButton } from "@/components/share-button";
 import { dismissArtistHint, useArtistHint } from "@/lib/artist-hint";
 import { Choreography, EXPO_OUT_CURVE } from "@/lib/choreography";
 import {
@@ -46,6 +47,12 @@ type Props = {
   onWiderDates?: () => void;
   onAnywhere?: () => void;
   onChange?: () => void;
+  /** Where a link to this Poster, or to one Ticket on it, comes from. Without it, no Share. */
+  shareLink?: (concertId?: string) => Promise<string>;
+  /** Shows the finished Poster at once, as a reloaded Search and a Shared Poster do. */
+  instant?: boolean;
+  /** The Ticket to open on arrival. */
+  openConcert?: string;
 };
 export function Poster({
   candidates,
@@ -57,10 +64,15 @@ export function Poster({
   onWiderDates,
   onAnywhere,
   onChange,
+  shareLink,
+  instant = false,
+  openConcert,
 }: Props) {
   const reduced = useReducedMotion();
   const [cached] = useState(!searching && hasPoster);
-  const [stage, setStage] = useState<"working" | "picks" | "poster">("working");
+  const [stage, setStage] = useState<"working" | "picks" | "poster">(
+    instant ? "poster" : "working",
+  );
   const [view, setView] = useState<View>(() => {
     try {
       return localStorage.getItem(VIEW_KEY) === "list" ? "list" : "grid";
@@ -72,9 +84,11 @@ export function Poster({
   const root = useRef<HTMLElement>(null);
   const source = useRef<HTMLElement>(null);
   const frames = useRef(new Map<string, NameFrame>());
-  const revealed = useRef(false);
-  const [selected, setSelected] = useState(0);
-  const [open, setOpen] = useState(false);
+  // A reloaded or shared Poster has been seen, so it rises like a view change instead of replaying the narrowing.
+  const revealed = useRef(instant);
+  const arrival = recommendations.findIndex((r) => r.concert.id === openConcert);
+  const [selected, setSelected] = useState(Math.max(arrival, 0));
+  const [open, setOpen] = useState(arrival >= 0);
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState<Set<string>>(() => new Set());
@@ -104,7 +118,7 @@ export function Poster({
   }, [notice, pending.size]);
 
   useEffect(() => {
-    if (!hasPoster) return;
+    if (!hasPoster || instant) return;
     const scope = new Choreography();
     void (async () => {
       // Live Searches have already shown candidates; cached Posters replay their narrowing.
@@ -118,7 +132,7 @@ export function Poster({
       setStage("poster");
     })();
     return () => scope.cancel();
-  }, [hasPoster, candidates, recommendations.length, reduced, cached]); // `searching` finishing must not restart the presentation.
+  }, [hasPoster, candidates, recommendations.length, reduced, cached, instant]); // `searching` finishing must not restart the presentation.
 
   useLayoutEffect(() => {
     if (stage !== "poster" || !results || results.dataset.view !== view) return;
@@ -262,6 +276,14 @@ export function Poster({
                     </p>
                   )}
                 </div>
+                <div className="poster-tools">
+                {shareLink && (
+                  <ShareButton
+                    title="A Poster on Concert Scout"
+                    label="Share Poster"
+                    link={() => shareLink()}
+                  />
+                )}
                 <div
                   className="views"
                   role="group"
@@ -306,6 +328,7 @@ export function Poster({
                       <Icon aria-hidden />
                     </button>
                   ))}
+                </div>
                 </div>
               </motion.header>
               <Dialog.Root
@@ -365,6 +388,12 @@ export function Poster({
                                   pending={pending.has(concert.id)}
                                   onToggle={() => void toggleSave(r)}
                                 />
+                                {shareLink && (
+                                  <ShareButton
+                                    title={`${name} on Concert Scout`}
+                                    link={() => shareLink(concert.id)}
+                                  />
+                                )}
                                 <Dialog.Trigger
                                   className="quiet"
                                   aria-label={`Open Ticket for ${name}`}
@@ -442,6 +471,13 @@ export function Poster({
                               pending={pending.has(current.concert.id)}
                               onToggle={() => void toggleSave()}
                             />
+                            {shareLink && (
+                              <ShareButton
+                                iconOnly
+                                title={`${nameOf(current)} on Concert Scout`}
+                                link={() => shareLink(current.concert.id)}
+                              />
+                            )}
                           </div>
                           <p className="decision-status" role="status">
                             {notice}

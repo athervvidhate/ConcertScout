@@ -25,6 +25,7 @@ The browser calls FastAPI directly ([ADR 0001](../adr/0001-separate-python-agent
 |---|---|
 | CORS | An allowlist of exact origins, no wildcard. `/search` also refuses other origins on the server |
 | Rate limit | Per client IP in Redis, hashed, read from the header named by `CLIENT_IP_HEADER`. Uvicorn runs with `--no-proxy-headers`, because otherwise it trusts a forged `X-Forwarded-For` from a local peer before the app sees it |
+| Sharing | `POST /share` takes only a Search ID the server issued, and refuses any other field. The Poster it promotes is the one the server kept, so a browser cannot write one. Each client gets 30 shares an hour, counted like other public lookups |
 | Bot check | Cloudflare Turnstile token on `/search`, with test keys locally |
 | Input | Search text capped at 500 characters, Taste lists at 100 names |
 | Secrets | Server only. The frontend receives none. The Supabase publishable key is public by design |
