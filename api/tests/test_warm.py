@@ -7,7 +7,7 @@ import httpx
 import pytest
 from fakeredis import FakeAsyncRedis
 
-from concert_scout import pool, warm
+from concert_scout import pool, sync, warm
 from concert_scout.app import create_app, make_services
 from concert_scout.sources import geocoder, listenbrainz, ticketmaster
 from tests.contracts import (
@@ -87,9 +87,24 @@ def api_for(**settings: Any) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test")
 
 
-async def test_without_a_secret_there_is_no_warming_route() -> None:
+@pytest.mark.parametrize("path", ["/warm", "/sync"])
+async def test_without_a_secret_there_are_no_scheduler_routes(path: str) -> None:
     async with api_for() as api:
-        assert (await api.get("/warm")).status_code == 404
+        assert (await api.get(path)).status_code == 404
+
+
+async def test_only_the_scheduler_secret_starts_a_sync(monkeypatch: pytest.MonkeyPatch) -> None:
+    ran = AsyncMock(return_value=[])
+    monkeypatch.setattr(sync, "run", ran)
+    async with api_for(cron_secret="right-secret") as api:
+        for headers in ({}, {"Authorization": "Bearer wrong"}):
+            refused = await api.get("/sync", headers=headers)
+            assert refused.status_code == 401
+            assert refused.json()["code"] == "not_scheduler"
+        assert ran.await_count == 0
+        right = await api.get("/sync", headers={"Authorization": "Bearer right-secret"})
+    assert right.json() == []
+    ran.assert_awaited_once()
 
 
 async def test_only_the_scheduler_secret_starts_warming(monkeypatch: pytest.MonkeyPatch) -> None:

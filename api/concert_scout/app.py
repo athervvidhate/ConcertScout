@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Literal
 
 import httpx
-from fastapi import Depends, FastAPI, Header, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -277,15 +277,17 @@ def create_app(
         return await home.read(services.redis, dt.datetime.now(dt.UTC).date())
 
     if settings.cron_secret:
-        expected = f"Bearer {settings.cron_secret.get_secret_value()}"
+        expected = f"Bearer {settings.cron_secret.get_secret_value()}".encode()
+
+        async def scheduler_only(authorization: Annotated[str, Header()] = "") -> None:
+            if not hmac.compare_digest(authorization.encode(), expected):
+                raise Refused(401, "not_scheduler", "Only the scheduler can run this job.")
+
+        scheduled = APIRouter(dependencies=[Depends(scheduler_only)], include_in_schema=False)
 
         # Only this authenticated job builds the public example Posters.
-        @app.get("/warm", include_in_schema=False)
-        async def warm_cache(
-            authorization: Annotated[str, Header()] = "",
-        ) -> list[warm.Warmed]:
-            if not hmac.compare_digest(authorization.encode(), expected.encode()):
-                raise Refused(401, "not_scheduler", "Only the scheduler can warm the cache.")
+        @scheduled.get("/warm")
+        async def warm_cache() -> list[warm.Warmed]:
             if accounts_client and settings.supabase_secret_key:
                 try:
                     await supabase.keep_awake(accounts_client, settings.supabase_secret_key)
@@ -296,14 +298,12 @@ def create_app(
                 await home.refresh(services)
             return warmed
 
-        # Vercel's scheduler, once a day: the JamBase catalog, then MusicBrainz IDs.
-        @app.get("/sync", include_in_schema=False)
-        async def sync_catalog(
-            authorization: Annotated[str, Header()] = "",
-        ) -> list[sync.Step]:
-            if not hmac.compare_digest(authorization.encode(), expected.encode()):
-                raise Refused(401, "not_scheduler", "Only the scheduler can sync the catalog.")
+        # Once a day: the JamBase Catalog, then MusicBrainz IDs.
+        @scheduled.get("/sync")
+        async def sync_catalog() -> list[sync.Step]:
             return await sync.run(services, dt.datetime.now(dt.UTC))
+
+        app.include_router(scheduled)
 
     @app.get("/artist", response_model=ArtistProfiles, response_model_exclude_none=True)
     async def artist(
