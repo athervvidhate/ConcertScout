@@ -60,16 +60,6 @@ def date_window(
     return first, end or first + DEFAULT_WINDOW
 
 
-def month_chunks(first: dt.date, last: dt.date) -> list[dt.date]:
-    """The first day of each calendar month the window touches."""
-    months: list[dt.date] = []
-    month = first.replace(day=1)
-    while month <= last:
-        months.append(month)
-        month = (month + dt.timedelta(days=31)).replace(day=1)
-    return months
-
-
 async def find_concerts(
     client: httpx.AsyncClient,
     redis: Redis,
@@ -111,7 +101,7 @@ async def find_concerts(
     chunks: list[list[Concert]] = []
     if state or point:
         earliest = _earliest(first, now.date())
-        months = month_chunks(earliest, last)
+        months = clock.months(earliest, last)
         chunks = await asyncio.gather(
             *(
                 _chunk(client, redis, point, m, earliest, state, radius, found_within(last))

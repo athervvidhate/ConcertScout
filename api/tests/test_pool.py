@@ -8,7 +8,7 @@ import httpx
 import pytest
 from fakeredis import FakeAsyncRedis
 
-from concert_scout import pool
+from concert_scout import clock, pool
 from concert_scout.models import Concert, Place
 from concert_scout.sources import ticketmaster
 from tests.contracts import CONCERTS, DAY, NOW, PLACE, forbidden_http
@@ -101,7 +101,7 @@ async def test_states_and_city_circles_never_share_cache_or_filters(
 
 def test_calendar_chunks_cover_each_day_across_a_year_boundary() -> None:
     first, last = dt.date(2026, 12, 15), dt.date(2027, 2, 10)
-    months = pool.month_chunks(first, last)
+    months = clock.months(first, last)
     assert len(months) == len(set(months))
     day = first
     while day <= last:

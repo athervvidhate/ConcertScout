@@ -56,15 +56,6 @@ def _state_key(state: str) -> str:
     return f"jambase:state:{state}"
 
 
-def months(first: dt.date, last: dt.date) -> list[dt.date]:
-    out: list[dt.date] = []
-    month = first.replace(day=1)
-    while month <= last:
-        out.append(month)
-        month = (month + dt.timedelta(days=31)).replace(day=1)
-    return out
-
-
 def _expiry(month: dt.date) -> dt.datetime:
     following = (month + dt.timedelta(days=31)).replace(day=1)
     # A few days past the month, so a venue further west can still be on its last day.
@@ -232,7 +223,7 @@ async def busiest_cells(redis: Redis, first: dt.date, last: dt.date, count: int)
     """The cells holding the most Concerts in the window: where the music actually is."""
     members = await redis.smembers(CELLS)
     cells = sorted(_texts(members))
-    spans = months(first, last)
+    spans = clock.months(first, last)
     pipe = redis.pipeline(transaction=False)
     for cell in cells:
         for month in spans:
@@ -247,7 +238,7 @@ async def busiest_cells(redis: Redis, first: dt.date, last: dt.date, count: int)
 async def listings_in(
     redis: Redis, cells: Iterable[str], first: dt.date, last: dt.date
 ) -> list[Listing]:
-    return await _read(redis, (_month_key(c, m) for c in cells for m in months(first, last)))
+    return await _read(redis, (_month_key(c, m) for c in cells for m in clock.months(first, last)))
 
 
 async def prune(redis: Redis, today: dt.date) -> int:
