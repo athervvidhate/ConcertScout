@@ -5,6 +5,5 @@ frontend/.env*
 !frontend/.env.example
 frontend/.next
 frontend/.next-e2e
-frontend/e2e
 frontend/test-results
 frontend/node_modules
