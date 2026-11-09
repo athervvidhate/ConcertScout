@@ -2,8 +2,10 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: false,
-  workers: 1,
+  // Every test owns its browser context, Supabase account and Search text, so tests run in parallel.
+  // Four matches a GitHub runner's CPUs and keeps the timing checks stable on both.
+  fullyParallel: true,
+  workers: 4,
   forbidOnly: !!process.env.CI,
   retries: 0,
   timeout: 40_000,

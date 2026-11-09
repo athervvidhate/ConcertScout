@@ -1,5 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
+// These journeys check behavior, not presentation: reduced motion skips the Poster's holds,
+// and only the @phone layout checks repeat at phone width. The motion and layout specs cover the rest.
+test.use({ reducedMotion: "reduce" });
+test.beforeEach(({ isMobile }, info) => {
+  test.skip(isMobile && !info.tags.includes("@phone"), "Width does not change this behavior");
+});
+
 
 async function locate(page: Page) {
   await page.locator(".search-bar").getByRole("button", {name: "Use my location"}).click();
@@ -79,6 +86,7 @@ test("history stays local, and only imported Artist names enter a Search", async
 });
 
 test("examples rotate without changing input, and reduced motion stays static", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   const input = page.getByRole("textbox", { name: "Search" });
   const first = await input.getAttribute("placeholder");
@@ -153,7 +161,7 @@ async function spotifyCallback(context: import("@playwright/test").BrowserContex
   return callback.headers().location;
 }
 
-test("Spotify has its own shelf, never enters Search Taste, and disconnect removes access", async ({ page, context }, testInfo) => {
+test("Spotify has its own shelf, never enters Search Taste, and disconnect removes access", {tag: "@phone"}, async ({ page, context }, testInfo) => {
   const target = await spotifyCallback(context, "account-code");
   await page.goto(target);
   const cookie = (await context.cookies()).find(c => c.name === "concert_scout_spotify")!;
@@ -193,7 +201,7 @@ test("Make it yours leads to Connect Spotify inside Your Taste", async ({ page }
   await expect(page.getByRole("dialog", {name: "Your Taste"}).getByRole("link", {name: "Connect Spotify"})).toBeVisible();
 });
 
-test("a connected home page shows the shelf near a shared location", async ({ page, context }) => {
+test("a connected home page shows the shelf near a shared location", {tag: "@phone"}, async ({ page, context }) => {
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({latitude: 37.77, longitude: -122.42});
   await page.goto(await spotifyCallback(context, "account-code"));
@@ -209,7 +217,7 @@ test("a connected home page shows the shelf near a shared location", async ({ pa
   await noOverflow(page);
 });
 
-test("the shelf opens with 5 Concerts and shows more on request", async ({ page, context }) => {
+test("the shelf opens with 5 Concerts and shows more on request", {tag: "@phone"}, async ({ page, context }) => {
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({latitude: 37.77, longitude: -122.42});
   await page.route("**/auth/spotify/shelf?*", async route => {
@@ -246,7 +254,7 @@ test("a visitor can report a Search with its results", async ({ page }) => {
   await expect(report.getByRole("status")).toContainText("We got your report");
 });
 
-test("Spotify leads Your Taste and the imports wait behind a toggle", async ({ page }) => {
+test("Spotify leads Your Taste and the imports wait behind a toggle", {tag: "@phone"}, async ({ page }) => {
   await page.goto("/");
   await openMenuItem(page, /^Your Taste/);
   await expect(page.getByRole("link", {name: "Connect Spotify"})).toBeVisible();
@@ -266,7 +274,7 @@ test("Spotify access denial explains the invite list and keeps no session", asyn
 
 
 
-test("the header keeps the brand and Saved Concerts alongside the menu", async ({page}) => {
+test("the header keeps the brand and Saved Concerts alongside the menu", {tag: "@phone"}, async ({page}) => {
   await page.goto("/");
   await expect(page.getByRole("heading", {level:1})).toBeVisible();
   await expect(page.getByRole("link", {name: "Concert Scout", exact: true})).toBeVisible();
@@ -300,7 +308,6 @@ test("Forget my location removes it from this device and from later Searches", a
 });
 
 test("the Artist hint shows once and stays gone", async ({page}) => {
-  await page.emulateMedia({reducedMotion: "reduce"});
   await page.goto("/");
   await search(page);
   const hint = page.locator(".artist-hint");
@@ -308,7 +315,8 @@ test("the Artist hint shows once and stays gone", async ({page}) => {
   await page.getByRole("button", {name: "Save", exact: true}).click();
   await expect(hint).toHaveCount(0);
   await page.reload();
-  await search(page);
+  // The reload restores the Poster, so its Ticket opens without another Search.
+  await page.locator(".card-open").first().click();
   await expect(page.locator(".ticket")).toBeVisible();
   await expect(hint).toHaveCount(0);
 });

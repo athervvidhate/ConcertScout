@@ -137,16 +137,13 @@ test("eight dates unfold within the viewport without enlarging the photo or scro
   if (info.project.name === "desktop") {
     expect(afterPhoto!.height).toBeCloseTo(photo!.height, 0);
     expect(after!.height).toBeGreaterThan(before!.height + 40);
+    // Smooth means several painted frames between closed and open, not one jump. Count frames
+    // rather than limiting the step per frame, which fails whenever a busy machine drops a frame.
     expect(
-      heights.some(
+      heights.filter(
         (height) => height > before!.height + 5 && height < after!.height - 5,
-      ),
-    ).toBe(true);
-    expect(
-      Math.max(
-        ...heights.slice(1).map((height, i) => Math.abs(height - heights[i])),
-      ),
-    ).toBeLessThan(70);
+      ).length,
+    ).toBeGreaterThanOrEqual(3);
   }
   await expect(sheet.locator(".other-chips a")).toHaveCount(8);
   await expect(sheet.locator(".other-chips a").last()).toBeInViewport();
