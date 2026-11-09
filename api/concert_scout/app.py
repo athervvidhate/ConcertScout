@@ -314,7 +314,6 @@ def create_app(
 
         scheduled = APIRouter(dependencies=[Depends(scheduler_only)], include_in_schema=False)
 
-        # Only this authenticated job builds the public example Posters.
         @scheduled.get("/warm")
         async def warm_cache() -> list[warm.Warmed]:
             if accounts_client and settings.supabase_secret_key:
@@ -322,10 +321,13 @@ def create_app(
                     await supabase.keep_awake(accounts_client, settings.supabase_secret_key)
                 except supabase.SupabaseError as exc:
                     logger.warning("Supabase keep-awake failed: %s", exc)
-            warmed = await warm.warm(services, dt.datetime.now(dt.UTC))
+            return await warm.warm(services, dt.datetime.now(dt.UTC))
+
+        # Its own job, so the example Posters get a whole time limit to themselves.
+        @scheduled.get("/refresh-examples")
+        async def refresh_examples() -> None:
             if settings.search_enabled:
                 await home.refresh(services)
-            return warmed
 
         # Once a day: the JamBase Catalog, then MusicBrainz IDs.
         @scheduled.get("/sync")

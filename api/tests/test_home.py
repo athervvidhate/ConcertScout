@@ -80,3 +80,34 @@ async def test_refresh_respects_shared_budget(monkeypatch: pytest.MonkeyPatch) -
     await home.refresh(services)
     assert await redis.get(home.KEY) is None
     assert guard.await_count == 1
+
+
+async def test_refresh_saves_each_example_and_keeps_old_ones_that_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first, second = home.EXAMPLES[:2]
+    redis = FakeAsyncRedis()
+    old = home.Example(text=second, poster=Poster(recommendations=[]))
+    await cache.write(redis, home.KEY, home.Examples(examples=[old]), home.TTL)
+    fresh = home.Example(
+        text=first,
+        poster=Poster(recommendations=[Recommendation(concert=CONCERTS[0], reason="Fits")]),
+    )
+    saved_after_first: list[home.Examples | None] = []
+
+    async def build(text: str, _: object) -> home.Example | None:
+        if text == first:
+            return fresh
+        saved_after_first.append(await cache.read(redis, home.KEY, home.Examples))
+        return None
+
+    monkeypatch.setattr(home, "_build", build)
+    monkeypatch.setattr(limits, "check_spend", AsyncMock())
+    services = make_services(
+        settings_with(), httpx.MockTransport(forbidden_http), redis, contract_model()
+    )
+    await home.refresh(services)
+    # The first Poster was already saved before the next Search started.
+    assert saved_after_first[0] and saved_after_first[0].examples == [fresh, old]
+    stored = await cache.read(redis, home.KEY, home.Examples)
+    assert stored and stored.examples == [fresh, old]
