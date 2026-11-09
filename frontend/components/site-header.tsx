@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { SavedCount } from "@/components/animated-count";
 import { Brand } from "@/components/brand";
 import { useSavedConcerts } from "@/lib/saved";
+import { forgetSearch } from "@/lib/search-session";
 import { toggleTheme } from "@/lib/theme";
 import { AccountDialog } from "@/components/account-dialog";
 import { useAccount } from "@/lib/account";
@@ -49,7 +50,15 @@ export function SiteHeader({ onHome, hideBrand, onTaste, tasteLabel }: Props) {
       className={hideBrand ? "site-header site-header-bare" : "site-header"}
     >
       {!hideBrand && (
-        <Link href="/" className="site-brand" onClick={onHome}>
+        <Link
+          href="/"
+          className="site-brand"
+          onClick={() => {
+            // The brand means the resting home page, even from another page.
+            forgetSearch();
+            onHome?.();
+          }}
+        >
           <Brand />
         </Link>
       )}

@@ -453,3 +453,46 @@ test("the shelf can be hidden, stays hidden and asks for nothing until shown", a
   await expect(shelf.locator(".listing-artist").first()).toBeVisible();
   expect(asked).toBe(1);
 });
+
+test("a reload keeps the Poster without a new Search, and the brand still returns home", async ({page}) => {
+  await page.goto("/");
+  await search(page, "UKG in SF", false);
+  let searched = false;
+  page.on("request", r => { if (r.url().endsWith("/search")) searched = true; });
+  await page.reload();
+  await expect(page.getByRole("textbox", {name: "Search", exact: true})).toHaveValue("UKG in SF");
+  await page.locator(".card-open").first().click();
+  await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
+  await page.getByRole("button", {name: "Close Ticket"}).click();
+  await page.locator(".nav-saved").click();
+  await expect(page).toHaveURL(/\/saved$/);
+  await page.goBack();
+  await expect(page.locator(".card-open").first()).toBeVisible();
+  expect(searched).toBe(false);
+  await page.locator(".nav-saved").click();
+  await page.getByRole("link", {name: "Concert Scout", exact: true}).click();
+  await expect(page.getByRole("heading", {name: "How a Search works"})).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", {name: "How a Search works"})).toBeVisible();
+  await expect(page.locator(".card-open")).toHaveCount(0);
+});
+
+test("a reload during a Search offers a retry of the same words", async ({page}) => {
+  await page.goto("/");
+  let held = false;
+  await page.route("http://127.0.0.1:8146/search", async route => {
+    if (held) return route.continue();
+    held = true;
+    // The stream never finishes, as when the page reloads mid-Search.
+    await new Promise(() => {});
+  });
+  await page.getByRole("textbox", {name: "Search", exact: true}).fill("UKG in SF");
+  await page.getByRole("button", {name: "Search", exact: true}).click();
+  await expect(page.locator(".fluid-poster")).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("page reloaded");
+  const request = page.waitForRequest(r => r.url().endsWith("/search"));
+  await page.getByRole("button", {name: "Try again"}).click();
+  expect((await request).postDataJSON().text).toBe("UKG in SF");
+  await expect(page.locator(".card-open").first()).toBeVisible();
+});
