@@ -2,8 +2,7 @@
 
 The browser never sends a Poster. `keep` stores what a Search produced under a Search ID that only
 that Search's stream carries, and `promote` turns it into a Shared Poster. Only Recommendations
-and the Search's reading are stored, so a Shared Poster holds no coordinates, imported Taste or
-Spotify data.
+and the Search's reading are stored, so a Shared Poster never holds the person's coordinates.
 """
 
 import base64

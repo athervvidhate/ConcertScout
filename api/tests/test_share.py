@@ -128,21 +128,14 @@ async def test_concerts_that_have_passed_are_dropped_when_read() -> None:
     assert [c["id"] for c in picks[0]["also"]] == ["contract-one"]
 
 
-async def test_a_shared_poster_holds_no_coordinates_or_imported_taste() -> None:
+async def test_a_shared_poster_holds_no_coordinates() -> None:
     redis = FakeAsyncRedis()
     near = {"lat": 32.712345, "lon": -117.198765}
     async with api_for(redis) as api:
-        # The Search names no Artist, so the imported Taste becomes its seed Artists.
-        events = await finished_search(
-            api, "place only SF", taste=["Private Imported Artist"], near=near
-        )
-        assert events["interpreted"]["artists"] == ["Private Imported Artist"]
+        events = await finished_search(api, "place only SF", near=near)
         search_id = events["shareable"]["search_id"]
-        link = (await api.post("/share", json={"search_id": search_id})).json()["id"]
-        body = (await api.get(f"/share/{link}")).json()
-    assert body["interpreted"]["artists"] == []
+        await api.post("/share", json={"search_id": search_id})
     for stored in (await stored_under(redis, "share:*")).values():
-        assert "Private Imported Artist" not in stored
         assert "32.7123" not in stored and "117.1987" not in stored
 
 

@@ -102,15 +102,6 @@ class Shared(BaseModel):
     id: str
 
 
-def _without_imported(reading: Interpreted | None, imported: list[str]) -> Interpreted | None:
-    """An imported Taste fills a Search's Artists, and a Shared Poster must not carry it."""
-    if reading is None or not imported:
-        return reading
-    names = {name.casefold() for name in imported}
-    artists = [name for name in reading.artists if name.casefold() not in names]
-    return reading.model_copy(update={"artists": artists})
-
-
 def _catalog_client(
     settings: Settings, transport: httpx.AsyncBaseTransport | None
 ) -> httpx.AsyncClient | None:
@@ -385,7 +376,7 @@ def create_app(
                 if poster.recommendations:
                     made = share.Made(
                         made=dt.datetime.now(dt.UTC).date(),
-                        interpreted=_without_imported(reading, search.taste),
+                        interpreted=reading,
                         recommendations=poster.recommendations,
                     )
                     try:
