@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHmac } from "node:crypto";
 
 import { type Browser, expect, type Page, test } from "@playwright/test";
 
@@ -274,4 +275,93 @@ test("a failed photo Unsave restores that Concert without losing a different con
     }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("status")).toContainText("could not be removed");
+});
+
+
+test("a signed-in person follows an Artist from its panel and sets up Alerts on the Account page", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const guestSearch = page.getByRole("textbox", { name: "Search" });
+  await guestSearch.fill("UKG in SF");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page.locator(".card-open").first().click();
+  await page.getByRole("button", { name: "Contract Artist", exact: true }).last().click();
+  const panel = page.getByRole("dialog", { name: "Contract Artist", exact: true });
+  // A guest is offered a sign-in instead.
+  await panel.getByRole("button", { name: "Follow Contract Artist" }).click();
+  await expect(page.getByRole("dialog", { name: "Sign in" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  const email = await confirmedPerson();
+  await page.goto("/");
+  await signIn(page, email);
+  await guestSearch.fill("UKG in SF");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page.locator(".card-open").first().click();
+  await page.getByRole("button", { name: "Contract Artist", exact: true }).last().click();
+  const follow = panel.getByRole("button", { name: /^Follow(ing)? Contract Artist$/ });
+  await follow.click();
+  await expect(follow).toHaveText(/^Following/);
+  await expect(follow).toHaveAttribute("aria-pressed", "true");
+
+  await page.goto("/account");
+  const alerts = page.getByRole("region", { name: "Alerts" });
+  await expect(alerts.getByRole("listitem")).toHaveText(["Contract ArtistUnfollow Contract Artist"]);
+  const emailMe = alerts.getByRole("checkbox", { name: /Email me about new Concerts/ });
+  await expect(emailMe).toBeDisabled();
+  await alerts.getByRole("textbox", { name: "Alert place" }).fill("San Francisco");
+  await alerts.getByRole("combobox", { name: "Distance" }).selectOption("25");
+  await alerts.getByRole("button", { name: "Set place" }).click();
+  await expect(alerts.getByText("Within 25 miles of San Francisco, California")).toBeVisible();
+  const saved = page.waitForResponse((r) => r.url().endsWith("/alerts/enabled") && r.ok());
+  await emailMe.check();
+  await saved;
+
+  // A reload reads the Alerts back from the account.
+  await page.reload();
+  await expect(emailMe).toBeChecked();
+  await alerts.getByRole("button", { name: "Unfollow Contract Artist" }).click();
+  await expect(alerts.getByText("You follow no Artists yet.")).toBeVisible();
+});
+
+test("an Alert's signed link stops Alerts without a sign-in, and a forged one does nothing", async ({
+  page,
+}) => {
+  const created = await fetch(`${SUPABASE}/auth/v1/admin/users`, {
+    method: "POST",
+    headers: { apikey: SECRET_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ email: newEmail(), password: PASSWORD, email_confirm: true }),
+  });
+  const { id } = (await created.json()) as { id: string };
+  const settings = await fetch(`${SUPABASE}/rest/v1/alert_settings`, {
+    method: "POST",
+    headers: { apikey: SECRET_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: id,
+      enabled: true,
+      place: { name: "San Francisco, California", lat: 37.77, lon: -122.42 },
+    }),
+  });
+  expect(settings.ok).toBe(true);
+  const enabled = async () => {
+    const rows = await fetch(`${SUPABASE}/rest/v1/alert_settings?user_id=eq.${id}&select=enabled`, {
+      headers: { apikey: SECRET_KEY },
+    });
+    return ((await rows.json()) as { enabled: boolean }[])[0].enabled;
+  };
+  const sign = (account: string) =>
+    createHmac("sha256", SECRET_KEY).update(`alert-unsubscribe:${account}`).digest("hex");
+
+  await page.goto(`/unsubscribe?account=${id}&token=${sign("someone-else")}`);
+  await page.getByRole("button", { name: "Stop Alerts" }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText("This link is not valid.");
+  expect(await enabled()).toBe(true);
+
+  // Opening the link alone changes nothing. Only the button does.
+  await page.goto(`/unsubscribe?account=${id}&token=${sign(id)}`);
+  expect(await enabled()).toBe(true);
+  await page.getByRole("button", { name: "Stop Alerts" }).click();
+  await expect(page.getByRole("heading", { name: "Alerts are off" })).toBeVisible();
+  expect(await enabled()).toBe(false);
 });

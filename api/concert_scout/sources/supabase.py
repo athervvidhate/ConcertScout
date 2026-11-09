@@ -1,10 +1,12 @@
-"""Supabase: who a request belongs to, and the Saved Concerts stored under that account.
+"""Supabase: who a request belongs to, and what is stored under that account: Saved Concerts,
+Followed Artists and Alert settings.
 
 Reads and removals run with the person's own access token, so the database's row policies decide
 what they reach. Only writes use the secret key, because their Concert facts come from the source
 here, and the owner is always the verified token's subject.
 """
 
+import datetime as dt
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -15,7 +17,7 @@ from joserfc.errors import InvalidKeyIdError, JoseError
 from joserfc.jwk import KeySet
 from pydantic import BaseModel, SecretStr
 
-from concert_scout.models import Concert
+from concert_scout.models import Concert, Place
 from concert_scout.sources.http import USER_AGENT
 
 AUDIENCE = "authenticated"
@@ -26,6 +28,9 @@ REFETCH_GAP = 30.0
 # Supabase's clock can run slightly ahead of ours, which makes a fresh token look early.
 CLOCK_LEEWAY = 10
 TABLE = "/rest/v1/saved_concerts"
+FOLLOWED = "/rest/v1/followed_artists"
+SETTINGS = "/rest/v1/alert_settings"
+SENT = "/rest/v1/alerts_sent"
 
 
 class SupabaseError(Exception):
@@ -47,6 +52,23 @@ class Account:
 class SavedConcert(BaseModel):
     concert: Concert
     reason: str | None = None
+
+
+class FollowedArtist(BaseModel):
+    artist_key: str
+    name: str
+
+
+class AlertSettings(BaseModel):
+    place: Place | None = None
+    enabled: bool = False
+
+
+class AlertAccount(BaseModel):
+    """An Account with Alerts on, as the daily run reads it."""
+
+    user_id: str
+    place: Place
 
 
 def make_client(url: str, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
@@ -195,3 +217,180 @@ async def keep_awake(client: httpx.AsyncClient, secret_key: SecretStr) -> None:
         "GET", TABLE, params={"select": "concert_id", "limit": 1}, headers=_as_server(secret_key)
     )
     await _send(client, request)
+
+
+def _rows[T: BaseModel](response: httpx.Response, model: type[T]) -> list[T]:
+    try:
+        return [model.model_validate(row) for row in response.json()]
+    except ValueError as exc:
+        raise SupabaseError(f"unreadable response: {type(exc).__name__}") from None
+
+
+def _among(user_ids: list[str]) -> str:
+    return f"in.({','.join(user_ids)})"
+
+
+async def list_followed(
+    client: httpx.AsyncClient, publishable_key: str, account: Account
+) -> list[FollowedArtist]:
+    request = client.build_request(
+        "GET",
+        FOLLOWED,
+        params={"select": "artist_key,name", "order": "followed_at.asc"},
+        headers=_as_person(account, publishable_key),
+    )
+    return _rows(await _send(client, request), FollowedArtist)
+
+
+async def follow(
+    client: httpx.AsyncClient, secret_key: SecretStr, account: Account, artist: FollowedArtist
+) -> None:
+    """Following an Artist again keeps the first follow and its spelling."""
+    request = client.build_request(
+        "POST",
+        FOLLOWED,
+        params={"on_conflict": "user_id,artist_key"},
+        json=[{"user_id": account.id} | artist.model_dump()],
+        headers=_as_server(secret_key) | {"Prefer": "resolution=ignore-duplicates,return=minimal"},
+    )
+    await _send(client, request)
+
+
+async def unfollow(
+    client: httpx.AsyncClient, publishable_key: str, account: Account, artist_key: str
+) -> None:
+    request = client.build_request(
+        "DELETE",
+        FOLLOWED,
+        params={"artist_key": f"eq.{artist_key}"},
+        headers=_as_person(account, publishable_key),
+    )
+    await _send(client, request)
+
+
+async def alert_settings(
+    client: httpx.AsyncClient, publishable_key: str, account: Account
+) -> AlertSettings:
+    request = client.build_request(
+        "GET",
+        SETTINGS,
+        params={"select": "place,enabled"},
+        headers=_as_person(account, publishable_key),
+    )
+    rows = _rows(await _send(client, request), AlertSettings)
+    return rows[0] if rows else AlertSettings()
+
+
+async def set_alert_place(
+    client: httpx.AsyncClient, secret_key: SecretStr, user_id: str, place: Place
+) -> None:
+    """Creates the Account's settings with Alerts off, or changes only the place."""
+    row = {
+        "user_id": user_id,
+        "place": place.model_dump(mode="json"),
+        "updated_at": dt.datetime.now(dt.UTC).isoformat(),
+    }
+    request = client.build_request(
+        "POST",
+        SETTINGS,
+        params={"on_conflict": "user_id"},
+        json=[row],
+        headers=_as_server(secret_key)
+        | {"Prefer": "resolution=merge-duplicates,return=minimal,missing=default"},
+    )
+    await _send(client, request)
+
+
+async def set_alerts_enabled(
+    client: httpx.AsyncClient, secret_key: SecretStr, user_id: str, enabled: bool
+) -> None:
+    """Changes an existing row only. The table refuses Alerts switched on without a place."""
+    request = client.build_request(
+        "PATCH",
+        SETTINGS,
+        params={"user_id": f"eq.{user_id}"},
+        json={"enabled": enabled, "updated_at": dt.datetime.now(dt.UTC).isoformat()},
+        headers=_as_server(secret_key) | {"Prefer": "return=minimal"},
+    )
+    await _send(client, request)
+
+
+async def accounts_with_alerts(
+    client: httpx.AsyncClient, secret_key: SecretStr
+) -> list[AlertAccount]:
+    request = client.build_request(
+        "GET",
+        SETTINGS,
+        params={"select": "user_id,place", "enabled": "is.true", "order": "updated_at.asc"},
+        headers=_as_server(secret_key),
+    )
+    return _rows(await _send(client, request), AlertAccount)
+
+
+async def followed_by(
+    client: httpx.AsyncClient, secret_key: SecretStr, user_ids: list[str]
+) -> dict[str, list[FollowedArtist]]:
+    if not user_ids:
+        return {}
+    request = client.build_request(
+        "GET",
+        FOLLOWED,
+        params={"select": "user_id,artist_key,name", "user_id": _among(user_ids)},
+        headers=_as_server(secret_key),
+    )
+    followed: dict[str, list[FollowedArtist]] = {}
+    for row in _rows(await _send(client, request), _FollowedRow):
+        followed.setdefault(row.user_id, []).append(FollowedArtist(**row.model_dump()))
+    return followed
+
+
+async def sent_to(
+    client: httpx.AsyncClient, secret_key: SecretStr, user_ids: list[str]
+) -> dict[str, set[str]]:
+    if not user_ids:
+        return {}
+    request = client.build_request(
+        "GET",
+        SENT,
+        params={"select": "user_id,concert_id", "user_id": _among(user_ids)},
+        headers=_as_server(secret_key),
+    )
+    sent: dict[str, set[str]] = {}
+    for row in _rows(await _send(client, request), _SentRow):
+        sent.setdefault(row.user_id, set()).add(row.concert_id)
+    return sent
+
+
+async def record_sent(
+    client: httpx.AsyncClient, secret_key: SecretStr, user_id: str, concert_ids: list[str]
+) -> None:
+    request = client.build_request(
+        "POST",
+        SENT,
+        params={"on_conflict": "user_id,concert_id"},
+        json=[{"user_id": user_id, "concert_id": c} for c in concert_ids],
+        headers=_as_server(secret_key) | {"Prefer": "resolution=ignore-duplicates,return=minimal"},
+    )
+    await _send(client, request)
+
+
+async def email_of(client: httpx.AsyncClient, secret_key: SecretStr, user_id: str) -> str | None:
+    """The Account's confirmed email address, or None when it has none."""
+    request = client.build_request(
+        "GET", f"/auth/v1/admin/users/{user_id}", headers=_as_server(secret_key)
+    )
+    try:
+        user = (await _send(client, request)).json()
+    except ValueError as exc:
+        raise SupabaseError(f"unreadable response: {type(exc).__name__}") from None
+    confirmed = user.get("email_confirmed_at")
+    return user.get("email") if confirmed else None
+
+
+class _FollowedRow(FollowedArtist):
+    user_id: str
+
+
+class _SentRow(BaseModel):
+    user_id: str
+    concert_id: str

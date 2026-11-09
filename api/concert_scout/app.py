@@ -18,6 +18,7 @@ from redis.exceptions import RedisError
 
 from concert_scout import (
     accounts,
+    alerts,
     cache,
     feedback,
     home,
@@ -52,6 +53,7 @@ from concert_scout.sources import (
     lastfm,
     listenbrainz,
     musicbrainz,
+    resend,
     spotify_catalog,
     supabase,
     ticketmaster,
@@ -178,6 +180,11 @@ def create_app(
         if settings.supabase_url and settings.accounts_enabled
         else None
     )
+    mail = (
+        resend.make_client(settings.resend_api_key.get_secret_value(), transport)
+        if settings.resend_api_key
+        else None
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -197,6 +204,8 @@ def create_app(
         await services.redis.aclose()
         if accounts_client:
             await accounts_client.aclose()
+        if mail:
+            await mail.aclose()
 
     app = FastAPI(title="Concert Scout", lifespan=lifespan)
     app.add_middleware(SecurityHeaders)
@@ -294,8 +303,12 @@ def create_app(
     app.include_router(feedback.router(settings, services.redis, transport))
     if accounts_client:
         app.include_router(
-            accounts.router(settings, accounts_client, services.redis, services.ticketmaster)
+            accounts.router(
+                settings, accounts_client, services.redis, services.ticketmaster, services.geocoder
+            )
         )
+        assert settings.supabase_secret_key
+        app.include_router(alerts.router(accounts_client, settings.supabase_secret_key))
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -333,6 +346,18 @@ def create_app(
         @scheduled.get("/sync")
         async def sync_catalog() -> list[sync.Step]:
             return await sync.run(services, dt.datetime.now(dt.UTC))
+
+        if accounts_client and mail and settings.supabase_secret_key:
+            secret_key = settings.supabase_secret_key
+
+            # Once a day, an hour after the sync: new Concerts by Followed Artists (ADR 0006).
+            @scheduled.get("/alerts")
+            async def send_alerts(request: Request) -> alerts.Outcome:
+                api_url = str(request.base_url).rstrip("/")
+                now = dt.datetime.now(dt.UTC)
+                return await alerts.run(
+                    services, accounts_client, secret_key, mail, settings.site_url, api_url, now
+                )
 
         app.include_router(scheduled)
 

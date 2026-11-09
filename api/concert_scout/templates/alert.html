@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>{{ subject }}</title>
+<style>
+  @media (max-width: 620px) {
+    .frame { width: 100% !important; }
+    .pad { padding-left: 20px !important; padding-right: 20px !important; }
+    .headline { font-size: 30px !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background:#f3f5f2;">
+{# Inbox preview text. The rest of the email never shows it. #}
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{{ preview }}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f5f2" style="background:#f3f5f2;">
+<tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" class="frame" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;">
+
+  <tr><td class="pad" bgcolor="#12352b" style="background:#12352b;border-radius:22px 22px 0 0;padding:28px 32px 32px;">
+    <a href="{{ site_url }}" style="color:#eef4ef;text-decoration:none;font:400 22px/1 Anton,Impact,'Arial Narrow Bold',sans-serif;text-transform:uppercase;letter-spacing:.02em;">Concert Scout</a>
+    <h1 class="headline" style="margin:22px 0 0;color:#eef4ef;font:400 38px/1.05 Anton,Impact,'Arial Narrow Bold',sans-serif;text-transform:uppercase;">New Concerts near {{ place }}</h1>
+    <p style="margin:10px 0 0;color:#c9d8cf;font:400 16px/1.5 -apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">From Artists you follow.</p>
+  </td></tr>
+
+  <tr><td bgcolor="#ffffff" style="background:#ffffff;padding:8px 0;">
+  {% for card in cards %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr><td class="pad" style="padding:24px 32px;{% if not loop.last %}border-bottom:1px solid #e1e6e2;{% endif %}">
+      {% if card.image %}
+      <a href="{{ card.tickets }}" style="text-decoration:none;"><img src="{{ card.image }}" alt="{{ card.lineup }}" width="536" style="display:block;width:100%;max-width:536px;height:auto;border:0;border-radius:16px;background:#1b2c26;margin:0 0 18px;"></a>
+      {% endif %}
+      <p style="margin:0;color:#12261f;font:400 28px/1.1 Anton,Impact,'Arial Narrow Bold',sans-serif;text-transform:uppercase;">{{ card.lineup }}</p>
+      {% if card.when %}<p style="margin:10px 0 0;color:#334a7a;font:700 16px/1.4 -apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">{{ card.when }}</p>{% endif %}
+      {% if card.where %}<p style="margin:4px 0 0;color:#4c5e57;font:400 16px/1.4 -apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">{{ card.where }}</p>{% endif %}
+      {% if card.price or card.on_sale %}<p style="margin:4px 0 0;color:#4c5e57;font:400 14px/1.4 -apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">{{ [card.price, card.on_sale] | select | join(" · ") }}</p>{% endif %}
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;"><tr>
+        <td bgcolor="#c4461f" style="background:#c4461f;border-radius:12px;">
+          <a href="{{ card.tickets }}" style="display:inline-block;padding:13px 22px;color:#ffffff;text-decoration:none;font:700 16px/1 -apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">Get tickets &rarr;</a>
+        </td>
+      </tr></table>
+    </td></tr>
+    </table>
+  {% endfor %}
+  {% if more %}
+    <p class="pad" style="margin:0;padding:8px 32px 24px;color:#4c5e57;font:400 15px/1.5 -apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">And {{ more }} more. The next Alert will include them.</p>
+  {% endif %}
+  </td></tr>
+
+  <tr><td class="pad" bgcolor="#e6ebe6" style="background:#e6ebe6;border-radius:0 0 22px 22px;padding:22px 32px;color:#4c5e57;font:400 14px/1.6 -apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">
+    You get this because you follow these Artists on Concert Scout. At most one email a day.<br>
+    <a href="{{ site_url }}/account" style="color:#12261f;font-weight:700;">Manage Followed Artists and Alert place</a>
+    &nbsp;·&nbsp;
+    <a href="{{ unsubscribe_url }}" style="color:#12261f;font-weight:700;">Stop these emails</a>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

@@ -4,6 +4,7 @@ import { Dialog } from "@base-ui/react/dialog";
 import { X } from "lucide-react";
 import { useState } from "react";
 
+import { FollowButton } from "@/components/follow-button";
 import { type ArtistProfile, spotifyHref, useArtistProfiles } from "@/lib/artist";
 
 const count = new Intl.NumberFormat("en-US");
@@ -15,6 +16,7 @@ function Profile({ profile, named }: { profile: ArtistProfile; named: boolean })
   return (
     <section className="artist-profile" aria-label={profile.name}>
       {named && <h3 className="artist-part">{profile.name}</h3>}
+      <FollowButton name={profile.name} />
       <a
         className="artist-spotify"
         href={spotifyHref(profile)}
