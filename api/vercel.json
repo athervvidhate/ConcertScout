@@ -9,6 +9,7 @@
   },
   "crons": [
     { "path": "/warm", "schedule": "0 23 * * *" },
+    { "path": "/refresh-examples", "schedule": "0 0 * * *" },
     { "path": "/sync", "schedule": "0 10 * * *" }
   ]
 }
