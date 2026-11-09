@@ -10,18 +10,20 @@ import logging
 import secrets
 import time
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Annotated
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import APIRouter, Query, Response
+from jinja2 import Environment, PackageLoader, select_autoescape
 from pydantic import BaseModel, SecretStr
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from concert_scout import pool
-from concert_scout.models import Concert, Place
+from concert_scout.models import Concert, Place, Price
 from concert_scout.names import normalize
 from concert_scout.pipeline import Services
 from concert_scout.security import Refused
@@ -38,6 +40,8 @@ DAILY_EMAILS = 60
 WINDOW = dt.timedelta(days=183)
 MAX_CONCERTS_PER_EMAIL = 20
 PURPOSE = b"alert-unsubscribe:"
+# Listing names come from outside sources, so every value is escaped into the HTML.
+TEMPLATES = Environment(loader=PackageLoader("concert_scout"), autoescape=select_autoescape())
 
 
 class Outcome(BaseModel):
@@ -64,18 +68,72 @@ def matching(concerts: Sequence[Concert], followed: Sequence[FollowedArtist]) ->
     return sorted(found, key=lambda c: (c.date or dt.date.max, c.time or dt.time.min))
 
 
+def _clock(day: dt.date, at: dt.time, zone: str | None) -> str:
+    """A day and time on the venue's clock, with the venue's zone when the source gives one."""
+    clock = f"{at:%I:%M %p}".lstrip("0")
+    if zone:
+        clock = f"{clock} {dt.datetime.combine(day, at, ZoneInfo(zone)):%Z}"
+    return f"{_day(day)} at {clock}"
+
+
+def _day(day: dt.date) -> str:
+    return f"{day:%a, %b} {day.day}, {day.year}"
+
+
 def when(concert: Concert) -> str | None:
     """The date and time on the venue's clock, with the venue's zone. A missing time stays out."""
     if not concert.date:
         return None
-    day = f"{concert.date:%a, %b} {concert.date.day}, {concert.date.year}"
     if not concert.time:
-        return day
-    clock = f"{concert.time:%I:%M %p}".lstrip("0")
-    if concert.time_zone:
-        zone = dt.datetime.combine(concert.date, concert.time, ZoneInfo(concert.time_zone))
-        clock = f"{clock} {zone:%Z}"
-    return f"{day} at {clock}"
+        return _day(concert.date)
+    return _clock(concert.date, concert.time, concert.time_zone)
+
+
+def price(value: Price) -> str:
+    """The source's price range. Whole amounts drop their cents; a real price keeps them."""
+    whole = value.min.is_integer() and value.max.is_integer()
+
+    def amount(number: float) -> str:
+        shown = f"{number:,.0f}" if whole else f"{number:,.2f}"
+        return f"${shown}" if value.currency == "USD" else f"{shown} {value.currency}"
+
+    low, high = amount(value.min), amount(value.max)
+    return low if low == high else f"{low} to {high}"
+
+
+def on_sale(concert: Concert, now: dt.datetime) -> str | None:
+    """When general sale opens, while it is still ahead. Without the venue's zone it stays out,
+    since its day could read wrong."""
+    sale, zone = concert.general_sale, concert.time_zone
+    if not sale or not zone or sale <= now:
+        return None
+    there = sale.astimezone(ZoneInfo(zone))
+    return f"On sale {_clock(there.date(), there.time(), zone)}"
+
+
+@dataclass(frozen=True)
+class Card:
+    """One Concert as an Alert shows it. Every value is the source's or left out."""
+
+    lineup: str
+    tickets: str
+    when: str | None
+    where: str | None
+    price: str | None
+    on_sale: str | None
+    image: str | None
+
+
+def card(concert: Concert, now: dt.datetime) -> Card:
+    return Card(
+        lineup=", ".join(a.name for a in concert.artists),
+        tickets=concert.url,
+        when=when(concert),
+        where=", ".join(f for f in (concert.venue, concert.city, concert.region) if f) or None,
+        price=price(concert.price) if concert.price else None,
+        on_sale=on_sale(concert, now),
+        image=concert.image,
+    )
 
 
 def subject(concerts: Sequence[Concert]) -> str:
@@ -86,22 +144,17 @@ def subject(concerts: Sequence[Concert]) -> str:
     return f"{len(concerts)} new Concerts from Artists you follow"
 
 
-def body(concerts: Sequence[Concert], place: Place, site_url: str, unsubscribe_url: str) -> str:
+def body(
+    cards: Sequence[Card], more: int, place: Place, site_url: str, unsubscribe_url: str
+) -> str:
+    """The plain-text part, for mail clients that show no HTML."""
     lines = [f"New Concerts near {place.name} from Artists you follow on Concert Scout.", ""]
-    for concert in concerts[:MAX_CONCERTS_PER_EMAIL]:
-        lines.append(", ".join(a.name for a in concert.artists))
-        lines.extend(
-            fact
-            for fact in (
-                when(concert),
-                ", ".join(f for f in (concert.venue, concert.city, concert.region) if f) or None,
-                f"Tickets: {concert.url}",
-            )
-            if fact
-        )
-        lines.append("")
-    if len(concerts) > MAX_CONCERTS_PER_EMAIL:
-        more = len(concerts) - MAX_CONCERTS_PER_EMAIL
+    for shown in cards:
+        lines.append(shown.lineup)
+        prices = " · ".join(f for f in (shown.price, shown.on_sale) if f) or None
+        lines.extend(f for f in (shown.when, shown.where, prices) if f)
+        lines.extend([f"Tickets: {shown.tickets}", ""])
+    if more:
         lines.extend([f"And {more} more. The next Alert will include them.", ""])
     lines.extend(
         [
@@ -110,6 +163,47 @@ def body(concerts: Sequence[Concert], place: Place, site_url: str, unsubscribe_u
         ]
     )
     return "\n".join(lines)
+
+
+def html(
+    title: str, cards: Sequence[Card], more: int, place: Place, site_url: str, unsubscribe_url: str
+) -> str:
+    """The designed part. It holds the same facts as `body`."""
+    return TEMPLATES.get_template("alert.html").render(
+        subject=title,
+        preview=f"{', '.join(c.lineup for c in cards[:3])}: new Concerts near {place.name}",
+        place=place.name,
+        cards=cards,
+        more=more,
+        site_url=site_url,
+        unsubscribe_url=unsubscribe_url,
+    )
+
+
+@dataclass(frozen=True)
+class Email:
+    subject: str
+    text: str
+    html: str
+
+
+def email(
+    concerts: Sequence[Concert],
+    place: Place,
+    site_url: str,
+    unsubscribe_url: str,
+    now: dt.datetime,
+) -> Email:
+    """One Alert: at most MAX_CONCERTS_PER_EMAIL Concerts, the rest counted for the next one."""
+    shown = concerts[:MAX_CONCERTS_PER_EMAIL]
+    cards = [card(c, now) for c in shown]
+    more = len(concerts) - len(shown)
+    title = subject(shown)
+    return Email(
+        subject=title,
+        text=body(cards, more, place, site_url, unsubscribe_url),
+        html=html(title, cards, more, place, site_url, unsubscribe_url),
+    )
 
 
 def _groups(
@@ -201,11 +295,13 @@ async def _send(
             {"account": account.user_id, "token": unsubscribe_token(secret_key, account.user_id)}
         )
         one_click = f"{api_url}/alerts/unsubscribe?{query}"
+        alert = email(concerts, account.place, site_url, f"{site_url}/unsubscribe?{query}", now)
         await resend.send(
             mail,
             address,
-            subject(shown),
-            body(concerts, account.place, site_url, f"{site_url}/unsubscribe?{query}"),
+            alert.subject,
+            alert.text,
+            html=alert.html,
             sender=resend.ALERT_SENDER,
             headers={
                 "List-Unsubscribe": f"<{one_click}>",

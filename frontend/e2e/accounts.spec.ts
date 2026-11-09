@@ -300,9 +300,9 @@ test("a signed-in person follows an Artist from its panel and sets up Alerts on 
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await page.locator(".card-open").first().click();
   await page.getByRole("button", { name: "Contract Artist", exact: true }).last().click();
-  const follow = panel.getByRole("button", { name: "Follow Contract Artist" });
+  const follow = panel.getByRole("button", { name: /^Follow(ing)? Contract Artist$/ });
   await follow.click();
-  // A toggle keeps its name; only its pressed state changes.
+  await expect(follow).toHaveText(/^Following/);
   await expect(follow).toHaveAttribute("aria-pressed", "true");
 
   await page.goto("/account");

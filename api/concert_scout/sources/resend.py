@@ -27,12 +27,15 @@ async def send(
     subject: str,
     text: str,
     *,
+    html: str | None = None,
     sender: str = SENDER,
     headers: dict[str, str] | None = None,
     idempotency_key: str | None = None,
 ) -> None:
     """`idempotency_key` makes Resend accept a repeated send without sending it twice."""
     body: dict[str, object] = {"from": sender, "to": [to], "subject": subject, "text": text}
+    if html:
+        body["html"] = html
     if headers:
         body["headers"] = headers
     request_headers = {"Idempotency-Key": idempotency_key} if idempotency_key else {}

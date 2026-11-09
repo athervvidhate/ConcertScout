@@ -53,7 +53,8 @@ export function FollowButton({ name }: { name: string }) {
         onClick={toggle}
       >
         {following && <Check aria-hidden size={18} strokeWidth={3} />}
-        Follow<span className="sr-only"> {name}</span>
+        {following ? "Following" : "Follow"}
+        <span className="sr-only"> {name}</span>
       </button>
       {failed && <p role="alert">That did not save. Try again soon.</p>}
     </>

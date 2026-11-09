@@ -16,7 +16,7 @@ from pydantic import SecretStr
 
 from concert_scout import alerts, pool
 from concert_scout.app import create_app, make_services
-from concert_scout.models import Concert, Place
+from concert_scout.models import Artist, Concert, Place, Price
 from concert_scout.sources import resend, supabase
 from concert_scout.sources.supabase import FollowedArtist
 from tests.contracts import CONCERTS, NOW, PLACE, contract_model, settings_with
@@ -136,6 +136,7 @@ async def test_an_alert_lists_new_concerts_by_followed_artists_from_source_facts
     assert "Second Contract Artist" not in text
     # The Concert with no time shows only its date. Nothing is invented.
     assert f"{three.date.day}, {three.date.year}\nThird Hall" in text
+    assert "Source Hall, San Francisco, CA" in email["html"] and one.url in email["html"]
     assert headers["Idempotency-Key"] == f"alert-{ALICE}-{NOW.date()}"
     assert email["headers"]["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
     assert sorted(r["concert_id"] for r in stack.sent) == [one.id, three.id]
@@ -272,3 +273,32 @@ async def test_the_alert_email_links_to_the_unsubscribe_page_and_one_click_api(
     assert "https://concertscout.test/unsubscribe?" in page
     query = parse_qs(urlsplit(one_click).query)
     assert alerts.valid_token(SECRET, query["account"][0], query["token"][0])
+
+
+def test_the_html_part_escapes_what_the_source_wrote() -> None:
+    listing = CONCERTS[0].model_copy(
+        update={"artists": [Artist(name='<b onclick="x">Hack & Co</b>')], "venue": "<i>Hall</i>"}
+    )
+
+    alert = alerts.email([listing], PLACE, "https://concertscout.test", "https://u.test", NOW)
+
+    assert "<b onclick" not in alert.html and "<i>Hall</i>" not in alert.html
+    assert "&lt;b onclick=&#34;x&#34;&gt;Hack &amp; Co&lt;/b&gt;" in alert.html
+    assert "https://concertscout.test/account" in alert.html and "https://u.test" in alert.html
+
+
+def test_a_price_keeps_real_cents_and_a_sale_shows_only_while_ahead() -> None:
+    assert alerts.price(Price(min=38, max=38, currency="USD")) == "$38"
+    assert alerts.price(Price(min=38.3, max=120, currency="USD")) == "$38.30 to $120.00"
+    assert alerts.price(Price(min=40, max=55, currency="CAD")) == "40 CAD to 55 CAD"
+
+    sale = dt.datetime(2026, 1, 9, 18, tzinfo=dt.UTC)
+    before = sale - dt.timedelta(days=2)
+    zoned = CONCERTS[0].model_copy(
+        update={"general_sale": sale, "time_zone": "America/Los_Angeles"}
+    )
+    # On the venue's clock: 18:00 UTC is 10 AM in Los Angeles in January.
+    assert alerts.on_sale(zoned, before) == "On sale Fri, Jan 9, 2026 at 10:00 AM PST"
+    assert alerts.on_sale(zoned, sale + dt.timedelta(minutes=1)) is None
+    # Without the venue's zone the day could read wrong, so it stays out.
+    assert alerts.on_sale(zoned.model_copy(update={"time_zone": None}), before) is None
