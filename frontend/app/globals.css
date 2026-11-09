@@ -283,7 +283,10 @@ body:has(.information)::before { animation:none; opacity:.35; }
 .artist-panel ol { margin:0; padding-left:24px; list-style:decimal; }
 .artist-panel a { color:inherit; text-decoration:underline; text-underline-offset:3px; }
 .artist-panel li { min-height:30px; }
-.artist-panel .artist-spotify { justify-self:start; align-self:flex-start; display:inline-flex; align-items:center; min-height:48px; padding:0 18px; border-radius:8px; font-weight:700; text-decoration:none; }
+.artist-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.artist-panel .artist-listen,.artist-panel .artist-spotify { justify-self:start; align-self:flex-start; display:inline-flex; align-items:center; min-height:48px; padding:0 18px; border-radius:8px; font-weight:700; text-decoration:none; }
+.artist-panel .artist-listen { border:0; font:inherit; font-weight:700; cursor:pointer; }
+.artist-preview { display:block; box-sizing:border-box; width:100%; min-width:280px; border:0; border-radius:12px; }
 .artist-missing { opacity:.8; }
 .artist-listeners { font:800 22px var(--font-ui),monospace; }
 .artist-tags { display:flex; flex-wrap:wrap; gap:6px; margin:0; padding:0; list-style:none; }
@@ -423,6 +426,7 @@ button:disabled { opacity:.6; cursor:default; }
 .taste-panel .account-actions button:first-child { background:var(--ink); color:var(--surface); }
 .account-panel .account-actions button:hover:not(:disabled) { background:var(--soft); color:var(--ink); }
 .account-actions .account-danger { color:#fff; }
+.artist-panel .artist-listen { background:var(--ink); color:var(--surface); }
 .artist-panel .artist-spotify { background:var(--soft); color:var(--ink); }
 .board { background:var(--band); color:var(--band-ink); }
 .board-more { border-color:currentColor; }
