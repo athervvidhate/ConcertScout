@@ -311,7 +311,12 @@ export function Search() {
               An Artist, a sound, a place. We find the Concerts worth going out
               for.
             </motion.p>
-            <SearchExamples onExample={tryExample} ready />
+            <SearchExamples
+              onExample={tryExample}
+              ready={(example) =>
+                canSearch || examples.some((item) => item.text === example)
+              }
+            />
             {!spotify.connected && (
               <HomeStrip
                 active={activeExample}
