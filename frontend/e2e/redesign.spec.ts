@@ -115,7 +115,7 @@ test("live API stream keeps source facts, missing values and the Poster through 
   await expect(page.locator(".ticket .artist-name")).toHaveCSS("text-transform","uppercase");
   expect((await page.locator(".ticket .artist-name").boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await expect(page.getByRole("link",{name:"Tickets for Contract Concert One"})).toHaveAttribute("href","https://tickets.example/one");
-  await expect(page.locator(".dialog-photo img")).toHaveAttribute("src","/spotify-logo-white.svg");
+  await expect(page.locator(".dialog-photo img")).toHaveAttribute("src",/\/spotify-logo-white\.svg$/);
   await page.locator(".other-toggle").click();
   await expect(page.locator(".other-chips a")).toHaveAttribute("href","https://tickets.example/three");
   await expect(page.locator(".other-place")).toContainText("Oakland");
@@ -171,4 +171,20 @@ test("Poster starts revealing after the approved narrowing hold and records fram
   const metrics=JSON.stringify({responseToRevealStartMs:timing.reveal-timing.received,responseToFirstCompleteCardMs:timing.usable-timing.received,frames:timing.gaps.length,maxFrameGapMs:Math.max(...timing.gaps)});
   await writeFile(info.outputPath("presentation-timing.json"),metrics);
   await info.attach("presentation-timing",{body:metrics,contentType:"application/json"});
+});
+
+test("a source photo that fails to load takes its frame with it",async({page})=>{
+  await page.emulateMedia({reducedMotion:"reduce"});
+  const broken={...picks[0],concert:{...picks[0].concert,image:"/no-such-photo.jpg"}};
+  const body=stream(1).replace(JSON.stringify(picks[0]),JSON.stringify(broken));
+  await page.route("**/search",route=>route.fulfill({contentType:"text/event-stream",body}));
+  await page.goto("/");
+  await page.getByRole("textbox",{name:"Search",exact:true}).fill("Broken photo");
+  await page.getByRole("button",{name:"Search",exact:true}).click();
+  await expect(page.locator(".concert-card")).toHaveCount(1);
+  await expect(page.locator(".card-photo")).toHaveCount(0);
+  await page.getByRole("button",{name:"Open Ticket for Source Artist 1",exact:true}).click();
+  const tickets=page.getByRole("link",{name:"Tickets for Source Concert 1"});
+  await expect(tickets).toHaveAttribute("rel","nofollow noopener noreferrer");
+  await expect(page.locator(".dialog-photo")).toHaveCount(0);
 });
