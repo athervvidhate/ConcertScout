@@ -11,6 +11,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from concert_scout import interpreter, pool
 from concert_scout.models import MAX_RADIUS_MILES, Place
 from concert_scout.sources import geocoder, ticketmaster
+from tests.contracts import idle_musicbrainz
 
 TODAY = dt.date(2026, 11, 6)
 NOW = dt.datetime(2026, 11, 6, 12, tzinfo=dt.UTC)
@@ -91,8 +92,12 @@ async def test_the_pool_asks_ticketmaster_for_the_region_and_caches_it_apart() -
     region = city.model_copy(update={"radius_miles": 150})
     day = dt.timedelta(days=1)
     async with ticketmaster.make_client("key", httpx.MockTransport(source)) as client:
-        await pool.find_concerts(client, redis, city, [], TODAY + day, TODAY + day, NOW)
-        await pool.find_concerts(client, redis, region, [], TODAY + day, TODAY + day, NOW)
+        await pool.find_concerts(
+            client, idle_musicbrainz(), redis, city, [], TODAY + day, TODAY + day, NOW
+        )
+        await pool.find_concerts(
+            client, idle_musicbrainz(), redis, region, [], TODAY + day, TODAY + day, NOW
+        )
     assert radii == [str(ticketmaster.RADIUS_MILES), "150"]
 
 

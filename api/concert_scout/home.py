@@ -6,8 +6,8 @@ import logging
 from pydantic import BaseModel
 from redis.asyncio import Redis
 
-from concert_scout import cache, limits
-from concert_scout.models import Candidates, Interpreted, Poster, Recommendation
+from concert_scout import assemble, cache, limits
+from concert_scout.models import Candidates, Interpreted, Poster
 from concert_scout.pipeline import Services, run_search
 
 logger = logging.getLogger(__name__)
@@ -40,42 +40,45 @@ async def read(redis: Redis, today: dt.date) -> Examples:
     for example in stored.examples:
         if example.interpreted and example.interpreted.end and example.interpreted.end < today:
             continue
-        picks: list[Recommendation] = []
-        for pick in example.poster.recommendations:
-            if pick.concert.date and pick.concert.date < today:
-                continue
-            also = [c for c in pick.also if not c.date or c.date >= today]
-            picks.append(pick.model_copy(update={"also": also}))
+        picks = assemble.upcoming(example.poster.recommendations, today)
         visible.append(example.model_copy(update={"poster": Poster(recommendations=picks)}))
     return Examples(examples=visible)
 
 
 async def refresh(services: Services) -> None:
-    examples: list[Example] = []
+    """Saves each Example as it lands, so a run cut off by the time limit keeps what it built.
+
+    An Example that fails keeps its last good Poster until the cache expires.
+    """
+    stored = await cache.read(services.redis, KEY, Examples)
+    built = {example.text: example for example in stored.examples} if stored else {}
     for text in EXAMPLES:
         try:
             await limits.check_spend(services.redis)
         except limits.SpendCapReached:
             break
-        interpreted = None
-        candidates = None
-        poster = None
-        failed = False
-        async for event in run_search(text, [], None, "UTC", services):
-            if event.event == "interpreted":
-                interpreted = Interpreted.model_validate(
-                    {field: event.data.get(field) for field in Interpreted.model_fields}
-                )
-            elif event.event == "candidates":
-                candidates = Candidates.model_validate(event.data)
-            elif event.event == "poster":
-                poster = Poster.model_validate(event.data)
-            elif event.event == "error":
-                failed = True
-        if poster is not None and not failed:
-            examples.append(
-                Example(text=text, interpreted=interpreted, candidates=candidates, poster=poster)
-            )
-    # A failed refresh must not replace a good cache with an empty one.
-    if examples:
-        await cache.write(services.redis, KEY, Examples(examples=examples), TTL)
+        example = await _build(text, services)
+        if example is None:
+            continue
+        built[text] = example
+        ordered = [built[t] for t in EXAMPLES if t in built]
+        await cache.write(services.redis, KEY, Examples(examples=ordered), TTL)
+
+
+async def _build(text: str, services: Services) -> Example | None:
+    interpreted = None
+    candidates = None
+    poster = None
+    async for event in run_search(text, [], None, "UTC", services):
+        if event.event == "interpreted":
+            interpreted = Interpreted.model_validate(event.data)
+        elif event.event == "candidates":
+            candidates = Candidates.model_validate(event.data)
+        elif event.event == "poster":
+            poster = Poster.model_validate(event.data)
+        elif event.event == "error":
+            logger.warning("Example %r failed: %s", text, event.data.get("code"))
+            return None
+    if poster is None:
+        return None
+    return Example(text=text, interpreted=interpreted, candidates=candidates, poster=poster)

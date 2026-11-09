@@ -15,6 +15,7 @@ import {
 } from "@/lib/format";
 import type { Concert, Recommendation } from "@/lib/search";
 
+/** What a Recommendation is called. With no Lineup that is the Concert's own name, never an Artist. */
 export function nameOf({ concert }: Recommendation): string {
   return concert.artists[0]?.name ?? concert.name;
 }
@@ -115,6 +116,8 @@ export function Ticket({
   hidePhoto,
 }: TicketProps) {
   const { concert, reason, also = [] } = recommendation;
+  // Only an Artist has a panel. A Concert with no Lineup is just its title.
+  const artist = concert.artists[0]?.name;
   const details = [
     placeOf(concert),
     concert.date && formatDayShort(concert.date),
@@ -143,9 +146,9 @@ export function Ticket({
           </time>
         )}
         <h2>
-          <ArtistPanel name={nameOf(recommendation)} onOpen={onArtistOpen} />
+          {artist ? <ArtistPanel name={artist} onOpen={onArtistOpen} /> : concert.name}
         </h2>
-        {artistHint && (
+        {artist && artistHint && (
           <p className="artist-hint">
             <Pointer aria-hidden size={15} />
             Tap the name for more

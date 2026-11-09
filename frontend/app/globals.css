@@ -658,3 +658,16 @@ button:disabled { opacity:.6; cursor:default; }
 .concerts-grid:not([data-count="2"]):not([data-count="4"]) .concert-card:not(.rank-0):not(.solo) .card-body::before,.concerts-grid:not([data-count="2"]):not([data-count="4"]) .concert-card:not(.rank-0):not(.solo) .card-body::after { top:-24px; }
 .concerts-grid:not([data-count="2"]):not([data-count="4"]) .concert-card:not(.rank-0):not(.solo) .card-body::before { -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); -webkit-mask-image:linear-gradient(180deg,transparent,#000 70%); mask-image:linear-gradient(180deg,transparent,#000 70%); }
 .concerts-grid .card-meta,.concerts-grid .card-why,.concerts-grid .card-bill { opacity:1; color:#fff; }
+.poster-tools { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.share { display:inline-flex; flex-direction:column; align-items:flex-start; gap:6px; }
+.share-action.icon { width:48px; padding:0; }
+.share-error { font-size:14px; color:var(--danger); }
+.dialog-actions { display:flex; gap:10px; }
+.dialog-actions .save-action:not(.icon) { flex:1; }
+.shared-head { display:grid; gap:10px; margin:12px 0 28px; }
+.shared-head h1 { margin:0; font:400 clamp(36px,5vw,64px)/1 var(--font-poster),sans-serif; text-transform:uppercase; max-width:900px; }
+.shared-head .understood { justify-content:flex-start; width:auto; margin:0; }
+.shared-label { justify-self:start; margin:0; padding:6px 14px; border-radius:999px; background:var(--band); color:var(--band-ink); font-size:14px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+.shared-made { margin:0; color:var(--ink-2); }
+.shared-note { max-width:560px; margin:0 0 20px; color:var(--ink-2); }
+.search-bar.shared-search { grid-template-columns:minmax(0,1fr) auto; margin-top:40px; }

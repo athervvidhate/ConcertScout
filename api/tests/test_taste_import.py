@@ -33,7 +33,7 @@ async def test_an_import_changes_a_poster() -> None:
     assert set(reasons(without.text)) == {"Coming up nearby"}
     assert set(reasons(imported.text)) == {"A source-backed match"}
     assert dict(parse_sse(imported.text))["interpreted"]["artists"] == ["Imported Artist"]
-    lookups = cast(AsyncMock, pool.find_concerts).call_args.args[3]
+    lookups = cast(AsyncMock, pool.find_concerts).call_args.args[4]
     assert list(lookups) == ["Imported Artist"]
 
 

@@ -87,7 +87,7 @@ async def test_a_search_with_no_place_uses_the_shared_location(api: httpx.AsyncC
     data = dict(parse_sse(response.text))
     assert "place" not in data["interpreted"]
     assert len(data["poster"]["recommendations"]) == 2
-    place = cast(AsyncMock, pool.find_concerts).call_args.args[2]
+    place = cast(AsyncMock, pool.find_concerts).call_args.args[3]
     assert (place.lat, place.lon) == (32.7, -117.1)
     cast(AsyncMock, geocoder.geocode).assert_not_called()
 
@@ -97,7 +97,7 @@ async def test_a_typed_place_beats_the_shared_location(api: httpx.AsyncClient) -
     await api.post(
         "/search", json={"text": "UKG in SF", "token": TOKEN, "time_zone": "UTC", "near": near}
     )
-    assert cast(AsyncMock, pool.find_concerts).call_args.args[2] == PLACE
+    assert cast(AsyncMock, pool.find_concerts).call_args.args[3] == PLACE
 
 
 async def test_a_style_with_no_place_asks_for_one(api: httpx.AsyncClient) -> None:
@@ -373,6 +373,32 @@ async def test_failed_reasons_keep_the_grades_and_neutral_reasons(
         ("contract-one", "Coming up nearby", 3),
         ("contract-two", "Coming up nearby", 3),
     ]
+
+
+async def test_a_concert_with_no_lineup_is_graded_as_unknown_and_given_no_written_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from concert_scout import ranker
+
+    unbilled = CONCERTS[0].model_copy(
+        update={"id": "unbilled", "name": "Everything All The Time Tour", "artists": []}
+    )
+    monkeypatch.setattr(pool, "find_concerts", AsyncMock(return_value=[unbilled, CONCERTS[1]]))
+    rows: list[ranker.Row] = []
+    explain = ranker.explain
+
+    async def spy(interpretation: Any, shown: Any, model: Any) -> list[str]:
+        rows.extend(shown)
+        return await explain(interpretation, shown, model)
+
+    monkeypatch.setattr(ranker, "explain", spy)
+    async with api_for() as api:
+        body = {"text": "UKG in SF", "token": TOKEN, "time_zone": "UTC"}
+        picks = dict(parse_sse((await api.post("/search", json=body)).text))
+    shown = {p["concert"]["id"]: p["reason"] for p in picks["poster"]["recommendations"]}
+    assert shown == {"unbilled": "Coming up nearby", "contract-two": "A source-backed match"}
+    assert [row.artist for row in rows] == [CONCERTS[1].artists[0].name]
+    assert "Tour" not in picks["candidates"]["names"]
 
 
 async def test_failed_grades_show_the_top_matches(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -79,6 +79,11 @@ def forbidden_http(request: httpx.Request) -> httpx.Response:
     raise AssertionError(f"Unexpected vendor HTTP: {request.url.host}")
 
 
+def idle_musicbrainz() -> httpx.AsyncClient:
+    """For a test whose Concerts all have a Lineup, so nothing should ask MusicBrainz."""
+    return musicbrainz.make_client(httpx.MockTransport(forbidden_http))
+
+
 def contract_model() -> FunctionModel:
     def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
         text = " ".join(

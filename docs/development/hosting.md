@@ -40,7 +40,7 @@ Set secrets through the hosting dashboard or private CLI input. Never put values
 | API | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | Optional accounts: the project's URL and publishable key |
 | API | `SUPABASE_SECRET_KEY` | The project's secret key. Server only |
 | Frontend | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | The same URL and publishable key; set before building |
-| API | `CRON_SECRET` | Random string of at least 32 characters. Vercel's daily crons send it to `/warm` and `/sync`; unset, those routes do not exist |
+| API | `CRON_SECRET` | Random string of at least 32 characters. Vercel's daily crons send it to `/warm`, `/refresh-examples` and `/sync`; unset, those routes do not exist |
 | API | `JBD_API_KEY` | Optional JamBase Developer key. Only the daily `/sync` cron uses it; unset, Searches stay Ticketmaster-only |
 | API | `JAMBASE_DAYS` | Optional catalog window in days, default 90, at most 180 |
 
@@ -99,4 +99,4 @@ Checked November 6, 2026: [Vercel FastAPI entrypoint, lifespan and streaming](ht
 
 ## Cached home examples
 
-The authenticated nightly `/warm` job also builds the three public example Posters when Search is enabled, within the existing shared spend and Ticketmaster limits. These are the only additional model calls from the redesign. `/examples` reads the 30-hour Redis cache only; a miss or Redis outage returns an empty strip, never a paid fallback. Past source dates are filtered before delivery. Visiting the page and clicking an example makes no Search/provider/model call. The first strip appears after the next successful warm job; no deployment or environment change is needed.
+The authenticated nightly `/refresh-examples` job (00:00 UTC) builds the three public example Posters when Search is enabled. It is its own cron so the three Searches get a whole function time limit, and it saves each Poster as it lands, so a run cut short keeps what it built. It works within the existing shared spend and Ticketmaster limits. These are the only additional model calls from the redesign. `/examples` reads the 30-hour Redis cache only; a miss or Redis outage returns an empty strip, never a paid fallback. Past source dates are filtered before delivery. Visiting the page and clicking an example makes no Search/provider/model call. A fresh Redis has no strip until that job runs; trigger it once by hand (`vercel crons run /refresh-examples` in `api/`) on first launch or after a Redis reset.
