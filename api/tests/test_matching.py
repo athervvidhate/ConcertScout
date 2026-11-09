@@ -232,7 +232,7 @@ def test_a_taste_ranks_matches_above_concerts_with_no_signal() -> None:
     assert [c.concert.id for c in matching.shortlist(candidates)] == ["match", "none"]
 
 
-def test_candidate_names_use_the_matched_artist_once_then_the_lineup_then_the_concert() -> None:
+def test_candidate_names_use_the_matched_artist_once_then_the_lineup_and_never_the_title() -> None:
     tyler = concert("1", Artist(name="Opener"), Artist(name="Tyler Childers"))
     candidates = [
         Candidate(concert=tyler, match=Match(artist="Tyler Childers", signal="seed", score=1)),
@@ -241,7 +241,7 @@ def test_candidate_names_use_the_matched_artist_once_then_the_lineup_then_the_co
         Candidate(concert=concert("3")),
     ]
 
-    assert matching.candidate_names(candidates) == ["Tyler Childers", "Unmatched", "Concert 3"]
+    assert matching.candidate_names(candidates) == ["Tyler Childers", "Unmatched"]
 
 
 @pytest.mark.parametrize(

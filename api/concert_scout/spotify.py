@@ -152,7 +152,11 @@ def exact_matches(
 
 
 def router(
-    settings: Settings, redis: Redis, ticketmaster: httpx.AsyncClient, geo: httpx.AsyncClient
+    settings: Settings,
+    redis: Redis,
+    ticketmaster: httpx.AsyncClient,
+    musicbrainz: httpx.AsyncClient,
+    geo: httpx.AsyncClient,
 ) -> APIRouter:
     routes = APIRouter(prefix=PREFIX)
     ready = bool(
@@ -356,6 +360,7 @@ def router(
         try:
             concerts = await pool.find_concerts(
                 ticketmaster,
+                musicbrainz,
                 redis,
                 where,
                 [],

@@ -16,6 +16,7 @@ from tests.contracts import (
     PLACE,
     contract_model,
     forbidden_http,
+    idle_musicbrainz,
     install_sources,
     settings_with,
 )
@@ -56,7 +57,9 @@ async def test_warming_fills_the_pool_and_tags_a_later_search_reads(
 
     # A Search afterwards may not reach either source: everything it needs is cached.
     async with ticketmaster.make_client("unused", httpx.MockTransport(forbidden_http)) as tm:
-        concerts = await pool.find_concerts(tm, redis, PLACE, [], None, None, NOW)
+        concerts = await pool.find_concerts(
+            tm, idle_musicbrainz(), redis, PLACE, [], None, None, NOW
+        )
     async with listenbrainz.make_client(httpx.MockTransport(forbidden_http)) as lb:
         tags = listenbrainz.TagFetch(lb, redis)
         tags.add(concerts)
