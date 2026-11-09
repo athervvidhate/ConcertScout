@@ -32,6 +32,7 @@ Terms follow [GLOSSARY.md](../../GLOSSARY.md). Choices with lasting trade-offs l
 | Model calls per Search | Three: the interpreter, Jev grades and Haiku reasons |
 | Concert data | Ticketmaster Discovery, plus a national JamBase catalog synced daily |
 | Accounts | Optional, on Supabase, with Google or email and password. They sync Saved Concerts ([ADR 0004](../adr/0004-optional-accounts-on-supabase.md)). Guests save in the browser |
+| Alerts | Accounts can follow Artists and get one email a day about new Concerts near their Alert place, sent through Resend ([ADR 0006](../adr/0006-alerts-by-email-through-resend.md)) |
 | Streaming | SSE directly from the browser to FastAPI |
 | Money | $10-15 a month in total, no affiliate links, no ads |
 | Development | Local, run like a production server |

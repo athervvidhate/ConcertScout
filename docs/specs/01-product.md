@@ -56,6 +56,14 @@ A guest's Saved Concerts live in `localStorage` and stay on one device. A Saved 
 
 An optional account keeps Saved Concerts on every device. Sign in from the menu with Google, or with an email and password after confirming the email. While signed in, a Save goes to the account, and the API reads the Concert's facts from its source before storing it: Ticketmaster, or the JamBase Catalog. Signing in moves the device's guest saves into the account. Each one leaves the device only once the account holds it, and any the API cannot confirm with their source stay on the device for the next sign-in. Signing out shows none of the account's saves. The Account page offers sign-out and account deletion, which needs a sign-in from the last 10 minutes.
 
+## Alerts
+
+A signed-in person follows an Artist from the Artist panel or a Ticket. A guest sees an invitation to sign in instead. The Account page lists Followed Artists, each with an unfollow action, and holds the Alert place, a radius and a switch that turns Alerts on or off. Alerts start off until the person sets an Alert place.
+
+Once a day, Concert Scout looks for Concerts by Followed Artists within the Alert place over the next 6 months, and emails the Account any it has not mentioned before. One email holds them all, and an Account gets at most one a day. Each Concert in it shows the Artist, date and time on the venue's clock, venue, city and a link to its source listing, all from the source record. A missing time stays out. No model writes or reads an Alert.
+
+Every Alert has a one-click unsubscribe link that works without signing in, and it turns Alerts off. Unfollowing an Artist or deleting the Account stops everything about it. See [ADR 0006](../adr/0006-alerts-by-email-through-resend.md).
+
 ## Spotify shelf
 
 An allowlisted visitor who connects Spotify sees a separate dark shelf beneath the Poster, listing Concerts by their own Artists. Before a Search, the shelf shows those Artists near a shared location for the next two months. Spec in [03-taste](03-taste.md).
