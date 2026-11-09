@@ -25,15 +25,17 @@ Ticketmaster data changes every day, so a judged Search would go stale. Each cas
 
 ## Search set
 
-The 20 Searches should cover the pipeline's weak spots:
+The 20 judged Searches should cover the pipeline's weak spots:
 
 - Seeds where tags worked in the spike (Tyler Childers, Turnstile).
 - Seeds where tags failed (Four Tet, Khruangbin).
-- Plain descriptions with no Artist ("dreamy guitar music").
-- Styles with sparse tags (shoegaze, techno).
+- Plain descriptions with no Artist ("late-night R&B").
+- Styles with sparse tags (UK garage, drum and bass, techno).
 - A large city, a small city (Boise), and no place at all.
 - No dates, a weekend, and a far-off month.
 - A Search with no good answer, which should give a short Poster.
+
+A label is only worth as much as the judge's knowledge of the genre, so judged Searches sit in genres the judge knows. Electronic music is both the pipeline's weakest genre and the owner's strongest. Searches in other genres (country, punk, metal, folk) stay in `searches.yaml` unjudged, and only the measures without labels cover them. Hearing an Artist is part of judging: the rating page plays each Artist from Spotify.
 
 ## Judging
 

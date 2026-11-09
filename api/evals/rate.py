@@ -2,10 +2,12 @@
 
 Each Search replays offline from its Snapshot in the batch, with no keys or cost, and labels are
 saved to searches.yaml exactly as `evals.judge` saves them. It listens on this computer only.
+With Spotify app credentials set, each Artist can also be heard in Spotify's player.
 """
 
 import argparse
 import webbrowser
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Literal
 
@@ -14,13 +16,20 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+from concert_scout import cache
+from concert_scout.config import Settings
+from concert_scout.sources import spotify_catalog
 from evals import cases, harness, judge, snapshots
 from evals.compare import batch_cases
 
 PORT = 8765
 PAGE = Path(__file__).with_name("rate.html")
+ARTIST_PAGE = "https://open.spotify.com/artist/"
+PLAYER = "https://open.spotify.com/embed/artist/"
 
 type Label = Literal["must", "good", "bad", "neutral"]
+# The Spotify page of the Artist with exactly this name, or None.
+type FindPage = Callable[[str], Awaitable[str | None]]
 
 
 class Artist(BaseModel):
@@ -44,6 +53,18 @@ class Detail(Case):
     error: str | None = None
 
 
+class Listen(BaseModel):
+    player: str | None
+
+
+def player(page: str | None) -> str | None:
+    """Spotify's player for an Artist page. Anything but a plain Artist page gets none."""
+    if not page or not page.startswith(ARTIST_PAGE):
+        return None
+    artist_id = page.removeprefix(ARTIST_PAGE).split("?", 1)[0]
+    return PLAYER + artist_id if artist_id.isalnum() else None
+
+
 class Rating(BaseModel):
     labels: dict[str, Label]
     others: list[str] = []
@@ -57,7 +78,7 @@ def _latest_batch() -> str:
     return reports[-1].stem
 
 
-def make_app(batch: str) -> FastAPI:
+def make_app(batch: str, find_page: FindPage | None = None) -> FastAPI:
     captured = batch_cases([batch])
     app = FastAPI(title="Rate Searches")
 
@@ -120,6 +141,10 @@ def make_app(batch: str) -> FastAPI:
             error=result.error,
         )
 
+    @app.get("/api/listen")
+    async def listen(name: str) -> Listen:
+        return Listen(player=player(await find_page(name)) if find_page else None)
+
     @app.post("/api/searches/{case_id}")
     async def save(case_id: str, rating: Rating) -> Case:
         search = find(case_id)
@@ -139,14 +164,30 @@ def make_app(batch: str) -> FastAPI:
     return app
 
 
+def _spotify(settings: Settings) -> FindPage | None:
+    if not (settings.spotify_client_id and settings.spotify_client_secret):
+        return None
+    secret = settings.spotify_client_secret.get_secret_value()
+    client = spotify_catalog.make_client(settings.spotify_client_id, secret)
+    redis = cache.make_client(settings.redis_url)
+
+    async def find_page(name: str) -> str | None:
+        return await spotify_catalog.artist_page(client, redis, name)
+
+    return find_page
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--batch", help="batch report name; the newest when left out")
     args = parser.parse_args()
     batch = args.batch or _latest_batch()
+    find_page = _spotify(Settings())  # pyright: ignore[reportCallIssue]
+    if find_page is None:
+        print("SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are unset, so Listen is off.")
     print(f"Rating Searches from {batch} at http://127.0.0.1:{PORT}  (Ctrl+C to stop)")
     webbrowser.open(f"http://127.0.0.1:{PORT}")
-    uvicorn.run(make_app(batch), host="127.0.0.1", port=PORT, log_level="warning")
+    uvicorn.run(make_app(batch, find_page), host="127.0.0.1", port=PORT, log_level="warning")
 
 
 if __name__ == "__main__":

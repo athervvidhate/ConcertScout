@@ -85,3 +85,37 @@ async def test_saving_writes_the_judge_labels(stored: list[list[Search]]) -> Non
 async def test_an_unknown_search_is_not_found(stored: list[list[Search]]) -> None:
     async with client() as api:
         assert (await api.get("/api/searches/missing")).status_code == 404
+
+
+async def test_listen_plays_the_exact_artist_page_in_spotifys_player(
+    stored: list[list[Search]],
+) -> None:
+    pages = {"Bonobo": "https://open.spotify.com/artist/0cmWgDlu9CwTgxPhf403hb?si=x"}
+
+    async def find_page(name: str) -> str | None:
+        return pages.get(name)
+
+    app = rate.make_app("batch", find_page)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://t") as api:
+        found = (await api.get("/api/listen", params={"name": "Bonobo"})).json()
+        missing = (await api.get("/api/listen", params={"name": "Katseye"})).json()
+    assert found == {"player": "https://open.spotify.com/embed/artist/0cmWgDlu9CwTgxPhf403hb"}
+    assert missing == {"player": None}
+
+
+async def test_listen_is_off_without_spotify_credentials(stored: list[list[Search]]) -> None:
+    async with client() as api:
+        assert (await api.get("/api/listen", params={"name": "Bonobo"})).json() == {"player": None}
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        None,
+        "https://open.spotify.com/album/0cmWgDlu9CwTgxPhf403hb",
+        "https://evil.example/artist/abc",
+        "https://open.spotify.com/artist/abc/../../x",
+    ],
+)
+def test_only_a_plain_artist_page_becomes_a_player(page: str | None) -> None:
+    assert rate.player(page) is None

@@ -1,16 +1,48 @@
 # Searches for the owner to judge with `uv run python -m evals.judge`. Labels come only from a person.
 - id: tyler-childers-chicago
   text: Artists like Tyler Childers in Chicago
-- id: turnstile-new-york
-  text: Something like Turnstile in New York this weekend
+- id: kaytranada-new-york
+  text: Something like Kaytranada in New York this weekend
 - id: four-tet-london
   text: Artists like Four Tet in London
 - id: khruangbin-chicago
   text: Something like Khruangbin in Chicago
-- id: dreamy-guitar-seattle
-  text: Dreamy guitar music in Seattle
-- id: shoegaze-portland
-  text: Shoegaze in Portland this weekend
+- id: late-night-rnb-seattle
+  text: Late-night R&B in Seattle
+  snapshot: late-night-rnb-seattle-2026-11-09-afe569de
+  must:
+  - Ms. Lauryn Hill
+  good:
+  - Syd
+  - Wyclef Jean
+  - Lola Young
+  - Robert Glasper
+  - Tyla
+  - Thundercat
+  - Steve Lacy
+  - Olivia Rodrigo
+  judged: true
+- id: uk-garage-portland
+  text: UK garage in Portland this weekend
+  snapshot: uk-garage-portland-2026-11-09-c79b8e8d
+  bad:
+  - Bonobo
+  - Metal Church
+  - SHELLY RUDOLPH
+  - Silverada
+  - Drive-By Truckers
+  - SUZY SHEER with Patch +
+  - SABBATH LIVE with Harrah's Void, 3ST, & KingDozer
+  - Down in the Delta with Ms Vee and Yella P
+  - Russian Circles
+  - Son Volt
+  - Oregon Symphony
+  - Iron Chic
+  - Jeffrey Foucault
+  - Dwight Yoakam
+  - Holy Wave
+  - Sueco
+  judged: true
 - id: techno-detroit
   text: Techno in Detroit
   snapshot: techno-detroit-2026-11-07-ac6ca223
@@ -26,22 +58,108 @@
   - Rhye
   - Blood Incantation
   judged: true
-- id: boise-country
-  text: Country music like Tyler Childers in Boise
-- id: no-place-turnstile
-  text: Concerts by Turnstile or similar Artists
-- id: new-york-jazz
-  text: Modern jazz in New York
+- id: dubstep-boise
+  text: Dubstep in Boise
+- id: no-place-sammy-virji
+  text: Concerts by Sammy Virji or similar Artists
+  snapshot: no-place-sammy-virji-2026-11-09-426e65f5
+  must:
+  - Sammy Virji
+  good:
+  - Sam Gellaitry
+  - Saint Ludo
+  - WORSHIP
+  - Sub Focus
+  - Chris Lorenzo
+  judged: true
+- id: afrobeats-new-york
+  text: Afrobeats in New York
+  snapshot: afrobeats-new-york-2026-11-09-370a48f6
+  good:
+  - Tyla
+  - Ayra Starr
+  - Antibalas
+  - Richard Bona
+  - Kes
+  bad:
+  - Udit Narayan
+  - Gena
+  - Cherish the Ladies
+  - Martin Hayes
+  - Lila Downs
+  - La India
+  - Vince Giordano and the Nighthawks
+  - Wheatus
+  - New Constellations
+  - Hamilton Leithauser
+  - eldon
+  - The Afghan Whigs
+  judged: true
 - id: chicago-far-month
-  text: Indie rock in Chicago in September 2027
-- id: boise-shoegaze
-  text: Shoegaze in Boise
+  text: Hip hop in Chicago in September 2027
+  snapshot: chicago-far-month-2026-11-09-649e443a
+  bad:
+  - Sampa the Great
+  - Levi.Sct
+  - TBD/TBD
+  - Evanston Folk Festival 2027 (2-Day Pass)
+  judged: true
+- id: drum-and-bass-boise
+  text: Drum and bass in Boise
+  snapshot: drum-and-bass-boise-2026-11-09-56a82090
+  good:
+  - ATLiens
+  - Shrek Rave
+  - GHENGAR
+  - Zingara
+  - METAL CHURCH AND ARMORED SAINT, Livekill
+  bad:
+  - Todd Rundgren
+  - Token
+  - Squirrel Flower
+  - Dwight Yoakam
+  - Rotimi
+  - Petty Theft
+  - Three Days Grace
+  - 'Olivia O’Brien Presents: The PIXIE Tour'
+  - JEFF CROSBY'S ANNUAL HOMECOMING RUN
+  - Olivia O'Brien
+  - Not.Greenday
+  - 'Maddie Zahm: Everything All The Time Tour'
+  judged: true
 - id: ambient-seattle
   text: Ambient electronic music in Seattle
+  snapshot: ambient-seattle-2026-11-09-68399cde
+  good:
+  - Beats Antique
+  - Bluetech
+  - Bonobo
+  bad:
+  - ALLEYCVT
+  - Dennett
+  - TVBOO
+  - Tape B
+  - Sippy
+  - ZULAN
+  - Nikademis
+  - Level Up
+  - Zingara
+  - Sully
+  - FKJ
+  - Rhye
+  - Emma Ruth Rundle
+  - Jai Wolf
+  judged: true
 - id: punk-los-angeles
   text: Punk like Turnstile in Los Angeles
 - id: folk-austin
   text: Intimate folk music in Austin
+  snapshot: folk-austin-2026-11-09-a9da46e3
+  bad:
+  - Gracie Abrams
+  - girlsweetvoiced
+  - Carly Rae Jepsen
+  judged: true
 - id: four-tet-boise
   text: Something like Four Tet in Boise this weekend
 - id: instrumental-san-francisco
@@ -52,12 +170,45 @@
   judged: true
 - id: metal-denver
   text: Heavy metal in Denver
-- id: no-place-khruangbin
-  text: Concerts by Khruangbin or similar Artists
+- id: no-place-doja-cat
+  text: Concerts by Doja Cat or similar Artists
+  snapshot: no-place-doja-cat-2026-11-09-f912fc50
+  good:
+  - Doja Cat
+  - Latto
+  - Harry Styles
+  judged: true
 - id: sparse-answer
   text: Tuvan throat singing in Boise this weekend
+  snapshot: sparse-answer-2026-11-09-acf4d4c1
+  bad:
+  - Rotimi
+  - Triptides, Eunoian
+  - Petty Theft
+  - Three Days Grace
+  - 'Olivia O’Brien Presents: The PIXIE Tour'
+  - JEFF CROSBY'S ANNUAL HOMECOMING RUN
+  - Olivia O'Brien
+  - Not.Greenday
+  - 'Maddie Zahm: Everything All The Time Tour'
+  - 'THE SLIGHTEST BITS, cryshadow, Eunoian, The Mall Goth Moths '
+  - Todd Rundgren
+  judged: true
 - id: rap-atlanta
   text: Artists like JID in Atlanta
+  snapshot: rap-atlanta-2026-11-09-a5d883f8
+  must:
+  - 6LACK
+  good:
+  - Trippie Redd
+  - Lil Baby
+  - Meek Mill
+  - Chris Brown
+  bad:
+  - Key Glock
+  - Doja Cat
+  - Olivia Rodrigo
+  judged: true
 - id: melodic-rap-houston
   text: Melodic rap in Houston
   snapshot: melodic-rap-houston-2026-11-07-babf31c3
@@ -137,3 +288,10 @@
   judged: true
 - id: country-nashville
   text: Country like Zach Bryan in Nashville
+  snapshot: country-nashville-2026-11-09-9da2291a
+  must:
+  - Zach Bryan
+  good:
+  - Chris Stapleton
+  - Clint Daniels
+  judged: true

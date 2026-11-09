@@ -39,6 +39,13 @@
   li.focused { outline: 2px solid var(--focus); outline-offset: 1px; }
   .name { font-weight: 600; }
   .name a { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  .listen { border: 1px solid var(--line); background: none; color: var(--muted); border-radius: 6px;
+    padding: 1px 7px; margin-left: 8px; font: inherit; font-size: 12px; font-weight: 400; cursor: pointer; }
+  .player { grid-column: 1 / -1; color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .player iframe { display: block; width: 100%; min-width: 280px; height: 152px; border: 0; border-radius: 12px; }
+  .hear { display: flex; gap: 8px; margin: 0 0 14px; }
+  .hear button { border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    border-radius: 8px; padding: 0 14px; font: inherit; cursor: pointer; }
   .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
     border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 6px; }
   .reason { grid-column: 1; color: var(--muted); font-size: 13px; }
@@ -114,6 +121,10 @@ function render() {
       <span><b>Bad</b> (b): shouldn't be here</span>
       <span><b>Neutral</b> (n): no opinion</span>
       <span>↑ ↓ move</span>
+      <span><b>l</b>: listen</span>
+    </div>
+    <div id="hear-box">
+      <form class="hear"><input id="hear" type="text" placeholder="Hear any Artist, such as the one the Search names" aria-label="Artist to hear"><button>Listen</button></form>
     </div>
     <ol id="artists"></ol>
     <label for="others">Other must Artists the Search missed (comma separated)</label>
@@ -126,6 +137,11 @@ function render() {
   main.querySelector(".meta").textContent =
     `${current.id} · ${poster} on the Poster, then shortlisted Artists · ${current.snapshot}` +
     (current.error ? ` · ended with ${current.error}` : "");
+  main.querySelector(".hear").onsubmit = event => {
+    event.preventDefault();
+    const name = main.querySelector("#hear").value.trim();
+    if (name) listen(name, main.querySelector("#hear-box"), true);
+  };
   main.querySelector("#others").value = current.others.join(", ");
   main.querySelector("#notes").value = current.notes;
   const ol = main.querySelector("#artists");
@@ -135,10 +151,10 @@ function render() {
     const name = li.querySelector(".name");
     name.append(artist.name);
     if (artist.on_poster) { const t = document.createElement("span"); t.className = "tag"; t.textContent = "Poster"; name.append(t); }
-    const link = document.createElement("a");
-    link.href = `https://open.spotify.com/search/${encodeURIComponent(artist.name)}`;
-    link.target = "_blank"; link.rel = "noopener"; link.textContent = "listen ↗";
-    name.append(link);
+    const hear = document.createElement("button");
+    hear.className = "listen"; hear.textContent = "Listen";
+    hear.onclick = () => { focus = i; paintFocus(); listen(artist.name, li); };
+    name.append(hear);
     if (artist.reason) { const r = document.createElement("div"); r.className = "reason"; r.textContent = artist.reason; li.append(r); }
     for (const label of LABELS) {
       const b = document.createElement("button");
@@ -151,6 +167,33 @@ function render() {
   });
   paint();
   main.querySelector("#save").onclick = save;
+}
+
+// One Spotify player at a time. Pressing Listen again on the same Artist closes it.
+async function listen(name, holder, replace = false) {
+  const wasOpen = holder.querySelector(".player");
+  document.querySelectorAll(".player").forEach(p => p.remove());
+  if (wasOpen && !replace) return;
+  const box = document.createElement("div");
+  box.className = "player";
+  box.textContent = "Finding on Spotify…";
+  holder.append(box);
+  const response = await fetch(`/api/listen?name=${encodeURIComponent(name)}`);
+  const { player } = response.ok ? await response.json() : { player: null };
+  box.textContent = "";
+  if (player) {
+    const frame = document.createElement("iframe");
+    frame.src = player;
+    frame.title = `${name} on Spotify`;
+    frame.allow = "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture";
+    box.append(frame);
+    return;
+  }
+  box.append("No Artist on Spotify has exactly this name. ");
+  const search = document.createElement("a");
+  search.href = `https://open.spotify.com/search/${encodeURIComponent(name)}`;
+  search.target = "_blank"; search.rel = "noopener"; search.textContent = "Search Spotify ↗";
+  box.append(search);
 }
 
 function setLabel(i, label) { current.artists[i].label = label; paint(); }
@@ -183,6 +226,7 @@ document.addEventListener("keydown", event => {
   if (!current || event.target.matches("input, textarea") || event.metaKey || event.ctrlKey) return;
   const label = KEYS[event.key.toLowerCase()];
   if (label) { setLabel(focus, label); focus = Math.min(focus + 1, current.artists.length - 1); paintFocus(); }
+  else if (event.key.toLowerCase() === "l") { const li = document.querySelectorAll("#artists li")[focus]; if (li) listen(current.artists[focus].name, li); }
   else if (event.key === "ArrowDown") { focus = Math.min(focus + 1, current.artists.length - 1); paintFocus(); event.preventDefault(); }
   else if (event.key === "ArrowUp") { focus = Math.max(focus - 1, 0); paintFocus(); event.preventDefault(); }
 });
