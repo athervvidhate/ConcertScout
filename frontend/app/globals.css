@@ -296,7 +296,7 @@ body:has(.information)::before { animation:none; opacity:.35; }
 .artist-panel ol { margin:0; padding-left:24px; list-style:decimal; }
 .artist-panel a { color:inherit; text-decoration:underline; text-underline-offset:3px; }
 .artist-panel li { min-height:30px; }
-.artist-panel .artist-follow { align-self:flex-start; min-height:48px; padding:0 18px; border:2px solid currentColor; border-radius:8px; background:transparent; color:inherit; font:700 17px var(--font-ui),sans-serif; cursor:pointer; }
+.artist-panel .artist-follow { align-self:flex-start; display:inline-flex; align-items:center; gap:6px; min-height:48px; padding:0 18px; border:2px solid currentColor; border-radius:8px; background:transparent; color:inherit; font:700 17px var(--font-ui),sans-serif; cursor:pointer; }
 .artist-panel .artist-follow[aria-pressed="true"] { background:var(--ink); border-color:var(--ink); color:var(--surface); }
 .artist-panel .artist-follow:disabled { opacity:.6; cursor:default; }
 .artist-panel .artist-spotify { justify-self:start; align-self:flex-start; display:inline-flex; align-items:center; min-height:48px; padding:0 18px; border-radius:8px; font-weight:700; text-decoration:none; }

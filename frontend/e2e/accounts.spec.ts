@@ -302,8 +302,8 @@ test("a signed-in person follows an Artist from its panel and sets up Alerts on 
   await page.getByRole("button", { name: "Contract Artist", exact: true }).last().click();
   const follow = panel.getByRole("button", { name: "Follow Contract Artist" });
   await follow.click();
+  // A toggle keeps its name; only its pressed state changes.
   await expect(follow).toHaveAttribute("aria-pressed", "true");
-  await expect(follow).toHaveText(/Following/);
 
   await page.goto("/account");
   const alerts = page.getByRole("region", { name: "Alerts" });
@@ -314,10 +314,11 @@ test("a signed-in person follows an Artist from its panel and sets up Alerts on 
   await alerts.getByRole("combobox", { name: "Distance" }).selectOption("25");
   await alerts.getByRole("button", { name: "Set place" }).click();
   await expect(alerts.getByText("Within 25 miles of San Francisco, California")).toBeVisible();
+  const saved = page.waitForResponse((r) => r.url().endsWith("/alerts/enabled") && r.ok());
   await emailMe.check();
-  await expect(emailMe).toBeChecked();
+  await saved;
 
-  // Another browser signed in to the same account reads the same Alerts.
+  // A reload reads the Alerts back from the account.
   await page.reload();
   await expect(emailMe).toBeChecked();
   await alerts.getByRole("button", { name: "Unfollow Contract Artist" }).click();
@@ -354,7 +355,7 @@ test("an Alert's signed link stops Alerts without a sign-in, and a forged one do
 
   await page.goto(`/unsubscribe?account=${id}&token=${sign("someone-else")}`);
   await page.getByRole("button", { name: "Stop Alerts" }).click();
-  await expect(page.getByRole("alert")).toHaveText("This link is not valid.");
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText("This link is not valid.");
   expect(await enabled()).toBe(true);
 
   // Opening the link alone changes nothing. Only the button does.

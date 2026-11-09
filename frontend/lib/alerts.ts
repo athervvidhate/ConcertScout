@@ -103,12 +103,18 @@ export async function setAlertPlace(place: string, radius: number): Promise<void
   if (alerts) set({ ...alerts, place: read });
 }
 
+/** The switch moves at once, and moves back if the API refuses. */
 export async function setAlertsEnabled(enabled: boolean): Promise<void> {
-  await accountFetch("/alerts/enabled", {
-    method: "PUT",
-    body: JSON.stringify({ enabled }),
-  });
   if (alerts) set({ ...alerts, enabled });
+  try {
+    await accountFetch("/alerts/enabled", {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    });
+  } catch (error) {
+    if (alerts) set({ ...alerts, enabled: !enabled });
+    throw error;
+  }
 }
 
 /** Stops Alerts from an email's signed link, with no sign-in. */

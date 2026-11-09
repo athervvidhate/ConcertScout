@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { useState } from "react";
 
 import { AccountDialog } from "@/components/account-dialog";
@@ -51,8 +52,8 @@ export function FollowButton({ name }: { name: string }) {
         disabled={busy || !alerts}
         onClick={toggle}
       >
-        {following ? "Following" : "Follow"}
-        <span className="sr-only"> {name}</span>
+        {following && <Check aria-hidden size={18} strokeWidth={3} />}
+        Follow<span className="sr-only"> {name}</span>
       </button>
       {failed && <p role="alert">That did not save. Try again soon.</p>}
     </>
