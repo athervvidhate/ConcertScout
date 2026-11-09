@@ -9,8 +9,40 @@
   text: Something like Khruangbin in Chicago
 - id: late-night-rnb-seattle
   text: Late-night R&B in Seattle
+  snapshot: late-night-rnb-seattle-2026-11-09-afe569de
+  must:
+  - Ms. Lauryn Hill
+  good:
+  - Syd
+  - Wyclef Jean
+  - Lola Young
+  - Robert Glasper
+  - Tyla
+  - Thundercat
+  - Steve Lacy
+  - Olivia Rodrigo
+  judged: true
 - id: uk-garage-portland
   text: UK garage in Portland this weekend
+  snapshot: uk-garage-portland-2026-11-09-c79b8e8d
+  bad:
+  - Bonobo
+  - Metal Church
+  - SHELLY RUDOLPH
+  - Silverada
+  - Drive-By Truckers
+  - SUZY SHEER with Patch +
+  - SABBATH LIVE with Harrah's Void, 3ST, & KingDozer
+  - Down in the Delta with Ms Vee and Yella P
+  - Russian Circles
+  - Son Volt
+  - Oregon Symphony
+  - Iron Chic
+  - Jeffrey Foucault
+  - Dwight Yoakam
+  - Holy Wave
+  - Sueco
+  judged: true
 - id: techno-detroit
   text: Techno in Detroit
   snapshot: techno-detroit-2026-11-07-ac6ca223
@@ -30,6 +62,16 @@
   text: Dubstep in Boise
 - id: no-place-sammy-virji
   text: Concerts by Sammy Virji or similar Artists
+  snapshot: no-place-sammy-virji-2026-11-09-426e65f5
+  must:
+  - Sammy Virji
+  good:
+  - Sam Gellaitry
+  - Saint Ludo
+  - WORSHIP
+  - Sub Focus
+  - Chris Lorenzo
+  judged: true
 - id: afrobeats-new-york
   text: Afrobeats in New York
 - id: chicago-far-month
@@ -58,6 +100,19 @@
   text: Tuvan throat singing in Boise this weekend
 - id: rap-atlanta
   text: Artists like JID in Atlanta
+  snapshot: rap-atlanta-2026-11-09-a5d883f8
+  must:
+  - 6LACK
+  good:
+  - Trippie Redd
+  - Lil Baby
+  - Meek Mill
+  - Chris Brown
+  bad:
+  - Key Glock
+  - Doja Cat
+  - Olivia Rodrigo
+  judged: true
 - id: melodic-rap-houston
   text: Melodic rap in Houston
   snapshot: melodic-rap-houston-2026-11-07-babf31c3
@@ -137,3 +192,10 @@
   judged: true
 - id: country-nashville
   text: Country like Zach Bryan in Nashville
+  snapshot: country-nashville-2026-11-09-9da2291a
+  must:
+  - Zach Bryan
+  good:
+  - Chris Stapleton
+  - Clint Daniels
+  judged: true
