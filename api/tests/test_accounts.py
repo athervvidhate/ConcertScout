@@ -7,6 +7,7 @@ import base64
 import json
 import time
 from collections.abc import AsyncIterator
+from typing import Any
 
 import httpx
 import pytest
@@ -15,12 +16,20 @@ from joserfc import jwt
 from joserfc.jwk import ECKey
 from pydantic import SecretStr
 
-from concert_scout import accounts, pool
-from concert_scout.app import create_app
+from concert_scout import accounts, alerts, pool
+from concert_scout.app import create_app, make_services
 from concert_scout.models import Concert
-from concert_scout.sources import supabase
+from concert_scout.sources import resend, supabase
 from tests import supabase_stack as stack
-from tests.contracts import CONCERTS, contract_model, forbidden_http, install_sources, settings_with
+from tests.contracts import (
+    CONCERTS,
+    NOW,
+    PLACE,
+    contract_model,
+    forbidden_http,
+    install_sources,
+    settings_with,
+)
 
 pytestmark = pytest.mark.supabase
 
@@ -196,3 +205,111 @@ async def test_the_daily_keep_awake_reaches_the_database() -> None:
         await supabase.keep_awake(client, SecretStr(stack.secret_key()))
         with pytest.raises(supabase.SupabaseError):
             await supabase.keep_awake(client, SecretStr("sb_secret_not_this_project"))
+
+
+async def alerts_view(api: httpx.AsyncClient, person: stack.Person) -> dict[str, Any]:
+    response = await api.get("/account/alerts", headers=bearer(person))
+    assert response.status_code == 200
+    return response.json()
+
+
+async def test_followed_artists_and_the_alert_place_follow_the_account(
+    api: httpx.AsyncClient,
+) -> None:
+    person = stack.new_person()
+    assert await alerts_view(api, person) == {"enabled": False, "place": None, "followed": []}
+
+    for name in ("Contract Artist", "contract  artist", "Second Contract Artist"):
+        followed = await api.post("/account/followed", json={"name": name}, headers=bearer(person))
+        assert followed.status_code == 200
+    early = await api.put("/account/alerts/enabled", json={"enabled": True}, headers=bearer(person))
+    assert early.status_code == 409
+    placed = await api.put(
+        "/account/alerts/place",
+        json={"place": "San Francisco", "radius_miles": 25},
+        headers=bearer(person),
+    )
+    assert placed.json()["radius_miles"] == 25
+    on = await api.put("/account/alerts/enabled", json={"enabled": True}, headers=bearer(person))
+    assert on.status_code == 204
+
+    elsewhere = stack.Person(person.id, person.email, stack.sign_in(person.email))
+    view = await alerts_view(api, elsewhere)
+    assert view["enabled"] is True
+    # Two spellings of one Artist are one follow, kept as first typed.
+    assert view["followed"] == [
+        {"artist_key": "contract artist", "name": "Contract Artist"},
+        {"artist_key": "second contract artist", "name": "Second Contract Artist"},
+    ]
+
+    gone = await api.delete("/account/followed/contract artist", headers=bearer(person))
+    assert gone.status_code == 204
+    assert [f["name"] for f in (await alerts_view(api, person))["followed"]] == [
+        "Second Contract Artist"
+    ]
+
+
+async def test_one_account_cannot_see_or_change_anothers_follows(api: httpx.AsyncClient) -> None:
+    owner, other = stack.new_person(), stack.new_person()
+    await api.post("/account/followed", json={"name": "Contract Artist"}, headers=bearer(owner))
+
+    assert (await alerts_view(api, other))["followed"] == []
+    await api.delete("/account/followed/contract artist", headers=bearer(other))
+    assert len((await alerts_view(api, owner))["followed"]) == 1
+
+    forged = {"user_id": owner.id, "artist_key": "forged", "name": "Forged"}
+    with stack.rest(other.token) as rest:
+        assert rest.post("/followed_artists", json=forged).status_code in (401, 403)
+        assert rest.post(
+            "/alert_settings", json={"user_id": other.id, "enabled": True}
+        ).status_code in (401, 403)
+        assert rest.get("/followed_artists", params={"select": "name"}).json() == []
+        # The browser has no grant on what was sent at all.
+        assert rest.get("/alerts_sent", params={"select": "concert_id"}).status_code in (401, 403)
+
+
+async def test_a_real_alert_run_sends_once_and_deleting_the_account_removes_everything() -> None:
+    person = stack.new_person()
+    secret = SecretStr(stack.secret_key())
+    emails: list[dict[str, object]] = []
+
+    def mail(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "api.resend.com"
+        emails.append(json.loads(request.content))
+        return httpx.Response(200, json={"id": "email"})
+
+    transport = stack.stack_transport(httpx.MockTransport(mail))
+    services = make_services(settings_with(), transport, FakeAsyncRedis(), contract_model())
+    async with (
+        supabase.make_client(stack.URL, transport) as client,
+        resend.make_client("re_test", transport) as mail_client,
+    ):
+        account = supabase.Account(person.id, person.token, 0)
+        await supabase.follow(
+            client,
+            secret,
+            account,
+            supabase.FollowedArtist(artist_key="contract artist", name="Contract Artist"),
+        )
+        await supabase.set_alert_place(client, secret, person.id, PLACE)
+        await supabase.set_alerts_enabled(client, secret, person.id, True)
+
+        async def alert_run() -> alerts.Outcome:
+            return await alerts.run(
+                services, client, secret, mail_client, "https://site.test", "https://api.test", NOW
+            )
+
+        await alert_run()
+        await alert_run()
+
+        mine = [e for e in emails if e["to"] == [person.email]]
+        assert len(mine) == 1
+        sent = await supabase.sent_to(client, secret, [person.id])
+        assert sent[person.id] == {ONE.id, CONCERTS[2].id}
+
+        await supabase.delete_user(client, secret, account)
+        assert await supabase.followed_by(client, secret, [person.id]) == {}
+        assert await supabase.sent_to(client, secret, [person.id]) == {}
+        assert person.id not in [
+            a.user_id for a in await supabase.accounts_with_alerts(client, secret)
+        ]
