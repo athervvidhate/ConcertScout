@@ -248,6 +248,7 @@ async def run(
             try:
                 concerts = await pool.find_concerts(
                     services.ticketmaster,
+                    services.musicbrainz,
                     services.redis,
                     group[0].place,
                     names,
