@@ -1,0 +1,139 @@
+# Searches for the owner to judge with `uv run python -m evals.judge`. Labels come only from a person.
+- id: tyler-childers-chicago
+  text: Artists like Tyler Childers in Chicago
+- id: turnstile-new-york
+  text: Something like Turnstile in New York this weekend
+- id: four-tet-london
+  text: Artists like Four Tet in London
+- id: khruangbin-chicago
+  text: Something like Khruangbin in Chicago
+- id: dreamy-guitar-seattle
+  text: Dreamy guitar music in Seattle
+- id: shoegaze-portland
+  text: Shoegaze in Portland this weekend
+- id: techno-detroit
+  text: Techno in Detroit
+  snapshot: techno-detroit-2026-11-07-ac6ca223
+  good:
+  - Taiki Nulight
+  - Moody Good
+  - Rohaan
+  - Papajay
+  - Die By The Sword
+  - BARELY ALIVE
+  - GRiZ
+  bad:
+  - Rhye
+  - Blood Incantation
+  judged: true
+- id: boise-country
+  text: Country music like Tyler Childers in Boise
+- id: no-place-turnstile
+  text: Concerts by Turnstile or similar Artists
+- id: new-york-jazz
+  text: Modern jazz in New York
+- id: chicago-far-month
+  text: Indie rock in Chicago in September 2027
+- id: boise-shoegaze
+  text: Shoegaze in Boise
+- id: ambient-seattle
+  text: Ambient electronic music in Seattle
+- id: punk-los-angeles
+  text: Punk like Turnstile in Los Angeles
+- id: folk-austin
+  text: Intimate folk music in Austin
+- id: four-tet-boise
+  text: Something like Four Tet in Boise this weekend
+- id: instrumental-san-francisco
+  text: Groove-led instrumental music in San Francisco
+  snapshot: instrumental-san-francisco-2026-11-07-90641efb
+  must:
+  - Thundercat
+  judged: true
+- id: metal-denver
+  text: Heavy metal in Denver
+- id: no-place-khruangbin
+  text: Concerts by Khruangbin or similar Artists
+- id: sparse-answer
+  text: Tuvan throat singing in Boise this weekend
+- id: rap-atlanta
+  text: Artists like JID in Atlanta
+- id: melodic-rap-houston
+  text: Melodic rap in Houston
+  snapshot: melodic-rap-houston-2026-11-07-babf31c3
+  must:
+  - Trippie Redd
+  good:
+  - Lil Tracy
+  - TopOppGen
+  - K Suave
+  - BalloutDaDon
+  - Lil Peep
+  - Doja Cat
+  bad:
+  - Key Glock
+  judged: true
+- id: pop-new-york
+  text: Pop like Sabrina Carpenter in New York
+  snapshot: pop-new-york-2026-11-07-0eb490b8
+  good:
+  - Kim Petras
+  - Olivia Rodrigo
+  - Sombr
+  - Charlie Puth
+  - Yeonjun
+  bad:
+  - Alan Walker
+  judged: true
+- id: dance-pop-los-angeles
+  text: Upbeat dance pop in Los Angeles
+  snapshot: dance-pop-los-angeles-2026-11-07-629fb1b9
+  good:
+  - Kim Petras
+  - Carly Rae Jepsen
+  - Icona Pop
+  - Olivia Rodrigo
+  bad:
+  - Mixed Feelings
+  judged: true
+- id: house-chicago
+  text: House music in Chicago
+  snapshot: house-chicago-2026-11-07-5aa94f32
+  good:
+  - John Summit
+  - Calvin Harris
+  - Zeds Dead
+  - Alan Walker
+  bad:
+  - Rhye
+  judged: true
+- id: fred-again-san-francisco
+  text: Something like Fred again.. in San Francisco
+  snapshot: fred-again-san-francisco-2026-11-07-dd3a530e
+  must:
+  - Sammy Virji
+  - John Summit
+  good:
+  - Jamie xx
+  - Sam Gellaitry
+  - Jorja Smith
+  bad:
+  - Gracie Abrams
+  judged: true
+- id: tech-house-miami
+  text: Tech house like John Summit in Miami
+  snapshot: tech-house-miami-2026-11-07-88efd522
+  must:
+  - John Summit
+  - Dom Dolla
+  - Ultra Music Festival
+  - it's murph
+  good:
+  - Afrojack
+  - Alison Wonderland
+  - Calvin Harris
+  bad:
+  - Holy Priest
+  judged: true
+- id: country-nashville
+  text: Country like Zach Bryan in Nashville

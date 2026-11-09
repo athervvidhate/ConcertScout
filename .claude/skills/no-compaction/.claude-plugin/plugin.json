@@ -1,0 +1,9 @@
+{
+  "name": "no-compaction",
+  "version": "0.1.0",
+  "description": "Replace compaction's summary with a pointer to the session's own transcript",
+  "types": "./types.d.ts",
+  "author": {
+    "name": "Atherv Vidhate"
+  }
+}

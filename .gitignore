@@ -74,3 +74,22 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Third-party Concert pool snapshots
+api/evals/snapshots/
+
+# Browser test build and failure artifacts
+.next-e2e/
+test-results/
+playwright-report/
+
+# Local conversation pointers and working checkpoints.
+.agent-context/
+
+# Vercel CLI link
+.vercel
+
+# Third-party design skills, installed locally for design work only
+.claude/skills/design-taste-frontend/
+.claude/skills/frontend-design/
+.claude/skills/impeccable/

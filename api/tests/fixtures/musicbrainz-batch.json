@@ -1,0 +1,641 @@
+{
+ "names": [
+  "Hit the Lights",
+  "Forever Came Calling",
+  "Fox Royale",
+  "Bahamas",
+  "YUMA",
+  "Wednesday",
+  "Turnover",
+  "Plini",
+  "Sabaton",
+  "Zzqx Nonexistent Act"
+ ],
+ "count": 145,
+ "artists": [
+  {
+   "id": "39a31de6-763d-48b6-a45c-f7cfad58ffd8",
+   "name": "Sabaton",
+   "score": 100
+  },
+  {
+   "id": "c114f39a-281e-4e66-82c6-6a0d763c5cb2",
+   "name": "Forever Came Calling",
+   "score": 94
+  },
+  {
+   "id": "3a4c8052-7c20-473f-8b41-c3a081cbeb13",
+   "name": "Turnover",
+   "score": 85,
+   "disambiguation": "rock band from Virginia Beach, Virginia"
+  },
+  {
+   "id": "b0442f82-6322-4096-8535-b3bb776019d3",
+   "name": "Hit the Lights",
+   "score": 85,
+   "disambiguation": "US | pop-punk"
+  },
+  {
+   "id": "3f6c0aa1-a7a9-4ff2-9c50-e84d4b0de178",
+   "name": "Plini",
+   "score": 84,
+   "disambiguation": "Australian guitarist and songwriter",
+   "aliases": [
+    {
+     "name": "plinimusic"
+    },
+    {
+     "name": "plinirh"
+    },
+    {
+     "name": "Plini Roessler‐Holgate"
+    }
+   ]
+  },
+  {
+   "id": "294d06f7-fd1f-4cbe-a433-bb9cd6ac937b",
+   "name": "Bahamas",
+   "score": 83,
+   "disambiguation": "a.k.a. Afie Jurvanen",
+   "aliases": [
+    {
+     "name": "Afie Jurvanen"
+    }
+   ]
+  },
+  {
+   "id": "f4d306f3-e82b-4186-9cca-4e8806db21f8",
+   "name": "Wednesday 13",
+   "score": 77,
+   "disambiguation": "the band; do not use for songwriting credits!"
+  },
+  {
+   "id": "9833b455-0da2-40b5-8e63-37816c910604",
+   "name": "Wednesday",
+   "score": 77,
+   "disambiguation": "Asheville NC band"
+  },
+  {
+   "id": "6312b3ac-1118-4175-8ac7-ef9579c17fa9",
+   "name": "Fox Royale",
+   "score": 76
+  },
+  {
+   "id": "b94095a4-0d5b-4440-b436-7bcc258036bb",
+   "name": "Bahamas",
+   "score": 74,
+   "disambiguation": "prog rock band"
+  },
+  {
+   "id": "08876bf0-894e-4eba-aed1-85503c3feb9f",
+   "name": "Bahamas",
+   "score": 74,
+   "disambiguation": "Polskie disco polo"
+  },
+  {
+   "id": "2e9da893-bea9-4e20-9fca-dcf09abfeae9",
+   "name": "TURNOVER",
+   "score": 74,
+   "disambiguation": "Mike Stocksdale"
+  },
+  {
+   "id": "26f78761-e454-4bb0-adcc-a88729e5e0c1",
+   "name": "BAHÄMAS",
+   "score": 73,
+   "disambiguation": "Emo / screamo from Burgundy (FR)"
+  },
+  {
+   "id": "409a05c7-662d-4883-b87f-9932d7c087f3",
+   "name": "Bahamas",
+   "score": 72,
+   "disambiguation": "producer"
+  },
+  {
+   "id": "dd86548c-dc0b-4ff3-bb11-7ca4a36ad1fa",
+   "name": "Bahamas",
+   "score": 72,
+   "disambiguation": "French?"
+  },
+  {
+   "id": "5770e444-2fc1-4800-aa3c-50a347a24d34",
+   "name": "Yuma",
+   "score": 72,
+   "disambiguation": "IRMA records"
+  },
+  {
+   "id": "92dfab22-d656-44a1-be98-4533759e0773",
+   "name": "Ÿuma",
+   "score": 72,
+   "disambiguation": "Sabrine Jenhani Ramy Zoghlemi tunisian duet",
+   "aliases": [
+    {
+     "name": "Yuma"
+    },
+    {
+     "name": "Ÿuma"
+    }
+   ]
+  },
+  {
+   "id": "1077e53e-c8e8-4492-9813-31f71677e6f9",
+   "name": "Blue Wednesday",
+   "score": 71,
+   "disambiguation": "lo‐fi artist",
+   "aliases": [
+    {
+     "name": "Gustav Joseph"
+    }
+   ]
+  },
+  {
+   "id": "88ba9981-ef4c-4305-aee3-fa8aa53e6753",
+   "name": "yuma yamaguchi",
+   "score": 71,
+   "aliases": [
+    {
+     "name": "山口由馬"
+    }
+   ]
+  },
+  {
+   "id": "b73e8cbf-6330-4e40-a19c-21a8c3d2efe5",
+   "name": "yuma.",
+   "score": 71,
+   "disambiguation": "Yuma Mair, deep house music",
+   "aliases": [
+    {
+     "name": "Yuma Mair"
+    }
+   ]
+  },
+  {
+   "id": "2a9f8204-16e2-4cd7-a29f-e5271c291c29",
+   "name": "Yuma",
+   "score": 70,
+   "disambiguation": "Spanish hip-hop / reggae"
+  },
+  {
+   "id": "aa5454e5-9eca-4246-8c9f-43bb8703efd5",
+   "name": "Wednesday",
+   "score": 69,
+   "disambiguation": "German‐English rock band active from 1975–1980"
+  },
+  {
+   "id": "e5c3343a-1fe2-4d32-9d83-9bff717b280d",
+   "name": "yuma",
+   "score": 69,
+   "disambiguation": "Passàggio Discs"
+  },
+  {
+   "id": "6f738f63-562f-4c4a-9834-03829d92a489",
+   "name": "Yuma",
+   "score": 69,
+   "disambiguation": "SynthesizerV"
+  },
+  {
+   "id": "50c9bce3-eeea-4372-9cb4-6d9bf6ca2753",
+   "name": "YUMA",
+   "score": 69,
+   "disambiguation": "trance group"
+  },
+  {
+   "id": "a682c339-67f9-4c99-b89a-5600d71ab9f6",
+   "name": "YUMA",
+   "score": 68,
+   "disambiguation": "Belgian band"
+  },
+  {
+   "id": "00ff71f5-11b0-40b1-9d2d-d78e83524634",
+   "name": "Yuma",
+   "score": 68,
+   "disambiguation": "Latin artist from Cuba"
+  },
+  {
+   "id": "3278d301-b8b8-4b0d-ae7b-9bd8af8dde66",
+   "name": "Yuma",
+   "score": 68,
+   "disambiguation": "chillout/psytrance artist from India",
+   "aliases": [
+    {
+     "name": "Anjal Krishna K V"
+    }
+   ]
+  },
+  {
+   "id": "76fd0206-dc32-4d66-adf9-ecf03fe56a42",
+   "name": "yuma",
+   "score": 68,
+   "disambiguation": "doujin artist"
+  },
+  {
+   "id": "132a65da-1271-4908-859c-9f10dee5985a",
+   "name": "Yuma",
+   "score": 68,
+   "disambiguation": "German rapper",
+   "aliases": [
+    {
+     "name": "¥uma"
+    }
+   ]
+  },
+  {
+   "id": "66b9df13-1c24-41a1-875c-8cd0545a0b5f",
+   "name": "YUMA",
+   "score": 68,
+   "disambiguation": "Japanese composer"
+  },
+  {
+   "id": "8bd83ab7-ae08-42ea-8447-e22dff551eef",
+   "name": "YUMA",
+   "score": 68,
+   "disambiguation": "Acoustic duo from north-east England"
+  },
+  {
+   "id": "9f86e6ba-1479-45ec-8919-c9d211d040d2",
+   "name": "yuma",
+   "score": 68,
+   "disambiguation": "yuma"
+  },
+  {
+   "id": "95a77c03-4900-4bd8-946f-2ff86a11e1d3",
+   "name": "Yuma",
+   "score": 68,
+   "disambiguation": "Japanese singer, from CHERRSEE"
+  },
+  {
+   "id": "eb5ce9f0-1904-4b03-8ff5-09c171b02d50",
+   "name": "yuma",
+   "score": 68,
+   "disambiguation": "artwork"
+  },
+  {
+   "id": "aaf10a34-ee7c-46fd-a88b-1ade0c271dd9",
+   "name": "yuma",
+   "score": 68,
+   "disambiguation": "J-pop songwriter/producer"
+  },
+  {
+   "id": "ffbfe93a-c372-4bb1-b836-b995fc83e739",
+   "name": "Yuma",
+   "score": 68,
+   "disambiguation": "1-SHINE"
+  },
+  {
+   "id": "9b36a093-913b-40ac-aa7a-bca9a6561db9",
+   "name": "yuma",
+   "score": 68,
+   "disambiguation": "Russian rapper"
+  },
+  {
+   "id": "9af01d07-8f6e-4651-bdcb-38efae021af7",
+   "name": "Wednesday",
+   "score": 68,
+   "disambiguation": "70s Canadian pop vocal group"
+  },
+  {
+   "id": "674cdf9b-ff09-4bf5-88ef-d70d37c7e4a4",
+   "name": "WEDNESDAY",
+   "score": 67,
+   "disambiguation": "Korean indie rock band"
+  },
+  {
+   "id": "71604a5a-11da-4249-bfde-7d59493739f3",
+   "name": "Rob Turnover",
+   "score": 67
+  },
+  {
+   "id": "4b100246-278d-4849-83c0-61271c5b1ba9",
+   "name": "Wednesday Addams",
+   "score": 66
+  },
+  {
+   "id": "bf13e7e8-a2ee-406c-8678-32722266f4a9",
+   "name": "Wednesday",
+   "score": 66,
+   "disambiguation": "P. Jacks, D. Edenvik, M. Thorhede, Swedish competitor"
+  },
+  {
+   "id": "f6b1fe59-0ea3-4899-9dad-26deec796506",
+   "name": "Wednesday",
+   "score": 66,
+   "disambiguation": "Hip-Hop artist"
+  },
+  {
+   "id": "f0f3fb26-753c-449d-8601-d2e2548b13c1",
+   "name": "Wednesday",
+   "score": 66,
+   "disambiguation": "Japanese visual kei"
+  },
+  {
+   "id": "ed7a4a5a-73fc-4b48-b137-50de87655f53",
+   "name": "Florent Sabaton",
+   "score": 66,
+   "aliases": [
+    {
+     "name": "Florent Alexandre Sabaton"
+    }
+   ]
+  },
+  {
+   "id": "9c5df819-1972-4da4-9ac6-a695261e44c1",
+   "name": "Wednesday",
+   "score": 66,
+   "disambiguation": "Texas"
+  },
+  {
+   "id": "24fad45f-3e5b-4b49-9eab-172a4b905434",
+   "name": "Wednesday",
+   "score": 66,
+   "disambiguation": "producer based in Portland, Oregon"
+  },
+  {
+   "id": "059cee91-5888-432d-be21-82765fd8092f",
+   "name": "Sensa Yuma",
+   "score": 66,
+   "disambiguation": "Spain-based UK punk band"
+  },
+  {
+   "id": "ad51a8ae-32ac-47a3-9d86-1a776ac06f9f",
+   "name": "The Bahamas",
+   "score": 66
+  },
+  {
+   "id": "552bd9a8-5dc8-4dcb-976f-12135e4b71fb",
+   "name": "Barako Bahamas",
+   "score": 65,
+   "disambiguation": "Belgian"
+  },
+  {
+   "id": "6c71c010-63cf-4bf1-a97d-d57e19572c0c",
+   "name": "Yuma Sun",
+   "score": 65
+  },
+  {
+   "id": "9a8ef1b4-858e-43ea-a15e-d8032a9c266d",
+   "name": "Yuma Uesaka",
+   "score": 65
+  },
+  {
+   "id": "7167c55d-fd04-414d-b567-8496a6b846dd",
+   "name": "Dead by Wednesday",
+   "score": 64
+  },
+  {
+   "id": "bc611fdf-a620-486a-a39a-842e7d5d4d31",
+   "name": "After Wednesday",
+   "score": 64
+  },
+  {
+   "id": "3ea1ecdd-0df4-4785-8f3f-628e99b714f3",
+   "name": "Wednesday Knudsen",
+   "score": 64
+  },
+  {
+   "id": "9c024378-e935-4698-8257-2094e0f32394",
+   "name": "Yuma Nora",
+   "score": 64
+  },
+  {
+   "id": "5541a40d-1145-4b85-9310-14a3d6c95293",
+   "name": "Wednesday's Wolves",
+   "score": 64
+  },
+  {
+   "id": "76231b16-c550-464a-9205-64f86b600356",
+   "name": "Wednesday Week",
+   "score": 63
+  },
+  {
+   "id": "9a01a1da-fbf5-482d-aaf5-cce851430032",
+   "name": "Yuma House",
+   "score": 63
+  },
+  {
+   "id": "8b549567-bfb6-44a5-b106-a83052f3675e",
+   "name": "Colour Me Wednesday",
+   "score": 63
+  },
+  {
+   "id": "ee31a237-38a4-4e7a-a3a1-a0f8f5524920",
+   "name": "By Wednesday",
+   "score": 63,
+   "disambiguation": "Ska band"
+  },
+  {
+   "id": "8c6223cd-e270-4331-bee5-1f0ca6849b62",
+   "name": "Wednesday Night Heroes",
+   "score": 62
+  },
+  {
+   "id": "e3c7b019-ed69-45f0-a13c-95429e7fafdb",
+   "name": "St. Yuma",
+   "score": 62
+  },
+  {
+   "id": "a7b0cbb3-3d1b-4432-8758-77b0677e4337",
+   "name": "Ash Wednesday",
+   "score": 62,
+   "disambiguation": "Australian synth/electronica musician"
+  },
+  {
+   "id": "6f336560-0f06-4fd7-b95e-979eef22839f",
+   "name": "Yuma X",
+   "score": 62,
+   "disambiguation": "Australian electropop duo"
+  },
+  {
+   "id": "a0aeda1e-2b36-4a7b-a809-4f2aef270c59",
+   "name": "YUMA OSAKO",
+   "score": 62,
+   "aliases": [
+    {
+     "name": "大迫佑磨"
+    }
+   ]
+  },
+  {
+   "id": "d671ab17-a3d9-49d6-abe4-794079a291dd",
+   "name": "Yuma Claeys",
+   "score": 62
+  },
+  {
+   "id": "3d11b2b0-0f58-4da0-9c37-10deaee58a61",
+   "name": "Yuma Hampejs",
+   "score": 62
+  },
+  {
+   "id": "04f76d52-022a-4cf1-85fa-2e4c2c275e16",
+   "name": "Mr. Wednesday",
+   "score": 62
+  },
+  {
+   "id": "28c88c08-4fbd-4ec8-95d4-7da1d5756a94",
+   "name": "Danny's Wednesday",
+   "score": 62
+  },
+  {
+   "id": "dba28df8-f921-4872-92c4-aa7fab4c2b20",
+   "name": "Sweet Wednesday",
+   "score": 62
+  },
+  {
+   "id": "96596511-b4b8-4f06-8275-5779d0396ab1",
+   "name": "Yuma Horiuchi",
+   "score": 62
+  },
+  {
+   "id": "3d060d9f-53e2-4ed6-8e1c-fee6b08d36e0",
+   "name": "Johnny Yuma",
+   "score": 62,
+   "disambiguation": "performer in the Ivonne Van Cleef Orquesta"
+  },
+  {
+   "id": "59e11fdc-d4ea-434c-9fb8-6a76d60377f3",
+   "name": "Jimmy Yuma",
+   "score": 62
+  },
+  {
+   "id": "1b30d780-60dd-4936-af8f-0dc80fef022a",
+   "name": "Yuma Okubo",
+   "score": 62
+  },
+  {
+   "id": "f8b6311e-12b1-4058-a4fa-01f1de03ab33",
+   "name": "Miki Yuma",
+   "score": 62
+  },
+  {
+   "id": "2010e11c-e1d5-4a78-8a26-deb327827168",
+   "name": "Atsuko Yuma",
+   "score": 62
+  },
+  {
+   "id": "bac10fc0-1016-4b6c-9d1f-b50df5e3e69d",
+   "name": "Yuma Murakami",
+   "score": 62
+  },
+  {
+   "id": "bfa295ea-d7f5-4131-9833-3791df36cb31",
+   "name": "Yuma Sugizaki",
+   "score": 62
+  },
+  {
+   "id": "78efc694-3a53-4deb-b951-43457a963657",
+   "name": "Yuma Kasongo",
+   "score": 62
+  },
+  {
+   "id": "8937dfcc-0d72-4530-a944-323fe85d14c2",
+   "name": "Wednesday's Child",
+   "score": 62
+  },
+  {
+   "id": "150710af-0167-4bf8-aa06-b66b0180f2c8",
+   "name": "Forever Wednesday",
+   "score": 62
+  },
+  {
+   "id": "45ad227d-dc32-4ef3-a0cf-6c95e815f0d9",
+   "name": "Last Wednesday",
+   "score": 62,
+   "disambiguation": "DMV Area rock band"
+  },
+  {
+   "id": "a6f18ea4-58d2-4c4d-9bb1-3128b550b418",
+   "name": "Black Wednesday",
+   "score": 62,
+   "disambiguation": "German hard rock band"
+  },
+  {
+   "id": "1449709f-c7fa-4da9-bd36-dfafc74b021e",
+   "name": "Wednesday Wine",
+   "score": 62
+  },
+  {
+   "id": "f0ff09e5-e14d-4b1a-af75-a74381a87fd7",
+   "name": "Wednesday Adams",
+   "score": 62
+  },
+  {
+   "id": "044f68fb-cf93-4dcc-b6c5-4956631ad7c1",
+   "name": "Miss Wednesday",
+   "score": 61
+  },
+  {
+   "id": "367286bd-0352-4e34-be8e-404648a4e82a",
+   "name": "Wednesday Amelia",
+   "score": 61,
+   "aliases": [
+    {
+     "name": "Wednesday Amelia"
+    },
+    {
+     "name": "Wednesday Amelia Wiles"
+    }
+   ]
+  },
+  {
+   "id": "eafcd3b9-849e-4eb3-a21a-261849f18eae",
+   "name": "Last Wednesday",
+   "score": 61
+  },
+  {
+   "id": "76a3de7f-76a4-4e93-9c05-ba120e687c50",
+   "name": "Scratchcard Wednesday",
+   "score": 61,
+   "disambiguation": "Scottish pop duo"
+  },
+  {
+   "id": "2ee41ee2-647f-4a53-a10c-346a5d51147e",
+   "name": "Big Wednesday",
+   "score": 61
+  },
+  {
+   "id": "f054312c-98d1-416a-b168-462db762f898",
+   "name": "Jamie Wednesday",
+   "score": 61
+  },
+  {
+   "id": "d35b6381-a511-4b3f-927e-c2827700f6ba",
+   "name": "Vintage Wednesday",
+   "score": 61
+  },
+  {
+   "id": "3c18bf1a-5b33-45d6-8f5e-a108d9562ae9",
+   "name": "Wednesday Nite",
+   "score": 61
+  },
+  {
+   "id": "5f798de3-ac4f-4b1c-aaf0-19d135fabfc6",
+   "name": "Aloha Wednesday",
+   "score": 61
+  },
+  {
+   "id": "239a6be5-3018-4bc9-9385-bbaf2c688b24",
+   "name": "Wednesday 13",
+   "score": 61,
+   "disambiguation": "the person, Joseph Poole",
+   "aliases": [
+    {
+     "name": "Joseph Poole"
+    }
+   ]
+  },
+  {
+   "id": "a005d371-61e6-4c90-ae88-420132a86ee0",
+   "name": "November, Wednesday.",
+   "score": 61
+  },
+  {
+   "id": "3732b498-dbe1-4323-8e9d-369e1b3b96ff",
+   "name": "Ash Wednesday",
+   "score": 61,
+   "disambiguation": "Ash Wednesday of Hand Job Academy"
+  },
+  {
+   "id": "95dce528-2411-44b9-bd5a-4d7ffc34ff12",
+   "name": "The Wednesday",
+   "score": 61
+  }
+ ]
+}

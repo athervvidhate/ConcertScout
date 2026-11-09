@@ -1,0 +1,430 @@
+{
+  "text": "Calvin Harris in SoCal next May",
+  "interpreted": {
+    "place": "Los Angeles, California, United States",
+    "region": "Southern California",
+    "radius_miles": 150,
+    "start": "2027-05-01",
+    "end": "2027-05-31",
+    "artists": [
+      "Calvin Harris"
+    ],
+    "genres": []
+  },
+  "candidates": {
+    "names": [
+      "Calvin Harris",
+      "Kylie Minogue",
+      "Niall Horan",
+      "Two Door Cinema Club",
+      "Def Leppard",
+      "Tally Hall",
+      "Alaska Thunderfuck",
+      "Al Stewart",
+      "Too Many Zooz",
+      "Ricky Montgomery",
+      "John Splithoff",
+      "The Limi\u00f1anas",
+      "Haiden Henderson",
+      "The Chats",
+      "The Aces",
+      "Angus & Julia Stone",
+      "Metallica",
+      "Queens of the Stone Age",
+      "French 79"
+    ],
+    "total": 40
+  },
+  "poster": {
+    "recommendations": [
+      {
+        "concert": {
+          "id": "vv1AaZk44GkdGR8BI",
+          "name": "Calvin Harris - North America Tour",
+          "url": "https://www.ticketmaster.com/calvin-harris-north-america-tour-anaheim-california-05-20-2027/event/09006555CCBD0EA8",
+          "artists": [
+            {
+              "name": "Calvin Harris",
+              "mbid": "8dd98bdc-80ec-4e93-8509-2f46bafc09a7",
+              "genre": "Pop",
+              "subgenre": "Pop"
+            }
+          ],
+          "date": "2027-05-20",
+          "time": "20:00:00",
+          "time_zone": "America/Los_Angeles",
+          "venue": "Honda Center",
+          "city": "Anaheim",
+          "region": "CA",
+          "image": "https://s1.ticketm.net/dam/a/259/9afb1a6e-3bf4-4fa7-a4f1-0c2602b90259_RETINA_PORTRAIT_16_9.jpg",
+          "general_sale": "2026-10-22T19:00:00Z",
+          "presales": []
+        },
+        "reason": "Scottish DJ and producer known for massive dance-pop hits blending house, disco and club beats.",
+        "score": 3,
+        "also": [
+          {
+            "id": "vvG1IZ_fQLbaqn",
+            "name": "Calvin Harris - North America Tour",
+            "url": "https://www.ticketmaster.com/calvin-harris-north-america-tour-san-diego-california-05-21-2027/event/0A0065469F60976A",
+            "artists": [
+              {
+                "name": "Calvin Harris",
+                "mbid": "8dd98bdc-80ec-4e93-8509-2f46bafc09a7",
+                "genre": "Pop",
+                "subgenre": "Pop"
+              }
+            ],
+            "date": "2027-05-21",
+            "time": "19:00:00",
+            "time_zone": "America/Los_Angeles",
+            "venue": "Viejas Arena at Aztec Bowl San Diego State University",
+            "city": "San Diego",
+            "region": "CA",
+            "image": "https://s1.ticketm.net/dam/a/259/9afb1a6e-3bf4-4fa7-a4f1-0c2602b90259_RETINA_PORTRAIT_16_9.jpg",
+            "general_sale": "2026-10-22T19:00:00Z",
+            "presales": [
+              {
+                "name": "Live Nation Presale",
+                "start": "2026-10-21T19:00:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              },
+              {
+                "name": "Reserved by Spotify presale",
+                "start": "2026-10-19T17:00:00Z",
+                "end": "2026-10-20T17:00:00Z"
+              },
+              {
+                "name": "Artist Presale",
+                "start": "2026-10-20T19:00:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              }
+            ]
+          },
+          {
+            "id": "vvG1IZ_4dBvmWB",
+            "name": "Calvin Harris - North America Tour",
+            "url": "https://www.ticketmaster.com/calvin-harris-north-america-tour-san-diego-california-05-22-2027/event/0A006550FA06EF7A",
+            "artists": [
+              {
+                "name": "Calvin Harris",
+                "mbid": "8dd98bdc-80ec-4e93-8509-2f46bafc09a7",
+                "genre": "Pop",
+                "subgenre": "Pop"
+              }
+            ],
+            "date": "2027-05-22",
+            "time": "19:00:00",
+            "time_zone": "America/Los_Angeles",
+            "venue": "Viejas Arena at Aztec Bowl San Diego State University",
+            "city": "San Diego",
+            "region": "CA",
+            "image": "https://s1.ticketm.net/dam/a/259/9afb1a6e-3bf4-4fa7-a4f1-0c2602b90259_RETINA_PORTRAIT_16_9.jpg",
+            "general_sale": "2026-10-22T19:00:00Z",
+            "presales": [
+              {
+                "name": "Artist Presale",
+                "start": "2026-10-20T19:45:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              },
+              {
+                "name": "Live Nation Presale",
+                "start": "2026-10-21T19:00:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              }
+            ]
+          },
+          {
+            "id": "vvG1IZ_45bbb-k",
+            "name": "Calvin Harris - North America Tour",
+            "url": "https://www.ticketmaster.com/calvin-harris-north-america-tour-san-diego-california-05-23-2027/event/0A006552D8618846",
+            "artists": [
+              {
+                "name": "Calvin Harris",
+                "mbid": "8dd98bdc-80ec-4e93-8509-2f46bafc09a7",
+                "genre": "Pop",
+                "subgenre": "Pop"
+              }
+            ],
+            "date": "2027-05-23",
+            "time": "19:00:00",
+            "time_zone": "America/Los_Angeles",
+            "venue": "Viejas Arena at Aztec Bowl San Diego State University",
+            "city": "San Diego",
+            "region": "CA",
+            "image": "https://s1.ticketm.net/dam/a/259/9afb1a6e-3bf4-4fa7-a4f1-0c2602b90259_RETINA_PORTRAIT_16_9.jpg",
+            "general_sale": "2026-10-22T19:00:00Z",
+            "presales": [
+              {
+                "name": "Artist Presale",
+                "start": "2026-10-20T20:00:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              },
+              {
+                "name": "Live Nation Presale",
+                "start": "2026-10-21T19:00:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              }
+            ]
+          },
+          {
+            "id": "vv1F0Z_48vCAZd8d1",
+            "name": "Calvin Harris - North America Tour",
+            "url": "https://www.ticketmaster.com/calvin-harris-north-america-tour-inglewood-california-05-26-2027/event/0900655401385F29",
+            "artists": [
+              {
+                "name": "Calvin Harris",
+                "mbid": "8dd98bdc-80ec-4e93-8509-2f46bafc09a7",
+                "genre": "Pop",
+                "subgenre": "Pop"
+              }
+            ],
+            "date": "2027-05-26",
+            "time": "20:00:00",
+            "time_zone": "America/Los_Angeles",
+            "venue": "Kia Forum",
+            "city": "Inglewood",
+            "region": "CA",
+            "image": "https://s1.ticketm.net/dam/a/259/9afb1a6e-3bf4-4fa7-a4f1-0c2602b90259_RETINA_PORTRAIT_16_9.jpg",
+            "general_sale": "2026-10-22T19:00:00Z",
+            "presales": []
+          },
+          {
+            "id": "vv1AaZk4FGkeBgHyq",
+            "name": "Calvin Harris - North America Tour",
+            "url": "https://www.ticketmaster.com/calvin-harris-north-america-tour-inglewood-california-05-27-2027/event/09006548BAD7CE5D",
+            "artists": [
+              {
+                "name": "Calvin Harris",
+                "mbid": "8dd98bdc-80ec-4e93-8509-2f46bafc09a7",
+                "genre": "Pop",
+                "subgenre": "Pop"
+              }
+            ],
+            "date": "2027-05-27",
+            "time": "20:00:00",
+            "time_zone": "America/Los_Angeles",
+            "venue": "Kia Forum",
+            "city": "Inglewood",
+            "region": "CA",
+            "image": "https://s1.ticketm.net/dam/a/259/9afb1a6e-3bf4-4fa7-a4f1-0c2602b90259_RETINA_PORTRAIT_16_9.jpg",
+            "general_sale": "2026-10-22T19:00:00Z",
+            "presales": [
+              {
+                "name": "Reserved by Spotify presale",
+                "start": "2026-10-19T17:00:00Z",
+                "end": "2026-10-20T17:00:00Z"
+              },
+              {
+                "name": "Artist Presale",
+                "start": "2026-10-20T19:00:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              },
+              {
+                "name": "Live Nation Presale",
+                "start": "2026-10-21T19:00:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              }
+            ]
+          },
+          {
+            "id": "vv1AaZk48Gkd68XiC",
+            "name": "Calvin Harris - North America Tour",
+            "url": "https://www.ticketmaster.com/calvin-harris-north-america-tour-inglewood-california-05-28-2027/event/09006550C743EB0E",
+            "artists": [
+              {
+                "name": "Calvin Harris",
+                "mbid": "8dd98bdc-80ec-4e93-8509-2f46bafc09a7",
+                "genre": "Pop",
+                "subgenre": "Pop"
+              }
+            ],
+            "date": "2027-05-28",
+            "time": "20:00:00",
+            "time_zone": "America/Los_Angeles",
+            "venue": "Kia Forum",
+            "city": "Inglewood",
+            "region": "CA",
+            "image": "https://s1.ticketm.net/dam/a/259/9afb1a6e-3bf4-4fa7-a4f1-0c2602b90259_RETINA_PORTRAIT_16_9.jpg",
+            "general_sale": "2026-10-22T19:00:00Z",
+            "presales": [
+              {
+                "name": "Artist Presale",
+                "start": "2026-10-20T19:00:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              },
+              {
+                "name": "Live Nation Presale",
+                "start": "2026-10-21T19:00:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              }
+            ]
+          },
+          {
+            "id": "vv1AaZk48Gkd6fCiJ",
+            "name": "Calvin Harris - North America Tour",
+            "url": "https://www.ticketmaster.com/calvin-harris-north-america-tour-inglewood-california-05-29-2027/event/09006550C750EB26",
+            "artists": [
+              {
+                "name": "Calvin Harris",
+                "mbid": "8dd98bdc-80ec-4e93-8509-2f46bafc09a7",
+                "genre": "Pop",
+                "subgenre": "Pop"
+              }
+            ],
+            "date": "2027-05-29",
+            "time": "20:00:00",
+            "time_zone": "America/Los_Angeles",
+            "venue": "Kia Forum",
+            "city": "Inglewood",
+            "region": "CA",
+            "image": "https://s1.ticketm.net/dam/a/259/9afb1a6e-3bf4-4fa7-a4f1-0c2602b90259_RETINA_PORTRAIT_16_9.jpg",
+            "general_sale": "2026-10-22T19:00:00Z",
+            "presales": [
+              {
+                "name": "Artist Presale",
+                "start": "2026-10-20T19:45:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              },
+              {
+                "name": "Live Nation Presale",
+                "start": "2026-10-21T19:00:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              }
+            ]
+          },
+          {
+            "id": "vv1AaZk48Gkd69rc1",
+            "name": "Calvin Harris - North America Tour",
+            "url": "https://www.ticketmaster.com/calvin-harris-north-america-tour-inglewood-california-05-30-2027/event/09006550C75DEB4A",
+            "artists": [
+              {
+                "name": "Calvin Harris",
+                "mbid": "8dd98bdc-80ec-4e93-8509-2f46bafc09a7",
+                "genre": "Pop",
+                "subgenre": "Pop"
+              }
+            ],
+            "date": "2027-05-30",
+            "time": "20:00:00",
+            "time_zone": "America/Los_Angeles",
+            "venue": "Kia Forum",
+            "city": "Inglewood",
+            "region": "CA",
+            "image": "https://s1.ticketm.net/dam/a/259/9afb1a6e-3bf4-4fa7-a4f1-0c2602b90259_RETINA_PORTRAIT_16_9.jpg",
+            "general_sale": "2026-10-22T19:00:00Z",
+            "presales": [
+              {
+                "name": "Artist Presale",
+                "start": "2026-10-20T19:45:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              },
+              {
+                "name": "Live Nation Presale",
+                "start": "2026-10-21T19:00:00Z",
+                "end": "2026-10-22T17:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "concert": {
+          "id": "vvG1iZ_3Bg-0lz",
+          "name": "Harry Styles: Together, Together",
+          "url": "https://www.ticketmaster.com/harry-styles-together-together-pasadena-california-05-01-2027/event/0B00652EB5864AF8",
+          "artists": [
+            {
+              "name": "Harry Styles",
+              "mbid": "7eb1ce54-a355-41f9-8d68-e018b096d427",
+              "genre": "Pop",
+              "subgenre": "Pop Rock"
+            },
+            {
+              "name": "Kylie Minogue",
+              "mbid": "d23dc845-caac-4758-8b52-0f6e42a3c5c3",
+              "genre": "Rock",
+              "subgenre": "Pop"
+            }
+          ],
+          "date": "2027-05-01",
+          "time": "19:30:00",
+          "time_zone": "America/Los_Angeles",
+          "venue": "Rose Bowl",
+          "city": "Pasadena",
+          "region": "CA",
+          "image": "https://s1.ticketm.net/dam/a/2c8/8b6d9420-66c7-4bcb-877b-0ff0238da2c8_RETINA_PORTRAIT_16_9.jpg",
+          "general_sale": "2026-09-16T16:00:00Z",
+          "presales": [
+            {
+              "name": "Amex Presale Tickets\u00ae",
+              "start": "2026-09-15T17:00:00Z",
+              "end": "2026-09-15T22:00:00Z"
+            },
+            {
+              "name": "Amex Preferred Tickets\u2122 presale",
+              "start": "2026-09-15T17:00:00Z",
+              "end": "2026-09-15T22:00:00Z"
+            },
+            {
+              "name": "Artist Presale",
+              "start": "2026-09-15T23:00:00Z",
+              "end": "2026-09-16T15:00:00Z"
+            }
+          ]
+        },
+        "reason": "Australian pop singer famed for glossy dance-pop hits, often in the vein of Calvin Harris.",
+        "score": 2,
+        "also": []
+      },
+      {
+        "concert": {
+          "id": "vv1AaZk3FGketptR7",
+          "name": "French 79 - Close To The Giants",
+          "url": "https://www.ticketmaster.com/french-79-close-to-the-giants-los-angeles-california-05-07-2027/event/09006488A95A9BC4",
+          "artists": [
+            {
+              "name": "French 79",
+              "mbid": "b4bf3785-04d5-4cd3-94d9-86f3b43e2904",
+              "genre": "Dance/Electronic",
+              "subgenre": "Dance/Electronic"
+            }
+          ],
+          "date": "2027-05-07",
+          "time": "20:00:00",
+          "time_zone": "America/Los_Angeles",
+          "venue": "The Regent Theater",
+          "city": "Los Angeles",
+          "region": "CA",
+          "image": "https://s1.ticketm.net/dam/a/9b9/6dd33d7c-be0c-43e8-abaa-5986b12209b9_RETINA_PORTRAIT_16_9.jpg",
+          "general_sale": "2026-04-17T17:00:00Z",
+          "presales": [
+            {
+              "name": "Artist Presale",
+              "start": "2026-04-15T17:00:00Z",
+              "end": "2026-04-17T05:00:00Z"
+            },
+            {
+              "name": "Ticketmaster Presale",
+              "start": "2026-04-15T15:00:00Z",
+              "end": "2026-04-17T05:00:00Z"
+            },
+            {
+              "name": "Spotify Presale",
+              "start": "2026-04-15T17:00:00Z",
+              "end": "2026-04-17T05:00:00Z"
+            },
+            {
+              "name": "Live Nation Presale",
+              "start": "2026-04-15T15:00:00Z",
+              "end": "2026-04-17T05:00:00Z"
+            }
+          ]
+        },
+        "reason": "Marseille French house duo with synth-pop melodies, in the vein of Calvin Harris's dance sound.",
+        "score": 2,
+        "also": []
+      }
+    ]
+  }
+}

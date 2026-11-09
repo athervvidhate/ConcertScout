@@ -1,41 +1,21 @@
-import type React from "react"
-import type { Metadata } from "next"
-import { Inter } from "next/font/google"
-import "./globals.css"
-import { Analytics } from '@vercel/analytics/react'
-import { Footer } from "@/components/footer"
-
-const inter = Inter({ subsets: ["latin"] })
+import type { Metadata } from "next";
+import localFont from "next/font/local";
+import "./globals.css";
+import { Footer } from "@/components/footer";
+import { THEME_BOOT } from "@/lib/theme";
+const poster = localFont({src:"./fonts/anton.woff2", variable:"--font-poster", display:"swap"});
+const ui = localFont({src:"./fonts/bricolage.woff2", variable:"--font-ui", display:"swap"});
 
 export const metadata: Metadata = {
-  title: "Concert Scout AI",
-  description: "Discover live music events tailored to your taste",
-  icons: {
-    icon: "/favicon.svg",
-    apple: "/favicon.svg",
-  },
-}
+  title: "Concert Scout",
+  description: "Find live music you would want to see.",
+};
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className="dark">
-      <head>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/favicon.svg" />
-      </head>
-      <body className={inter.className}>
-        <div className="flex min-h-screen flex-col">
-          <div className="flex-1">
-            {children}
-          </div>
-          <Footer />
-        </div>
-        <Analytics />
-      </body>
+    <html lang="en" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{__html: THEME_BOOT}} /></head>
+      <body className={`${poster.variable} ${ui.variable} `}>{children}<Footer /></body>
     </html>
-  )
+  );
 }

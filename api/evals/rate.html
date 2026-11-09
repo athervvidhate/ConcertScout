@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rate Searches</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --panel: #fff; --ink: #1d1c1a; --muted: #6b675f; --line: #e2ddd2;
+    --must: #1f7a4d; --good: #2f6fb3; --bad: #b3412f; --neutral: #8a857b; --focus: #e8a33d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161513; --panel: #201f1c; --ink: #efece6; --muted: #a39e94; --line: #34322d;
+      --must: #4cc38a; --good: #6aa8ec; --bad: #ec7b66; --neutral: #9b968c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  nav { border-right: 1px solid var(--line); padding: 16px; overflow-y: auto; }
+  nav h1 { font-size: 15px; margin: 0 0 12px; }
+  nav button { display: block; width: 100%; text-align: left; border: 0; background: none;
+    color: var(--ink); padding: 8px 10px; border-radius: 8px; cursor: pointer; font: inherit; }
+  nav button:hover { background: var(--panel); }
+  nav button.active { background: var(--panel); box-shadow: inset 3px 0 0 var(--focus); }
+  nav .id { font-weight: 600; }
+  nav .state { font-size: 12px; color: var(--muted); }
+  nav .done .state { color: var(--must); }
+  main { padding: 24px 32px; max-width: 860px; }
+  .search { font-size: 22px; font-weight: 650; margin: 0 0 4px; }
+  .meta, .hint { color: var(--muted); font-size: 13px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 14px 0 18px; font-size: 13px; }
+  .legend b { font-weight: 600; }
+  ol { list-style: none; padding: 0; margin: 0; }
+  li { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 8px; }
+  li.focused { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .name { font-weight: 600; }
+  .name a { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 6px; }
+  .reason { grid-column: 1; color: var(--muted); font-size: 13px; }
+  .choices { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 4px; }
+  .choices button { border: 1px solid var(--line); background: none; color: var(--ink);
+    border-radius: 6px; padding: 5px 9px; cursor: pointer; font: inherit; font-size: 13px; }
+  .choices button[aria-pressed="true"][data-label="must"] { background: var(--must); border-color: var(--must); color: #fff; }
+  .choices button[aria-pressed="true"][data-label="good"] { background: var(--good); border-color: var(--good); color: #fff; }
+  .choices button[aria-pressed="true"][data-label="bad"] { background: var(--bad); border-color: var(--bad); color: #fff; }
+  .choices button[aria-pressed="true"][data-label="neutral"] { background: var(--neutral); border-color: var(--neutral); color: #fff; }
+  label { display: block; margin: 18px 0 6px; font-weight: 600; }
+  input[type=text], textarea { width: 100%; padding: 8px 10px; border-radius: 8px; font: inherit;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+  textarea { min-height: 64px; }
+  .save { margin-top: 16px; display: flex; gap: 12px; align-items: center; }
+  .save button { background: var(--ink); color: var(--bg); border: 0; border-radius: 8px;
+    padding: 9px 18px; font: inherit; font-weight: 600; cursor: pointer; }
+  .error { color: var(--bad); }
+  @media (max-width: 700px) {
+    .layout { grid-template-columns: 1fr; }
+    nav { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
+    main { padding: 16px; }
+    li { grid-template-columns: 1fr; }
+    .choices { grid-row: auto; grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav><h1>Searches</h1><div id="list"></div></nav>
+  <main id="main"><p class="hint">Pick a Search on the left.</p></main>
+</div>
+<script>
+const LABELS = ["must", "good", "bad", "neutral"];
+const KEYS = { m: "must", g: "good", b: "bad", n: "neutral" };
+let cases = [], current = null, focus = 0;
+
+async function loadList(selected) {
+  cases = await (await fetch("/api/searches")).json();
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+  for (const c of cases) {
+    const b = document.createElement("button");
+    b.className = (c.judged ? "done " : "") + (c.id === selected ? "active" : "");
+    b.innerHTML = `<div class="id"></div><div class="state"></div>`;
+    b.querySelector(".id").textContent = c.id;
+    b.querySelector(".state").textContent = c.judged ? "rated" : c.snapshot ? "not rated" : "no capture";
+    b.disabled = !c.snapshot;
+    b.onclick = () => open(c.id);
+    list.append(b);
+  }
+}
+
+async function open(id) {
+  const main = document.getElementById("main");
+  main.innerHTML = `<p class="hint">Replaying ${id}…</p>`;
+  const response = await fetch(`/api/searches/${id}`);
+  if (!response.ok) { main.innerHTML = `<p class="error"></p>`; main.querySelector(".error").textContent = (await response.json()).detail; return; }
+  current = await response.json();
+  focus = 0;
+  loadList(id);
+  render();
+}
+
+function render() {
+  const main = document.getElementById("main");
+  main.innerHTML = `
+    <p class="search"></p>
+    <p class="meta"></p>
+    <div class="legend">
+      <span><b>Must</b> (m): you'd be upset to miss them</span>
+      <span><b>Good</b> (g): a good pick</span>
+      <span><b>Bad</b> (b): shouldn't be here</span>
+      <span><b>Neutral</b> (n): no opinion</span>
+      <span>↑ ↓ move</span>
+    </div>
+    <ol id="artists"></ol>
+    <label for="others">Other must Artists the Search missed (comma separated)</label>
+    <input id="others" type="text">
+    <label for="notes">Notes</label>
+    <textarea id="notes"></textarea>
+    <div class="save"><button id="save">Save rating</button><span id="status" class="hint"></span></div>`;
+  main.querySelector(".search").textContent = `“${current.text}”`;
+  const poster = current.artists.filter(a => a.on_poster).length;
+  main.querySelector(".meta").textContent =
+    `${current.id} · ${poster} on the Poster, then shortlisted Artists · ${current.snapshot}` +
+    (current.error ? ` · ended with ${current.error}` : "");
+  main.querySelector("#others").value = current.others.join(", ");
+  main.querySelector("#notes").value = current.notes;
+  const ol = main.querySelector("#artists");
+  current.artists.forEach((artist, i) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<div class="name"></div><div class="choices"></div>`;
+    const name = li.querySelector(".name");
+    name.append(artist.name);
+    if (artist.on_poster) { const t = document.createElement("span"); t.className = "tag"; t.textContent = "Poster"; name.append(t); }
+    const link = document.createElement("a");
+    link.href = `https://open.spotify.com/search/${encodeURIComponent(artist.name)}`;
+    link.target = "_blank"; link.rel = "noopener"; link.textContent = "listen ↗";
+    name.append(link);
+    if (artist.reason) { const r = document.createElement("div"); r.className = "reason"; r.textContent = artist.reason; li.append(r); }
+    for (const label of LABELS) {
+      const b = document.createElement("button");
+      b.dataset.label = label;
+      b.textContent = label[0].toUpperCase() + label.slice(1);
+      b.onclick = () => { setLabel(i, label); focus = i; paintFocus(); };
+      li.querySelector(".choices").append(b);
+    }
+    ol.append(li);
+  });
+  paint();
+  main.querySelector("#save").onclick = save;
+}
+
+function setLabel(i, label) { current.artists[i].label = label; paint(); }
+function paint() {
+  document.querySelectorAll("#artists li").forEach((li, i) => {
+    li.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.label === current.artists[i].label));
+  });
+  paintFocus();
+}
+function paintFocus() {
+  document.querySelectorAll("#artists li").forEach((li, i) => li.classList.toggle("focused", i === focus));
+  document.querySelectorAll("#artists li")[focus]?.scrollIntoView({ block: "nearest" });
+}
+
+async function save() {
+  const body = {
+    labels: Object.fromEntries(current.artists.map(a => [a.name, a.label])),
+    others: document.getElementById("others").value.split(","),
+    notes: document.getElementById("notes").value,
+  };
+  const status = document.getElementById("status");
+  const response = await fetch(`/api/searches/${current.id}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  status.textContent = response.ok ? "Saved to searches.yaml." : "Saving failed.";
+  if (response.ok) loadList(current.id);
+}
+
+document.addEventListener("keydown", event => {
+  if (!current || event.target.matches("input, textarea") || event.metaKey || event.ctrlKey) return;
+  const label = KEYS[event.key.toLowerCase()];
+  if (label) { setLabel(focus, label); focus = Math.min(focus + 1, current.artists.length - 1); paintFocus(); }
+  else if (event.key === "ArrowDown") { focus = Math.min(focus + 1, current.artists.length - 1); paintFocus(); event.preventDefault(); }
+  else if (event.key === "ArrowUp") { focus = Math.max(focus - 1, 0); paintFocus(); event.preventDefault(); }
+});
+
+loadList();
+</script>
+</body>
+</html>

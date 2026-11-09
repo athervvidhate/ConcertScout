@@ -1,0 +1,65 @@
+[project]
+name = "concert-scout"
+version = "0.1.0"
+description = "Finds live music a person would want to see"
+requires-python = ">=3.13"
+dependencies = [
+    "authlib>=1.9.5",
+    "cryptography>=50.0.2",
+    "fastapi>=0.162.0",
+    "httpx>=0.28.1",
+    "httpx-retries>=0.6.0",
+    "httpx2>=2.16.0",
+    "joserfc>=1.8.0",
+    "opentelemetry-sdk>=1.45.2",
+    "pydantic-ai-slim[anthropic]>=2.66.0",
+    "pydantic-settings>=2.16.2",
+    "pygeohash>=3.5.1",
+    "redis>=8.1.0",
+    "tzdata>=2026.6",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.vercel]
+entrypoint = "index:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["concert_scout"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.pyright]
+include = ["concert_scout", "evals", "tests", "index.py"]
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-m 'not live and not supabase'"
+markers = [
+    "live: opt-in checks against real external providers, requiring local keys",
+    "supabase: account checks against the local Supabase stack, started with `make supabase`",
+]
+
+[dependency-groups]
+dev = [
+    "fakeredis>=2.40.0",
+    "pydantic-evals>=2.66.0",
+    "pyright>=1.1.414",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1.post1",
+    "pyyaml>=6.0.3",
+    "ruff>=0.17.3",
+    "types-pyyaml>=6.0.12.20261103",
+]
