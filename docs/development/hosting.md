@@ -26,7 +26,7 @@ Set secrets through the hosting dashboard or private CLI input. Never put values
 | API | `TM_KEY`, `ANTHROPIC_API_KEY`, `GEOAPIFY_KEY`, `TYPESAFE_API_KEY` | Private provider keys |
 | API | `LASTFM_KEY` | Optional private fallback/import key |
 | API | `REDIS_URL` | Password-protected `rediss://` connection from Upstash; not its REST URL |
-| API | `CORS_ORIGINS` | `["https://concertscout.app"]`; no trailing slash or wildcard |
+| API | `CORS_ORIGINS` | `["https://concertscout.app","https://dev.concertscout.app"]`; no trailing slash or wildcard |
 | API | `CLIENT_IP_HEADER` | `x-vercel-forwarded-for`, only behind Vercel's edge |
 | API | `TURNSTILE_SECRET` | Real production secret matching the frontend widget |
 | API | `SEARCH_ENABLED` | Start with `false`; enable for the acceptance Search after settings are checked |
@@ -49,16 +49,18 @@ The public entrypoint refuses to start with unencrypted or unauthenticated Redis
 
 Upstash holds the public cache, hashed limits, encrypted Spotify sessions and recorded spend. Keep its TLS connection private, select a region near the function and use the free tier or a deliberate budget cap. A stopped/reset database loses spend history; do not reset it as a way to clear a visitor limit. API spend guards use recorded usage, not a hard reservation against concurrent calls. Use the Anthropic and Typesafe accounts' spend controls as well.
 
-## No preview deployments
+## Development preview
 
-`frontend/vercel.json` lets Vercel deploy only `main`, which goes to Production. Other branches build nothing: the API's CORS allows only `https://concertscout.app`, so a preview could not Search anyway. GitHub CI runs the browser suite on every PR instead.
+`frontend/vercel.json` lets Vercel deploy `main`, which goes to Production, and `development`, which is a Preview served at `https://dev.concertscout.app`. The domain is assigned to the `development` branch in the frontend project's Domains settings. Other branches build nothing; GitHub CI runs the browser suite on every PR instead.
+
+The preview uses the production API, Supabase project and Turnstile key. Its Preview variables are scoped to the `development` branch and hold the same four `NEXT_PUBLIC_` values as Production. The API's `CORS_ORIGINS` and Supabase's redirect allowlist name `https://dev.concertscout.app`, so Search, Spotify and accounts work there. The API is not Git-connected, so the preview shows frontend changes only; an API change appears once the API is deployed.
 
 The build refuses missing API URLs, invalid or local API bases and published bot-test keys when `VERCEL=1` outside Vercel development mode; local development and the isolated browser suite retain their local/test configuration. This validation runs during the build and adds no work to a Search.
 
 ## Accounts on Supabase
 
 1. Create a Supabase project in US East, near the API's `iad1` region, and apply the migrations with `npx supabase link` and `npx supabase db push` from `frontend/`, with `--workdir ..`. Keep the project on asymmetric JWT signing keys, which new projects use by default.
-2. Under Authentication, set the Site URL to `https://concertscout.app` and allow only the redirect `https://concertscout.app/auth/confirm`. Turn on email confirmation, an 8-character minimum password and secure password change.
+2. Under Authentication, set the Site URL to `https://concertscout.app` and allow only the redirects `https://concertscout.app/auth/confirm` and `https://dev.concertscout.app/auth/confirm`. Turn on email confirmation, an 8-character minimum password and secure password change.
 3. Paste `supabase/templates/confirmation.html` and `recovery.html` into the Confirm signup and Reset password email templates. Their links carry a token hash to the confirm page, so they work in any browser.
 4. Send auth email through Resend before opening sign-up, because Supabase's built-in mail only reaches the project team and sends two emails an hour. Resend's free plan allows 100 emails a day and 3,000 a month. Verify `concertscout.app` in Resend by adding its DNS records in Vercel, create a separate sending-only API key, then under Authentication → SMTP set host `smtp.resend.com`, port `465`, user `resend`, the API key as the password, and a sender such as `Concert Scout <accounts@concertscout.app>`.
 5. For Google, create an OAuth web client in Google Cloud with the redirect `https://<project>.supabase.co/auth/v1/callback`, then enable Google in Supabase with its ID and secret. It needs identity scopes only.
@@ -69,7 +71,7 @@ The build refuses missing API URLs, invalid or local API bases and published bot
 
 1. Confirm project settings, production Redis and real Turnstile pair. Add the exact OAuth redirect and invited Spotify accounts if enabling that optional shelf. Keep Preview and Production secrets separate.
 2. Build the API from `api/` and the frontend from `frontend/`. Review deployment artifacts, domain assignments and environment-variable names before promotion. Run `make check` and `make e2e` against the same commit. These local checks do not substitute for public acceptance.
-3. On the candidate API, verify `/health`, CORS preflight for `https://concertscout.app` and refusal of another origin. With Search on, run `scripts/check_visitor_limit.py https://api.concertscout.app --origin https://concertscout.app`. It proves the limit and that forged forwarding headers cannot reset it, with bad bot tokens that make no model calls. Check a second client from another network still gets through. Do not use a permissive proxy-header setting.
+3. On the candidate API, verify `/health`, CORS preflight for `https://concertscout.app` and `https://dev.concertscout.app`, and refusal of another origin. With Search on, run `scripts/check_visitor_limit.py https://api.concertscout.app --origin https://concertscout.app`. It proves the limit and that forged forwarding headers cannot reset it, with bad bot tokens that make no model calls. Check a second client from another network still gets through. Do not use a permissive proxy-header setting.
 4. Open the real frontend, finish the real Turnstile check and submit one Search. Verify progressive SSE, a final Poster, source Ticket links, Save and reload, with no localhost requests. Confirm `/health` wakes on page load and a failed wake-up does not disable Search. Test Spotify consent/refresh/disconnect separately if configured; none of its Artists may enter `/search`.
 5. Leave the API idle for at least 20 minutes. Without first opening the page or requesting health, measure submit-to-first-status on a direct Search and record whether a fresh instance actually handled it. Also record a warm control and a normal page-open-then-Search. One new deployment response may already be warm. Keep network timing separate from Python import timing. Do not store OAuth codes, tokens or Search bodies in diagnostic logs.
 6. If a true cold first status exceeds 3 seconds, record the measured result and implement the spec's Fly.io move. Do not label local timings or the earlier throwaway function as production acceptance.
