@@ -113,8 +113,9 @@ TITLE_BATCHES = 2
 async def confirm(client: httpx.AsyncClient, redis: Redis, names: Sequence[str]) -> dict[str, str]:
     """MusicBrainz IDs, by normalized name, for the names it holds by exact name (see `identify`).
 
-    A name it does not hold, or cannot tell from a namesake, is left out. Each answer is kept for
-    a week, so a name asked for before costs no call.
+    A name it does not hold, cannot tell from a namesake, or crowds off a full page is left out.
+    Every name asked is kept for a week, so a name asked for before costs no call. A crowded-out
+    name would be crowded out again, and soonest first would keep it ahead of names never asked.
     """
     spellings: dict[str, str] = {}
     for name in names:
@@ -124,8 +125,9 @@ async def confirm(client: httpx.AsyncClient, redis: Redis, names: Sequence[str])
     mbids = {key: cached[stored].mbid for key, stored in keys.items() if stored in cached}
     asked = [name for key, name in spellings.items() if key not in mbids]
     for start in range(0, min(len(asked), TITLE_BATCHES * BATCH_SIZE), BATCH_SIZE):
-        settled = await identify(client, redis, asked[start : start + BATCH_SIZE])
-        answers = {normalize(name): mbid for name, mbid in settled.items()}
+        batch = asked[start : start + BATCH_SIZE]
+        settled = await identify(client, redis, batch)
+        answers = {normalize(name): settled.get(name) for name in batch}
         stored = {
             f"title:{key}": SeedArtist(mbid=mbid, name=spellings[key])
             for key, mbid in answers.items()

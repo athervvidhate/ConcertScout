@@ -65,6 +65,25 @@ test("a truncated app stream offers a retry of the same Search", async ({ page }
   await expect(page.getByRole("link", { name: "Tickets for Contract Concert One" })).toBeVisible();
 });
 
+test("a Search that waits long on one step says it is still working", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/");
+  // The Search stays open with no further event, as one does while it waits on a slow source.
+  await page.route(`${API_URL}/search`, () => new Promise<void>(() => {}));
+  await page.getByRole("textbox", { name: "Search", exact: true }).fill("UKG in SF");
+  await expect(page.getByRole("button", { name: "Search", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  const card = page.locator(".run-card");
+  const note = card.getByRole("status").filter({ hasText: "Taking longer than usual" });
+  await expect(card).toContainText("Reading your Search");
+  await page.clock.fastForward(7000);
+  await expect(note).toHaveCount(0);
+  await page.clock.fastForward(1500);
+  await expect(note).toBeVisible();
+  await expect(card.locator(".run-slow")).toHaveCSS("opacity", "1");
+  await expect(card).toContainText("Reading your Search");
+});
+
 test("history stays local, and only imported Artist names enter a Search", async ({ page }) => {
   await page.goto("/");
   const requests: string[] = [];

@@ -321,6 +321,29 @@ async def test_a_search_asks_musicbrainz_for_a_bounded_number_of_new_names() -> 
     assert len(requests) == 2 * musicbrainz.TITLE_BATCHES
 
 
+async def test_a_name_crowded_off_a_full_page_is_not_asked_again_for_a_week() -> None:
+    requests: list[httpx.Request] = []
+
+    def full_page(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        # 100 namesakes of the first name fill the page, so the other names never appear on it.
+        artists = [
+            {"name": "Triptides", "id": f"mbid-{n}", "score": 100 if n == 0 else 90}
+            for n in range(100)
+        ]
+        return httpx.Response(200, json={"count": 500, "artists": artists})
+
+    wanted = ["Triptides", "Swift Nation", "Rock"]
+    redis = FakeAsyncRedis()
+    async with musicbrainz.make_client(httpx.MockTransport(full_page)) as names:
+        first = await musicbrainz.confirm(names, redis, wanted)
+        second = await musicbrainz.confirm(names, redis, wanted)
+
+    assert first == second == {"triptides": "mbid-0"}
+    assert len(requests) == 1
+    assert 0 < await redis.ttl("title:swift nation") <= musicbrainz.CACHE_TTL.total_seconds()
+
+
 async def test_a_musicbrainz_outage_leaves_titles_unread_and_the_pool_intact(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

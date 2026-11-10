@@ -38,7 +38,7 @@ line-length = 100
 select = ["E", "F", "I", "UP", "B", "ASYNC"]
 
 [tool.pyright]
-include = ["concert_scout", "evals", "tests", "index.py"]
+include = ["concert_scout", "evals", "scripts", "tests", "index.py"]
 typeCheckingMode = "strict"
 venvPath = "."
 venv = ".venv"
@@ -55,7 +55,7 @@ markers = [
 
 [dependency-groups]
 dev = [
-    "fakeredis>=2.40.0",
+    "fakeredis[lua]>=2.40.0",
     "pydantic-evals>=2.66.0",
     "pyright>=1.1.414",
     "pytest>=9.2.0",

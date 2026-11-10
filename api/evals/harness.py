@@ -142,7 +142,7 @@ async def replay(
     transport = ReplayTransport(snapshot, live_grades=live != "none")
     model = ReplayModel(real_model(settings), snapshot, live)
     with (
-        patch.object(limits, "SLOT_SECONDS", 0.001),
+        patch.object(limits, "TICKETMASTER_GAP", dt.timedelta(milliseconds=1)),
         patch.object(limits, "MUSICBRAINZ_GAP", dt.timedelta(milliseconds=1)),
     ):
         result = await run(snapshot.text, snapshot.today, settings, transport, model)
