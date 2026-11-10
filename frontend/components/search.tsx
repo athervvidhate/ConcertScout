@@ -27,6 +27,7 @@ import { dateIn, viewerZone } from "@/lib/format";
 import { anywhere, overNextMonths } from "@/lib/reading";
 import { API_URL, type Asked, type Reading } from "@/lib/search";
 import { createSharedPoster, sharedUrl } from "@/lib/share";
+import { sharedTitle } from "@/lib/shared-heading";
 import { useImportedTaste } from "@/lib/taste";
 import { useSearch } from "@/lib/use-search";
 import { EXPO_IN_OUT_CURVE, EXPO_OUT_CURVE } from "@/lib/choreography";
@@ -434,6 +435,7 @@ export function Search() {
               shareLink={
                 searchId ? (id) => linkToPoster(searchId, id) : undefined
               }
+              shareTitle={sharedTitle({ reading: reading ?? undefined, recommendations })}
               status={status}
               step={step}
               onChange={() => {
