@@ -433,7 +433,7 @@ button:disabled { opacity:.6; cursor:default; }
 .artist-name:hover { text-decoration-color:currentColor; }
 .ticket .artist-hint { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-2); margin:0 0 16px; }
 .other-venues,.other-venues ul { list-style:none; padding:0; margin:0; }
-.other-venues { display:grid; gap:16px; font-size:14px; }
+.other-venues { display:grid; gap:16px; margin-bottom:16px; font-size:14px; }
 .ticket .other-place { margin:0; font-weight:600; }
 .ticket .other-venue { font-size:14px; color:var(--ink-2); }
 .other-chips { display:flex; flex-wrap:wrap; gap:6px; }
