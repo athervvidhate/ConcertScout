@@ -188,3 +188,21 @@ test("a source photo that fails to load takes its frame with it",async({page})=>
   await expect(tickets).toHaveAttribute("rel","nofollow noopener noreferrer");
   await expect(page.locator(".dialog-photo")).toHaveCount(0);
 });
+
+test("an Artist name with a Latin Extended letter keeps the poster face",async({page})=>{
+  await page.emulateMedia({reducedMotion:"reduce"});
+  const giveon={...picks[0],concert:{...picks[0].concert,artists:[{name:"GIVĒON"}]}};
+  const body=stream(1).replace(JSON.stringify(picks[0]),JSON.stringify(giveon));
+  await page.route("**/search",route=>route.fulfill({contentType:"text/event-stream",body}));
+  await page.goto("/");
+  await page.getByRole("textbox",{name:"Search",exact:true}).fill("Latin Extended name");
+  await page.getByRole("button",{name:"Search",exact:true}).click();
+  const heading=page.getByRole("heading",{name:"GIVĒON",exact:true});
+  await expect(heading).toBeVisible();
+  // Chromium can draw Ē as E plus a combining macron from the Latin file; iOS Safari cannot, so load the Ē face itself.
+  const ranges=await heading.evaluate(async el=>{
+    const family=getComputedStyle(el).fontFamily.split(",")[0];
+    return (await document.fonts.load(`400 30px ${family}`,"Ē")).map(face=>face.unicodeRange);
+  });
+  expect(ranges.some(range=>/U\+100-/i.test(range))).toBe(true);
+});

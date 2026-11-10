@@ -21,7 +21,7 @@ const PICKS = 5;
 
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const shared = await loadShared((await params).id);
-  // Satori cannot read WOFF2, so anton.ttf is the same typeface as anton.woff2, unpacked.
+  // Satori cannot read WOFF2, so anton.ttf is the full Anton TTF, Latin Extended included.
   const anton = await readFile(join(process.cwd(), "app/fonts/anton.ttf"));
   const picks = shared?.recommendations.slice(0, PICKS) ?? [];
   const more = (shared?.recommendations.length ?? 0) - picks.length;
