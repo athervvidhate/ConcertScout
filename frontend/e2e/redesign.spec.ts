@@ -2,9 +2,9 @@ import {writeFile} from "node:fs/promises";
 import {expect,test,type Page} from "@playwright/test";
 
 const picks = Array.from({length:8},(_,i) => ({concert:{id:`layout-${i}`,name:`Source Concert ${i+1}`,artists:[{name:`Source Artist ${i+1}`}],date:"2027-05-15",venue:`Source Hall ${i+1}`,city:"Chicago",url:`https://tickets.example/${i}`,image:"/spotify-logo-white.svg"},reason:"A source-backed recommendation."}));
-const interpreted={place:"Chicago",artists:["Source Artist"],genres:[]};
+const reading={place:"Chicago",artists:["Source Artist"],genres:[]};
 function stream(count:number) {
-  return [["status",{step:"interpret",message:"Reading your Search"}],["interpreted",interpreted],["candidates",{names:[...picks.map(p=>p.concert.artists[0].name),"Other Source Artist"],total:12}],["poster",{recommendations:picks.slice(0,count)}],["done",{}]].map(([event,data])=>`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join("");
+  return [["status",{step:"interpret",message:"Reading your Search"}],["reading",reading],["candidates",{names:[...picks.map(p=>p.concert.artists[0].name),"Other Source Artist"],total:12}],["poster",{recommendations:picks.slice(0,count)}],["done",{}]].map(([event,data])=>`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join("");
 }
 async function overflow(page:Page) {
   expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -51,7 +51,7 @@ test("cached home examples make no Search request and work without the bot widge
   let searches=0;
   page.on("request",r=>{if(r.url().endsWith("/search")) searches++;});
   await page.route("**/challenges.cloudflare.com/**",route=>route.abort());
-  await page.route("**/examples",route=>route.fulfill({json:{examples:[{text:"Tame Impala in London next summer",interpreted,candidates:{names:["Source Artist 1","Other Source Artist"],total:12},poster:{recommendations:picks.slice(0,3)}}]}}));
+  await page.route("**/examples",route=>route.fulfill({json:{examples:[{text:"Tame Impala in London next summer",reading,candidates:{names:["Source Artist 1","Other Source Artist"],total:12},poster:{recommendations:picks.slice(0,3)}}]}}));
   await page.goto("/");
   await expect(page.getByRole("region",{name:"Found by real Searches"})).toBeVisible();
   const how=page.locator(".how");

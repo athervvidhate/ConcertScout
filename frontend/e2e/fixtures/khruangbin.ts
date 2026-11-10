@@ -4,7 +4,7 @@ import type { HomeExample } from "@/lib/home-examples";
 
 export const RECORDED_SEARCH: HomeExample = {
   text: "Something like Khruangbin in Chicago",
-  interpreted: {
+  reading: {
     place: "Chicago",
     artists: ["Khruangbin"],
     genres: [],

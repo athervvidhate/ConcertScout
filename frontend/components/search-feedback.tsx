@@ -4,16 +4,16 @@ import { Button } from "@base-ui/react/button";
 import { type SubmitEvent, useState } from "react";
 
 import { sendReport } from "@/lib/feedback";
-import { type Interpreted, type Recommendation, SearchRefused } from "@/lib/search";
+import { type Reading, type Recommendation, SearchRefused } from "@/lib/search";
 
 type Props = {
   search: string;
-  interpreted: Interpreted | null;
+  reading: Reading | null;
   recommendations: Recommendation[];
   error: string | null;
 };
 
-export function SearchFeedback({ search, interpreted, recommendations, error }: Props) {
+export function SearchFeedback({ search, reading, recommendations, error }: Props) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
@@ -25,7 +25,7 @@ export function SearchFeedback({ search, interpreted, recommendations, error }: 
     setSending(true);
     setFailure(null);
     try {
-      await sendReport({ search, note, interpreted, recommendations, error });
+      await sendReport({ search, note, reading, recommendations, error });
       setSent(true);
     } catch (caught) {
       setFailure(caught instanceof SearchRefused ? caught.message : "That did not send. Try again soon.");

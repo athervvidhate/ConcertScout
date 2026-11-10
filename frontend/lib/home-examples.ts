@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import type {
   Candidates,
-  Interpreted,
+  Reading,
   Recommendation,
 } from "@/lib/search";
 
 export type HomeExample = {
   text: string;
-  interpreted: Interpreted | null;
+  reading: Reading | null;
   candidates: Candidates | null;
   poster: { recommendations: Recommendation[] };
 };

@@ -69,7 +69,7 @@ async def test_sse_terminates_and_every_fact_comes_from_its_source(api: httpx.As
     assert events[-1] == ("done", {})
     assert sum(name == "poster" for name, _ in events) == 1
     data = dict(events)
-    assert data["interpreted"]["place"].startswith("San Francisco")
+    assert data["reading"]["place"].startswith("San Francisco")
     source = {c.id: c.model_dump(mode="json", exclude_none=True) for c in CONCERTS}
     picks = data["poster"]["recommendations"]
     assert [p["concert"]["id"] for p in picks] == ["contract-one", "contract-two"]
@@ -85,7 +85,7 @@ async def test_a_search_with_no_place_uses_the_shared_location(api: httpx.AsyncC
         "/search", json={"text": "rap near me", "token": TOKEN, "time_zone": "UTC", "near": near}
     )
     data = dict(parse_sse(response.text))
-    assert "place" not in data["interpreted"]
+    assert "place" not in data["reading"]
     assert len(data["poster"]["recommendations"]) == 2
     place = cast(AsyncMock, pool.find_concerts).call_args.args[3]
     assert (place.lat, place.lon) == (32.7, -117.1)

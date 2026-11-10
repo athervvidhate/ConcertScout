@@ -4,7 +4,7 @@ import calvin from "../lib/how-recording.json";
 
 async function search(page: Page) {
   const body = [
-    ["interpreted", recording.interpreted],
+    ["reading", recording.reading],
     ["candidates", recording.candidates],
     ["poster", recording.poster],
     ["done", {}],
