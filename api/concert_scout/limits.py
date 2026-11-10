@@ -4,6 +4,10 @@ import hashlib
 import logging
 import math
 import time
+from collections import defaultdict
+from collections.abc import Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from decimal import Decimal
 
 from redis.asyncio import Redis
@@ -11,12 +15,22 @@ from redis.exceptions import RedisError
 
 logger = logging.getLogger(__name__)
 
-# One call per slot. Any one second touches at most 4 slots, under Ticketmaster's 5 a second,
-# and the count holds across every worker sharing Redis.
-SLOT_SECONDS = 1 / 3
+# Calls start at least this far apart, so any one second holds at most 3, under Ticketmaster's
+# 5 a second. The gap holds across every worker sharing Redis.
+TICKETMASTER_GAP = dt.timedelta(milliseconds=334)
 DAILY_CALLS = 5000
 # MusicBrainz blocks clients that average over 1 request a second.
 MUSICBRAINZ_GAP = dt.timedelta(seconds=1)
+
+# Books the caller the gate's next free start, so callers go in the order they asked. Returns the
+# milliseconds to wait. Times are whole milliseconds, which Lua writes back without an exponent.
+_BOOK_START = """
+local now = tonumber(ARGV[1])
+local gap = tonumber(ARGV[2])
+local start = math.max(now, tonumber(redis.call('GET', KEYS[1]) or '0'))
+redis.call('SET', KEYS[1], start + gap, 'PX', start + gap - now + 1000)
+return start - now
+"""
 
 
 SEARCHES_PER_HOUR = 10
@@ -57,26 +71,55 @@ class DailyLimitReached(Exception):
 
 
 async def ticketmaster_call(redis: Redis) -> None:
-    """Count one call against today's limit, then wait for a free slot to make it."""
+    """Count one call against today's limit, then wait for this caller's turn to make it."""
     try:
         await _count_today(redis)
-        await _wait_for_slot(redis)
     except RedisError as exc:
-        # Without Redis nothing is shared, so pace this caller alone and let the Search go on.
         logger.warning("Limiter failed: %s", type(exc).__name__)
-        await asyncio.sleep(SLOT_SECONDS)
+    await _take_turn(redis, "ticketmaster:next", TICKETMASTER_GAP)
 
 
 async def musicbrainz_call(redis: Redis) -> None:
-    """Wait until a full gap has passed since the last MusicBrainz call by any worker."""
+    """Wait for this caller's turn, a full gap after the last MusicBrainz call by any worker."""
+    await _take_turn(redis, "musicbrainz:next", MUSICBRAINZ_GAP)
+
+
+# Each caller holds at most one place in each gate's line at a time. A Search with many calls then
+# takes turns with the Searches around it instead of filling the line ahead of them, and a Search
+# alone still books its next turn as soon as its last one starts.
+_places: ContextVar[defaultdict[str, asyncio.Lock] | None] = ContextVar("gate_places", default=None)
+
+
+@contextmanager
+def one_caller() -> Generator[None]:
+    """Every gate call inside counts as one caller's, however many tasks make them."""
+    token = _places.set(defaultdict(asyncio.Lock))
     try:
-        while True:
-            if await redis.set("musicbrainz:gate", 1, nx=True, px=MUSICBRAINZ_GAP):
-                return
-            await asyncio.sleep(MUSICBRAINZ_GAP.total_seconds() / 20)
+        yield
+    finally:
+        _places.reset(token)
+
+
+async def _take_turn(redis: Redis, key: str, gap: dt.timedelta) -> None:
+    if (places := _places.get()) is None:
+        await _book_turn(redis, key, gap)
+        return
+    async with places[key]:
+        await _book_turn(redis, key, gap)
+
+
+async def _book_turn(redis: Redis, key: str, gap: dt.timedelta) -> None:
+    """First come, first served across every worker sharing Redis."""
+    gap_ms = int(gap / dt.timedelta(milliseconds=1))
+    try:
+        wait_ms = await redis.register_script(_BOOK_START)(
+            keys=[key], args=[int(time.time() * 1000), gap_ms]
+        )
     except RedisError as exc:
+        # Without Redis nothing is shared, so pace this caller alone and let the Search go on.
         logger.warning("Limiter failed: %s", type(exc).__name__)
-        await asyncio.sleep(MUSICBRAINZ_GAP.total_seconds())
+        wait_ms = gap_ms
+    await asyncio.sleep(int(wait_ms) / 1000)
 
 
 async def visitor_call(redis: Redis, bucket: str, ip: str, limit: int) -> None:
@@ -140,11 +183,3 @@ async def _count_today(redis: Redis) -> None:
     if calls > DAILY_CALLS:
         tomorrow = dt.datetime.combine(now.date() + dt.timedelta(days=1), dt.time(), dt.UTC)
         raise DailyLimitReached(int((tomorrow - now).total_seconds()) + 1)
-
-
-async def _wait_for_slot(redis: Redis) -> None:
-    while True:
-        slot = int(time.time() / SLOT_SECONDS)
-        if await redis.set(f"ticketmaster:slot:{slot}", 1, nx=True, ex=2):
-            return
-        await asyncio.sleep(SLOT_SECONDS - time.time() % SLOT_SECONDS)

@@ -8,11 +8,13 @@ import {
   Check,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BACK_OUT, Choreography, EXPO_OUT_CURVE } from "@/lib/choreography";
 import type { Candidates } from "@/lib/search";
 
 const STEPS = ["interpret", "resolve", "pool", "match", "rank"];
+// Most steps finish well inside this. Past it, the visitor hears the Search is still running.
+export const SLOW_STEP_MS = 8000;
 const ICONS = {
   interpret: AlignLeft,
   resolve: MapPin,
@@ -38,6 +40,15 @@ export function WorkingSearch({
 }) {
   const root = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
+  // Any new status restarts the wait, so the note only ever describes the current step.
+  const waitingOn = done ? null : `${step}:${status}`;
+  const [slowOn, setSlowOn] = useState<string | null>(null);
+  useEffect(() => {
+    if (!waitingOn) return;
+    const timer = setTimeout(() => setSlowOn(waitingOn), SLOW_STEP_MS);
+    return () => clearTimeout(timer);
+  }, [waitingOn]);
+  const slow = waitingOn !== null && slowOn === waitingOn;
   useLayoutEffect(() => {
     if (reduced || !root.current) return;
     const scope = new Choreography();
@@ -138,15 +149,26 @@ export function WorkingSearch({
           </AnimatePresence>
         </div>
       </div>
+      <AnimatePresence initial={false}>
+        {slow && (
+          <motion.div
+            key="slow"
+            className="run-slow"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: reduced ? 0 : 0.35, ease: EXPO_OUT_CURVE }}
+          >
+            <p role="status">Taking longer than usual. Still working on it.</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="run-bar" aria-hidden>
-        {STEPS.map((s, i) => (
-          <i
-            key={s}
-            className={
-              done || i <= STEPS.indexOf(step ?? "interpret") ? "done" : ""
-            }
-          />
-        ))}
+        {STEPS.map((s, i) => {
+          const at = STEPS.indexOf(step ?? "interpret");
+          const now = !done && i === at ? " now" : "";
+          return <i key={s} className={done || i <= at ? `done${now}` : ""} />;
+        })}
       </div>
       {candidates && (
         <>

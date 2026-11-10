@@ -235,7 +235,7 @@ async def test_replay_restores_live_source_pacing_even_after_failure(
 ) -> None:
     from concert_scout import limits
 
-    before = limits.SLOT_SECONDS, limits.MUSICBRAINZ_GAP
+    before = limits.TICKETMASTER_GAP, limits.MUSICBRAINZ_GAP
 
     async def fail(*_: Any, **__: Any) -> SearchRun:
         raise RuntimeError("replay failed")
@@ -243,7 +243,7 @@ async def test_replay_restores_live_source_pacing_even_after_failure(
     monkeypatch.setattr(harness, "run", fail)
     with pytest.raises(RuntimeError, match="replay failed"):
         await harness.replay(snapshot_with({}), None)
-    assert (limits.SLOT_SECONDS, limits.MUSICBRAINZ_GAP) == before
+    assert (limits.TICKETMASTER_GAP, limits.MUSICBRAINZ_GAP) == before
 
 
 async def test_offline_judging_needs_no_settings_and_refuses_changed_text(

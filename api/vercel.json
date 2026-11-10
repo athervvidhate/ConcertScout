@@ -4,7 +4,7 @@
   "functions": {
     "index.py": {
       "maxDuration": 300,
-      "excludeFiles": "{tests/**,evals/**,.env*,.pytest_cache/**,.ruff_cache/**}"
+      "excludeFiles": "{tests/**,evals/**,scripts/**,.env*,.pytest_cache/**,.ruff_cache/**}"
     }
   },
   "crons": [
