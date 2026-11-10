@@ -3,14 +3,14 @@ import { notFound } from "next/navigation";
 
 import { loadShared } from "@/app/p/[id]/load";
 import { SharedPosterView } from "@/components/shared-poster";
-import { sharedHeading, sharedSummary } from "@/lib/shared-heading";
+import { sharedSummary, sharedTitle } from "@/lib/shared-heading";
 
 type Props = PageProps<"/p/[id]">;
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const shared = await loadShared((await params).id);
   if (!shared) return { title: "Shared Poster · Concert Scout" };
-  const title = `${sharedHeading(shared)} · Shared Poster`;
+  const title = sharedTitle(shared);
   const description = sharedSummary(shared);
   return {
     title,

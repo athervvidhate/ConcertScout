@@ -51,6 +51,25 @@ test("a Poster shared by link opens on another device without a Search", async (
   await context.close();
 });
 
+test("the share sheet titles a Poster by its Search, not by the app", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "share", {
+      value: async (data: ShareData) => {
+        (window as unknown as { shared: ShareData }).shared = data;
+      },
+    });
+  });
+  await search(page);
+  await page.getByRole("button", { name: "Share Poster", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Shared" })).toBeVisible();
+  const { title, url } = await page.evaluate(() => (window as unknown as { shared: ShareData }).shared);
+  expect(title).toMatch(/ · Shared Poster$/);
+  expect(title).not.toContain("A Poster on Concert Scout");
+  const device = await page.context().newPage();
+  await device.goto(url!);
+  await expect(device).toHaveTitle(title!);
+});
+
 test("a Ticket link opens the Poster with that Ticket open", async ({ page, browser }) => {
   await withoutWebShare(page);
   await search(page);

@@ -24,6 +24,7 @@ import { countOf, TastePanel } from "@/components/taste-panel";
 import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/place";
 import { API_URL } from "@/lib/search";
 import { createSharedPoster, sharedUrl } from "@/lib/share";
+import { sharedTitle } from "@/lib/shared-heading";
 import { useImportedTaste } from "@/lib/taste";
 import { useSearch } from "@/lib/use-search";
 import { EXPO_IN_OUT_CURVE, EXPO_OUT_CURVE } from "@/lib/choreography";
@@ -399,6 +400,7 @@ export function Search() {
               shareLink={
                 searchId ? (id) => linkToPoster(searchId, id) : undefined
               }
+              shareTitle={sharedTitle({ interpreted: interpreted ?? undefined, recommendations })}
               status={status}
               step={step}
               onChange={() => {

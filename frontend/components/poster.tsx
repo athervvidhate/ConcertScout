@@ -51,6 +51,8 @@ type Props = {
   onChange?: () => void;
   /** Where a link to this Poster, or to one Ticket on it, comes from. Without it, no Share. */
   shareLink?: (concertId?: string) => Promise<string>;
+  /** The title the share sheet gives a link to this Poster. */
+  shareTitle?: string;
   /** Shows the finished Poster at once, as a reloaded Search and a Shared Poster do. */
   instant?: boolean;
   /** The Ticket to open on arrival. */
@@ -67,6 +69,7 @@ export function Poster({
   onAnywhere,
   onChange,
   shareLink,
+  shareTitle,
   instant = false,
   openConcert,
 }: Props) {
@@ -292,7 +295,7 @@ export function Poster({
                 <div className="poster-tools">
                 {shareLink && (
                   <ShareButton
-                    title="A Poster on Concert Scout"
+                    title={shareTitle ?? "Concert Scout"}
                     label="Share Poster"
                     link={() => shareLink()}
                   />
