@@ -11,12 +11,15 @@ type PhotoProps = Pick<ImageProps, "sizes" | "loading" | "priority" | "draggable
   className: string;
 };
 
+const JAMBASE_UPLOADS = "https://www.jambase.com/wp-content/uploads/";
+
 /**
  * A Concert's own source photo in a frame, or nothing.
  *
  * Ticketmaster serves sized photos, so they load directly. JamBase uploads are full size, so
- * they pass through the Next.js image cache, which only accepts JamBase's upload path. A photo
- * that fails to load takes its frame with it.
+ * they pass through the Next.js image cache, which only accepts JamBase's upload path. A
+ * Ticketmaster listing can carry its JamBase duplicate's photo, so the URL decides, not the
+ * source. A photo that fails to load takes its frame with it.
  */
 export function ConcertPhoto({ concert, className, ...image }: PhotoProps) {
   const [failed, setFailed] = useState<string>();
@@ -27,7 +30,7 @@ export function ConcertPhoto({ concert, className, ...image }: PhotoProps) {
         src={concert.image}
         alt=""
         fill
-        unoptimized={concert.source !== "jambase"}
+        unoptimized={!concert.image.startsWith(JAMBASE_UPLOADS)}
         onError={() => setFailed(concert.image)}
         {...image}
       />

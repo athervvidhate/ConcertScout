@@ -262,16 +262,23 @@ def _parse_moment(value: str | None) -> dt.datetime | None:
 
 
 def _image(images: list[dict[str, Any]]) -> str | None:
-    """The smallest real photo wide enough for a Ticket. `fallback` marks a generic placeholder."""
+    """The smallest real photo wide enough for a Ticket, 16:9 first. A Ticket crops to fit.
+
+    `fallback` marks a generic placeholder. TicketWeb listings often have only a 3:2 photo.
+    """
     usable = [
         image
         for image in images
         if image.get("url")
-        and image.get("ratio") == IMAGE_RATIO
         and not image.get("fallback")
         and (image.get("width") or 0) >= IMAGE_MIN_WIDTH
     ]
-    return min(usable, key=lambda image: image["width"])["url"] if usable else None
+    best = min(
+        usable,
+        key=lambda image: (image.get("ratio") != IMAGE_RATIO, image["width"]),
+        default=None,
+    )
+    return best["url"] if best else None
 
 
 def _parse_artist(
