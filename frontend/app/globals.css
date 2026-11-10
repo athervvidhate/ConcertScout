@@ -364,7 +364,6 @@ button:disabled { opacity:.6; cursor:default; }
 .bot-check { display:flex; justify-content:center; }
 .search-context { text-align:center; margin:16px auto; max-width:860px; }
 .search-context:empty { display:none; }
-.search-context p { display:inline-block; padding:6px 16px; border:1px solid var(--line); border-radius:999px; background:var(--surface); font-size:14px; }
 .search-error { max-width:700px; padding:18px; margin:16px auto; border:1px solid var(--line-2); border-radius:16px; background:var(--soft); }
 .search-error button { min-height:44px; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:8px 18px; }
 .home-try { text-align:center; margin:20px auto 0; }

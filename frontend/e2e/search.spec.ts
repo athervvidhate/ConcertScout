@@ -351,7 +351,7 @@ test("a Search with no place uses the shared location", async ({page, context}) 
   const request = page.waitForRequest(r => r.url().endsWith("/search"));
   await search(page, "rap near me");
   expect((await request).postDataJSON().near).toEqual({lat: 32.7, lon: -117.1});
-  await expect(page.getByText("Near you", {exact: true})).toBeVisible();
+  await expect(page.locator(".chip[data-kind='place']")).toContainText("Near you");
 });
 
 test("an Artist Last.fm does not know says so and keeps the Spotify link", async ({page}) => {
