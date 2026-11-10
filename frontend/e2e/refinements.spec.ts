@@ -142,6 +142,10 @@ test("eight dates swap in without resizing the Ticket, its photo or scrolling", 
   await expect(back).toBeFocused();
   await expect(sheet.locator(".other-chips a")).toHaveCount(8);
   await expect(sheet.locator(".other-chips a").last()).toBeInViewport();
+  // The last dates keep the details' 16px of space above Tickets.
+  const lastDate = (await sheet.locator(".other-chips a").last().boundingBox())!,
+    stub = (await sheet.locator(".ticket-stub").boundingBox())!;
+  expect(stub.y - (lastDate.y + lastDate.height)).toBeGreaterThanOrEqual(15);
   await expect(
     sheet.getByRole("button", { name: "Save", exact: true }),
   ).toBeInViewport();
