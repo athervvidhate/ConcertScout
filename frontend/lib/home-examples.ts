@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import {
-  API_URL,
-  type Candidates,
-  type Interpreted,
-  type Recommendation,
+import type {
+  Candidates,
+  Interpreted,
+  Recommendation,
 } from "@/lib/search";
 
 export type HomeExample = {
@@ -18,7 +17,8 @@ export function useHomeExamples() {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     const controller = new AbortController();
-    void fetch(`${API_URL}/examples`, {
+    // Same-origin and cached by app/examples/route.ts, so a cold API never delays home.
+    void fetch("/examples", {
       signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]),
     })
       .then(async (response) =>
