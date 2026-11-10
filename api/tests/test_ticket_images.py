@@ -37,6 +37,14 @@ def test_a_placeholder_gives_way_to_the_concert_image() -> None:
     assert parse_concert(event([photo("event")], placeholder)).image == "event"
 
 
+def test_a_real_photo_of_another_shape_beats_no_photo() -> None:
+    # TicketWeb listings often report only a 3:2 photo, or none of the usual ratios.
+    shapes = [photo("small", width=305, ratio="3_2"), photo("wide", width=640, ratio="3_2")]
+    assert parse_concert(event(shapes, [])).image == "wide"
+    unnamed = {"url": "unnamed", "width": 640}
+    assert parse_concert(event([unnamed], [])).image == "unnamed"
+
+
 def test_only_placeholders_leave_the_image_out() -> None:
     assert parse_concert(event([photo("generic", fallback=True)], [])).image is None
 

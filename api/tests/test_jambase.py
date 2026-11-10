@@ -155,6 +155,19 @@ def test_merge_drops_the_same_performance_spelled_differently() -> None:
     assert pool.merge_sources([tm], extra) == [tm]
 
 
+def test_a_duplicate_lends_its_photo_only_to_a_listing_without_one() -> None:
+    jb = lodge()[0].concert.model_copy(
+        update={"image": "https://www.jambase.com/wp-content/uploads/a.jpg"}
+    )
+    bare = jb.model_copy(update={"id": "tm-bare", "source": "ticketmaster", "image": None})
+    own = jb.model_copy(
+        update={"id": "tm-own", "source": "ticketmaster", "image": "https://s1.ticketm.net/a.jpg"}
+    )
+    filled = pool.merge_sources([bare], [jb])
+    assert filled == [bare.model_copy(update={"image": jb.image})]
+    assert pool.merge_sources([own], [jb]) == [own]
+
+
 def test_batch_lookup_takes_clear_leads_and_leaves_crowded_out_names() -> None:
     body = captured("musicbrainz-batch.json")
     names: list[str] = body["names"]

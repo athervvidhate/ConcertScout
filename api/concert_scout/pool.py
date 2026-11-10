@@ -151,14 +151,14 @@ def merge_sources(primary: Sequence[Concert], extra: Sequence[Concert]) -> list[
 
     Sources spell venues and cities differently, so a duplicate is the same date, the extra
     headliner anywhere in the primary Lineup, a shared distinctive venue word and a nearby
-    start time.
+    start time. A primary listing without a photo takes its duplicate's.
     """
-    by_artist: dict[tuple[dt.date, str], list[Concert]] = {}
-    for concert in primary:
+    merged = list(primary)
+    by_artist: dict[tuple[dt.date, str], list[int]] = {}
+    for at, concert in enumerate(merged):
         if concert.date:
             for artist in concert.artists:
-                by_artist.setdefault((concert.date, normalize(artist.name)), []).append(concert)
-    merged = list(primary)
+                by_artist.setdefault((concert.date, normalize(artist.name)), []).append(at)
     for concert in extra:
         matches = (
             by_artist.get((concert.date, normalize(concert.artists[0].name)), [])
@@ -166,11 +166,19 @@ def merge_sources(primary: Sequence[Concert], extra: Sequence[Concert]) -> list[
             else []
         )
         words = _venue_words(concert.venue)
-        if not any(
-            words & _venue_words(other.venue) and _same_set(concert.time, other.time)
-            for other in matches
-        ):
+        same = next(
+            (
+                at
+                for at in matches
+                if words & _venue_words(merged[at].venue)
+                and _same_set(concert.time, merged[at].time)
+            ),
+            None,
+        )
+        if same is None:
             merged.append(concert)
+        elif concert.image and not merged[same].image:
+            merged[same] = merged[same].model_copy(update={"image": concert.image})
     return merged
 
 
