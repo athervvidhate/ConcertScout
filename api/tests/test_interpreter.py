@@ -55,3 +55,14 @@ async def test_common_shorthand_is_normalized_without_another_model_call() -> No
     )
     assert result.place == "San Francisco, California, United States"
     assert "uk garage" in result.tags
+
+
+async def test_the_interpreters_reading_keeps_the_bounds_a_corrected_reading_must_meet() -> None:
+    artists = [f"Artist {n}" for n in range(25)]
+    result = await interpret(
+        "a long list",
+        TODAY,
+        model_returning(interpretation(artists=artists, genres=["Rock", "Polka", "Rock"])),
+    )
+    assert result.artists == artists[:20]
+    assert result.genres == ["Rock"]

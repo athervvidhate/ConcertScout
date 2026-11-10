@@ -4,17 +4,17 @@ import { nameOf as headliner } from "@/lib/lineup";
 
 // What a Shared Poster is about, from the Search's reading or else its first Artists.
 export function sharedHeading({
-  interpreted,
+  reading,
   recommendations,
-}: Pick<SharedPoster, "interpreted" | "recommendations">): string {
-  const reading = interpreted ? formatPosterHeading(interpreted) : "";
-  const genres = interpreted?.genres.join(", ");
-  if (reading && genres) return `${genres} · ${reading}`;
-  return reading || genres || recommendations.slice(0, 3).map(headliner).join(", ");
+}: Pick<SharedPoster, "reading" | "recommendations">): string {
+  const heading = reading ? formatPosterHeading(reading) : "";
+  const genres = reading?.genres.join(", ");
+  if (heading && genres) return `${genres} · ${heading}`;
+  return heading || genres || recommendations.slice(0, 3).map(headliner).join(", ");
 }
 
 // The link's title wherever it is shown: a browser tab, a chat preview, the share sheet.
-export function sharedTitle(shared: Pick<SharedPoster, "interpreted" | "recommendations">): string {
+export function sharedTitle(shared: Pick<SharedPoster, "reading" | "recommendations">): string {
   return `${sharedHeading(shared)} · Shared Poster`;
 }
 

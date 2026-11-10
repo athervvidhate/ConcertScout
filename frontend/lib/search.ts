@@ -51,8 +51,9 @@ export type Recommendation = {
   lineup_match?: string[];
 };
 
-// What the interpreter read from a Search. Anything it did not find is left out.
-export type Interpreted = {
+// What a Search was taken to mean. The interpreter writes it, and a person can correct it.
+// Anything it did not find is left out.
+export type Reading = {
   place?: string;
   // A named area wider than a city. `place` is then its center, and `radius_miles` its reach.
   region?: string;
@@ -60,6 +61,9 @@ export type Interpreted = {
   start?: string;
   end?: string;
   artists: string[];
+  // The Search's own words for a sound, and the music tags they expand to.
+  descriptors?: string[];
+  tags?: string[];
   genres: string[];
 };
 
@@ -100,7 +104,7 @@ export type Elsewhere = { keyword: string; concerts: Concert[] };
 
 export type SearchEvent =
   | { event: "status"; data: { step: string; message: string } }
-  | { event: "interpreted"; data: Interpreted }
+  | { event: "reading"; data: Reading }
   | { event: "pool"; data: { total: number } }
   | { event: "candidates"; data: Candidates }
   | { event: "poster"; data: { recommendations: Recommendation[] } }
@@ -109,8 +113,11 @@ export type SearchEvent =
   | { event: "error"; data: SearchError }
   | { event: "done"; data: Record<string, never> };
 
+// A Search sends its words, or a Reading the person corrected, which skips the interpreter.
+export type Asked = { text: string } | { reading: Reading };
+
 export async function* streamSearch(
-  text: string,
+  asked: Asked,
   token: string,
   taste: string[],
   near: Coordinates | null,
@@ -119,7 +126,7 @@ export async function* streamSearch(
   const response = await fetch(`${API_URL}/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, token, taste, near, time_zone: viewerZone() }),
+    body: JSON.stringify({ ...asked, token, taste, near, time_zone: viewerZone() }),
     signal,
   });
   if (!response.ok || !response.body) {

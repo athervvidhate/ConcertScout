@@ -1,4 +1,4 @@
-import type { Concert, Interpreted, Price } from "@/lib/search";
+import type { Concert, Reading, Price } from "@/lib/search";
 
 // Concert dates and times are local to the venue, so format them in UTC to keep them unshifted.
 const dateFormat = new Intl.DateTimeFormat("en-US", {
@@ -117,7 +117,7 @@ function headingDates(start?: string, end?: string): string | null {
   return null;
 }
 
-export function formatPosterHeading({ place, region, start, end, artists }: Interpreted): string {
+export function formatPosterHeading({ place, region, start, end, artists }: Reading): string {
   return [region ?? place, headingDates(start, end)].filter(Boolean).join(", ") || artists.join(", ");
 }
 

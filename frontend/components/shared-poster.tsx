@@ -16,7 +16,7 @@ type Props = { id: string; shared: SharedPoster; ticket?: string };
 // A Shared Poster is already kept, so the link needs no request.
 export function SharedPosterView({ id, shared, ticket }: Props) {
   const reduced = useReducedMotion();
-  const { interpreted, recommendations, made } = shared;
+  const { reading, recommendations, made } = shared;
   return (
     <>
       <SiteHeader />
@@ -26,7 +26,7 @@ export function SharedPosterView({ id, shared, ticket }: Props) {
         <p className="shared-made">
           Made <time dateTime={made}>{formatMade(made)}</time>
         </p>
-        {interpreted && (
+        {reading && (
           <motion.div
             className="understood"
             aria-label="How the Search was read"
@@ -37,7 +37,7 @@ export function SharedPosterView({ id, shared, ticket }: Props) {
               shown: { transition: { staggerChildren: reduced ? 0 : 0.08 } },
             }}
           >
-            <SearchChips interpreted={interpreted} />
+            <SearchChips reading={reading} />
           </motion.div>
         )}
       </header>

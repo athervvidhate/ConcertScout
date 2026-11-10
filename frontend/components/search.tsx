@@ -3,9 +3,10 @@
 import { Button } from "@base-ui/react/button";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowRight, LocateFixed } from "lucide-react";
+import { ArrowRight, LocateFixed, Pencil } from "lucide-react";
 import { type SubmitEvent, useEffect, useRef, useState } from "react";
 
+import { ReadingEditor } from "@/components/reading-editor";
 import { SearchChips } from "@/components/search-chips";
 import { SearchInput } from "@/components/search-input";
 import { HomeHero } from "@/components/home-hero";
@@ -22,7 +23,9 @@ import { SpotifyShelf } from "@/components/spotify-shelf";
 import { useSpotifyConnection } from "@/lib/spotify";
 import { countOf, TastePanel } from "@/components/taste-panel";
 import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/place";
-import { API_URL } from "@/lib/search";
+import { dateIn, viewerZone } from "@/lib/format";
+import { anywhere, overNextMonths } from "@/lib/reading";
+import { API_URL, type Asked, type Reading } from "@/lib/search";
 import { createSharedPoster, sharedUrl } from "@/lib/share";
 import { sharedTitle } from "@/lib/shared-heading";
 import { useImportedTaste } from "@/lib/taste";
@@ -54,13 +57,18 @@ export function Search() {
   const spotify = useSpotifyConnection();
   const [place, setPlace] = useState<Place | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const changeButton = useRef<HTMLButtonElement>(null);
+  // Focus goes back to Change after the editor closes, so a keyboard never loses its place.
+  const refocus = useRef(false);
   const {
     phase,
     run: searchRun,
     searched,
+    asked,
     status,
     step,
-    interpreted,
+    reading,
     candidates,
     recommendations,
     hasPoster,
@@ -85,9 +93,9 @@ export function Search() {
   const locationLabel = place ? "Forget my location" : "Use my location";
   const canSearch = token !== null && phase !== "searching";
   const searchedFor =
-    interpreted && !interpreted.place && place
-      ? { ...interpreted, place: "Near you" }
-      : interpreted;
+    reading && !reading.place && place
+      ? { ...reading, place: "Near you" }
+      : reading;
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -128,15 +136,33 @@ export function Search() {
     setPlace(null);
   }
 
-  function run(query: string, near: Place | null = place) {
+  useEffect(() => {
+    if (editing || !refocus.current) return;
+    refocus.current = false;
+    changeButton.current?.focus();
+  }, [editing]);
+
+  function run(request: Asked, near: Place | null = place) {
     if (!token) return;
     // Each token works once, so the next Search needs a fresh one.
     setToken(null);
     botCheck.current?.reset();
+    setEditing(false);
     // A typed place wins on the server, so a shared location only fills the gap.
-    search(query, token, taste?.artists ?? [], near);
+    search(request, token, taste?.artists ?? [], near);
     input.current?.blur();
     window.scrollTo({ top: 0, behavior: reduced ? "instant" : "smooth" });
+  }
+
+  function closeEditor() {
+    refocus.current = true;
+    setEditing(false);
+  }
+
+  // A corrected Reading skips the interpreter and replaces the Poster on screen.
+  function update(corrected: Reading) {
+    refocus.current = true;
+    run({ reading: corrected });
   }
 
   function goHome() {
@@ -151,27 +177,17 @@ export function Search() {
   function tryExample(example: string) {
     setText(example);
     const cached = examples.find((item) => item.text === example);
-    if (!cached) return run(example);
+    if (!cached) return run({ text: example });
     showExample(cached);
     input.current?.blur();
     window.scrollTo({ top: 0, behavior: reduced ? "instant" : "smooth" });
   }
 
-  function searchAgain(query: string, near: Place | null = place) {
-    setText(query);
-    run(query, near);
-  }
-
   function searchWiderDates() {
-    if (!searchedFor) return;
-    const words = [
-      ...searchedFor.artists,
-      ...searchedFor.genres,
-      searchedFor.region ?? searchedFor.place,
-    ]
-      .filter(Boolean)
-      .join(" ");
-    searchAgain(`${words} in the next three months`);
+    if (reading)
+      run({
+        reading: overNextMonths(reading, dateIn(viewerZone(), new Date())),
+      });
   }
 
   // Concerts elsewhere are already on the page; otherwise drop the place and Search again.
@@ -182,17 +198,13 @@ export function Search() {
         ?.scrollIntoView({ behavior: reduced ? "instant" : "smooth" });
       return;
     }
-    if (!interpreted) return;
-    searchAgain(
-      [...interpreted.artists, ...interpreted.genres].join(" "),
-      null,
-    );
+    if (reading) run({ reading: anywhere(reading) }, null);
   }
 
   function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = text.trim();
-    if (trimmed) run(trimmed);
+    if (trimmed) run({ text: trimmed });
   }
 
   return (
@@ -349,9 +361,9 @@ export function Search() {
         )}
       </AnimatePresence>
 
-      <div aria-live="polite" className="search-context">
+      <div className="search-context">
         {searchedFor && (
-          <>
+          <div className="understood-row" aria-live="polite">
             <motion.div
               key={JSON.stringify(searchedFor)}
               className="understood"
@@ -363,9 +375,32 @@ export function Search() {
                 shown: { transition: { staggerChildren: reduced ? 0 : 0.08 } },
               }}
             >
-              <SearchChips interpreted={searchedFor} />
+              <SearchChips reading={searchedFor} />
             </motion.div>
-          </>
+            {reading && !editing && (
+              <Button
+                ref={changeButton}
+                type="button"
+                className="reading-change"
+                aria-label="Change how we read your Search"
+                disabled={phase === "searching"}
+                focusableWhenDisabled
+                onClick={() => setEditing(true)}
+              >
+                <Pencil aria-hidden size={14} />
+                Change
+              </Button>
+            )}
+          </div>
+        )}
+        {reading && editing && (
+          <ReadingEditor
+            reading={reading}
+            near={place !== null}
+            canSearch={canSearch}
+            onUpdate={update}
+            onCancel={closeEditor}
+          />
         )}
       </div>
 
@@ -376,7 +411,7 @@ export function Search() {
             <Button
               type="button"
               disabled={!canSearch}
-              onClick={() => run(searched)}
+              onClick={() => run(asked ?? { text: searched })}
             >
               Try again
             </Button>
@@ -400,7 +435,7 @@ export function Search() {
               shareLink={
                 searchId ? (id) => linkToPoster(searchId, id) : undefined
               }
-              shareTitle={sharedTitle({ interpreted: interpreted ?? undefined, recommendations })}
+              shareTitle={sharedTitle({ reading: reading ?? undefined, recommendations })}
               status={status}
               step={step}
               onChange={() => {
@@ -412,7 +447,7 @@ export function Search() {
               }
               onAnywhere={
                 elsewhere ||
-                (canSearch && interpreted && interpreted.artists.length > 0)
+                (canSearch && reading && reading.artists.length > 0)
                   ? searchAnywhere
                   : undefined
               }
@@ -423,7 +458,7 @@ export function Search() {
       {elsewhere && phase === "finished" && (
         <div id="elsewhere">
           <Board
-            title={`Nothing in ${interpreted?.region ?? interpreted?.place?.split(",")[0] ?? "this area"}`}
+            title={`Nothing in ${reading?.region ?? reading?.place?.split(",")[0] ?? "this area"}`}
             subtitle={`These match "${elsewhere.keyword}" in other cities.`}
           >
             <Listings>
@@ -438,25 +473,25 @@ export function Search() {
         <SearchFeedback
           key={searched}
           search={searched}
-          interpreted={interpreted}
+          reading={reading}
           recommendations={recommendations}
           error={error}
         />
       )}
       {spotify.connected &&
-        (home || (phase === "finished" && interpreted && !error)) && (
+        (home || (phase === "finished" && reading && !error)) && (
           <SpotifyShelf
             connectHref={spotify.connectHref}
             onLocate={shareLocation}
             upcoming={home}
-            key={JSON.stringify([interpreted, place])}
-            place={interpreted?.place}
-            lat={interpreted?.place ? undefined : place?.lat}
-            lon={interpreted?.place ? undefined : place?.lon}
-            radius={interpreted?.radius_miles}
-            start={interpreted?.start}
-            end={interpreted?.end}
-            genres={interpreted?.genres}
+            key={JSON.stringify([reading, place])}
+            place={reading?.place}
+            lat={reading?.place ? undefined : place?.lat}
+            lon={reading?.place ? undefined : place?.lon}
+            radius={reading?.radius_miles}
+            start={reading?.start}
+            end={reading?.end}
+            genres={reading?.genres}
           />
         )}
       <AnimatePresence initial={false}>

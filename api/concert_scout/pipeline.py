@@ -25,16 +25,17 @@ from concert_scout import (
     similarity,
     telemetry,
 )
-from concert_scout.interpreter import Interpretation, InterpreterError, interpret
+from concert_scout.aliases import place_name
+from concert_scout.interpreter import InterpreterError, interpret
 from concert_scout.models import (
     ArtistProfile,
     Candidates,
     Concert,
     Elsewhere,
-    Interpreted,
     Place,
     PoolTotal,
     Poster,
+    Reading,
     Recommendation,
     SearchError,
     SeedArtist,
@@ -142,14 +143,14 @@ async def _resolve_seed(name: str, services: Services) -> SeedArtist:
 
 
 async def _find_taste(
-    interpretation: Interpretation, names_only: Sequence[str], services: Services
+    reading: Reading, names_only: Sequence[str], services: Services
 ) -> matching.Taste:
-    seeds = await asyncio.gather(*(_resolve_seed(n, services) for n in interpretation.artists))
+    seeds = await asyncio.gather(*(_resolve_seed(n, services) for n in reading.artists))
     neighbours = await similarity.find_neighbours(
         services.listenbrainz, services.lastfm, services.redis, seeds
     )
     extra = [SeedArtist(name=name) for name in names_only]
-    return matching.Taste([*seeds, *extra], neighbours, interpretation.tags, interpretation.genres)
+    return matching.Taste([*seeds, *extra], neighbours, reading.tags, reading.genres)
 
 
 # A repeated Search within this window gets the same reading and grades, so the same Poster,
@@ -163,14 +164,14 @@ def _answer_key(kind: str, *parts: str) -> str:
     return f"answer:{kind}:{digest}"
 
 
-async def _interpreted(text: str, today: dt.date, services: Services) -> Interpretation:
+async def _interpreted(text: str, today: dt.date, services: Services) -> Reading:
     words = " ".join(text.split()).casefold()
     key = _answer_key("interpret", interpreter.INSTRUCTIONS, today.isoformat(), words)
-    if cached := await cache.read(services.redis, key, Interpretation):
+    if cached := await cache.read(services.redis, key, Reading):
         return cached
-    interpretation = await interpret(text, today, services.model)
-    await cache.write(services.redis, key, interpretation, ANSWER_TTL)
-    return interpretation
+    reading = await interpret(text, today, services.model)
+    await cache.write(services.redis, key, reading, ANSWER_TTL)
+    return reading
 
 
 class Levels(BaseModel):
@@ -182,38 +183,38 @@ class Explained(BaseModel):
 
 
 async def _graded(
-    interpretation: Interpretation, rows: Mapping[str, ranker.Row], services: Services
+    reading: Reading, rows: Mapping[str, ranker.Row], services: Services
 ) -> dict[str, int]:
     as_json = [f"{id_}={row.model_dump_json()}" for id_, row in rows.items()]
-    taste = str(ranker.taste(interpretation))
+    taste = str(ranker.taste(reading))
     key = _answer_key("grade", jev.MODEL, jev.GUIDE, jev.QUESTION, *jev.LEVELS, taste, *as_json)
     if cached := await cache.read(services.redis, key, Levels):
         return cached.levels
-    levels = await ranker.grade(services.jev, interpretation, rows)
+    levels = await ranker.grade(services.jev, reading, rows)
     await cache.write(services.redis, key, Levels(levels=levels), ANSWER_TTL)
     return levels
 
 
 async def _explained(
-    interpretation: Interpretation, shown: Sequence[ranker.Row], services: Services
+    reading: Reading, shown: Sequence[ranker.Row], services: Services
 ) -> list[str]:
-    key = _answer_key("explain", ranker.REASONS, ranker.reasons_prompt(interpretation, shown))
+    key = _answer_key("explain", ranker.REASONS, ranker.reasons_prompt(reading, shown))
     if cached := await cache.read(services.redis, key, Explained):
         return cached.reasons
-    reasons = await ranker.explain(interpretation, shown, services.model)
+    reasons = await ranker.explain(reading, shown, services.model)
     await cache.write(services.redis, key, Explained(reasons=reasons), ANSWER_TTL)
     return reasons
 
 
 async def _recommend(
-    interpretation: Interpretation,
+    reading: Reading,
     shortlist: Sequence[matching.Candidate],
     artist_tags: Mapping[str, Sequence[str]],
     services: Services,
 ) -> list[Recommendation]:
     rows = ranker.rows(shortlist, artist_tags)
     try:
-        levels = await _graded(interpretation, rows, services)
+        levels = await _graded(reading, rows, services)
     except RankerError as exc:
         logger.warning("Ranker failed: %s", exc)
         return assemble.from_matches(shortlist)
@@ -225,7 +226,7 @@ async def _recommend(
     # A Concert with no Lineup has no Artist to describe, so it keeps its neutral reason.
     named = [n for n, row in enumerate(shown) if row.artist]
     try:
-        written = await _explained(interpretation, [shown[n] for n in named], services)
+        written = await _explained(reading, [shown[n] for n in named], services)
     except RankerError as exc:
         # The grades still stand. Each Concert keeps the neutral reason its match gave it.
         logger.warning("Reasons failed: %s", exc)
@@ -238,10 +239,10 @@ async def _recommend(
 
 
 async def _find_elsewhere(
-    interpretation: Interpretation, place: Place, services: Services, now: dt.datetime
+    reading: Reading, place: Place, services: Services, now: dt.datetime
 ) -> Elsewhere | None:
     """The Poster has already answered this Search, so a failure here only means no extra list."""
-    words = [*interpretation.artists, *interpretation.tags, *interpretation.descriptors]
+    words = [*reading.artists, *reading.tags, *reading.descriptors]
     if not words:
         return None
     try:
@@ -250,8 +251,8 @@ async def _find_elsewhere(
                 services.ticketmaster,
                 services.redis,
                 words[0],
-                interpretation.start,
-                interpretation.end,
+                reading.start,
+                reading.end,
                 now,
             )
     except (ticketmaster.TicketmasterError, limits.DailyLimitReached) as exc:
@@ -262,32 +263,33 @@ async def _find_elsewhere(
     return Elsewhere(keyword=words[0], concerts=others) if others else None
 
 
-async def _steps(
-    text: str, imported: Sequence[str], near: Place | None, services: Services, now: dt.datetime
-) -> AsyncIterator[ServerSentEvent]:
-    yield _event("status", Status(step="interpret", message="Reading your Search"))
+async def _read(asked: str | Reading, today: dt.date, services: Services) -> Reading:
+    """A corrected Reading skips the interpreter. Its place still goes to the geocoder."""
+    if isinstance(asked, Reading):
+        return asked.model_copy(update={"place": place_name(asked.place) if asked.place else None})
     with telemetry.step("interpret"):
-        interpretation = await _interpreted(text, now.date(), services)
+        return await _interpreted(asked, today, services)
+
+
+async def _steps(
+    asked: str | Reading,
+    imported: Sequence[str],
+    near: Place | None,
+    services: Services,
+    now: dt.datetime,
+) -> AsyncIterator[ServerSentEvent]:
+    if isinstance(asked, str):
+        yield _event("status", Status(step="interpret", message="Reading your Search"))
+    reading = await _read(asked, now.date(), services)
     names_only: Sequence[str] = ()
     # A Taste typed into this Search says what the person wants now, so it beats an import.
-    if not (interpretation.artists or interpretation.tags or interpretation.descriptors):
+    if not (reading.artists or reading.tags or reading.descriptors):
         seeds, names_only = imported[:IMPORTED_SEEDS], imported[IMPORTED_SEEDS:]
-        interpretation = interpretation.model_copy(update={"artists": list(seeds)})
-    yield _event(
-        "interpreted",
-        Interpreted(
-            place=interpretation.place,
-            region=interpretation.region,
-            radius_miles=interpretation.radius_miles,
-            start=interpretation.start,
-            end=interpretation.end,
-            artists=interpretation.artists,
-            genres=interpretation.genres,
-        ),
-    )
+        reading = reading.model_copy(update={"artists": list(seeds)})
+    yield _event("reading", reading)
 
-    if not (interpretation.place or near or interpretation.artists):
-        if interpretation.descriptors or interpretation.tags:
+    if not (reading.place or near or reading.artists):
+        if reading.descriptors or reading.tags:
             # Similar Artists start from a seed, so a style alone has nothing to look up.
             yield _error("needs_place", NEEDS_A_PLACE)
         else:
@@ -295,16 +297,16 @@ async def _steps(
         return
 
     async def find_place() -> Place | None:
-        if not interpretation.place:
+        if not reading.place:
             return near
         with telemetry.step("resolve_place"):
-            place = await geocoder.geocode(services.geocoder, services.redis, interpretation.place)
-            radius = interpretation.radius_miles
+            place = await geocoder.geocode(services.geocoder, services.redis, reading.place)
+            radius = reading.radius_miles
             return place.model_copy(update={"radius_miles": radius}) if place else None
 
     async def find_taste() -> matching.Taste:
         with telemetry.step("resolve_artists"):
-            return await _find_taste(interpretation, names_only, services)
+            return await _find_taste(reading, names_only, services)
 
     async def find_pool(place: Place | None, lookups: Sequence[str]) -> list[Concert]:
         with telemetry.step("pool"):
@@ -314,14 +316,14 @@ async def _steps(
                 services.redis,
                 place,
                 lookups,
-                interpretation.start,
-                interpretation.end,
+                reading.start,
+                reading.end,
                 now,
                 on_found=tag_fetch.add if wants_tags else None,
             )
 
     # Tags only score a Taste, so a place-only Search never asks for them.
-    wants_tags = bool(interpretation.artists or names_only or interpretation.tags)
+    wants_tags = bool(reading.artists or names_only or reading.tags)
     tag_fetch = listenbrainz.TagFetch(services.listenbrainz, services.redis)
     # With a place, the pool needs nothing from the Taste, so the slowest steps overlap.
     tasks: list[asyncio.Task[Any]] = []
@@ -334,33 +336,33 @@ async def _steps(
     try:
         place_lookup = start(find_place())
         taste_lookup = start(find_taste())
-        if interpretation.place:
-            message = f"Finding {interpretation.region or interpretation.place}"
+        if reading.place:
+            message = f"Finding {reading.region or reading.place}"
             yield _event("status", Status(step="resolve", message=message))
-        if interpretation.artists:
-            message = f"Finding Artists like {', '.join(interpretation.artists)}"
+        if reading.artists:
+            message = f"Finding Artists like {', '.join(reading.artists)}"
             yield _event("status", Status(step="resolve", message=message))
 
         place = await place_lookup
-        if interpretation.place and place is None:
-            where = interpretation.region or interpretation.place
+        if reading.place and place is None:
+            where = reading.region or reading.place
             message = f"We could not find {where}. Check the spelling."
             yield _error("place_not_found", message)
             return
 
         if place:
-            near_place = "you" if place is near else interpretation.region or place.name
+            near_place = "you" if place is near else reading.region or place.name
             message = f"Looking for Concerts near {near_place}"
             yield _event("status", Status(step="pool", message=message))
-            concert_lookup = start(find_pool(place, interpretation.artists))
+            concert_lookup = start(find_pool(place, reading.artists))
             taste = await taste_lookup
         else:
             taste = await taste_lookup
             closest = similarity.closest(taste.neighbours, DIRECT_LOOKUPS)
-            names = ", ".join(interpretation.artists)
+            names = ", ".join(reading.artists)
             message = f"Looking for Concerts by {names} and similar Artists"
             yield _event("status", Status(step="pool", message=message))
-            concert_lookup = start(find_pool(None, [*interpretation.artists, *closest]))
+            concert_lookup = start(find_pool(None, [*reading.artists, *closest]))
         concerts = await concert_lookup
         yield _event("pool", PoolTotal(total=len(concerts)))
 
@@ -390,21 +392,25 @@ async def _steps(
     else:
         yield _event("status", Status(step="rank", message="Choosing the closest Concerts"))
         with telemetry.step("rank"):
-            recommendations = await _recommend(interpretation, shortlist, artist_tags, services)
+            recommendations = await _recommend(reading, shortlist, artist_tags, services)
     yield _event("poster", Poster(recommendations=recommendations))
     if place and taste and not recommendations:
-        elsewhere = await _find_elsewhere(interpretation, place, services, now)
+        elsewhere = await _find_elsewhere(reading, place, services, now)
         if elsewhere:
             yield _event("elsewhere", elsewhere)
 
 
 async def run_search(
-    text: str, imported: Sequence[str], near: Place | None, time_zone: str, services: Services
+    asked: str | Reading,
+    imported: Sequence[str],
+    near: Place | None,
+    time_zone: str,
+    services: Services,
 ) -> AsyncIterator[ServerSentEvent]:
     with telemetry.search() as usage:
         try:
             now = clock.now_in(time_zone)
-            async for event in stream_search(text, imported, near, services, now):
+            async for event in stream_search(asked, imported, near, services, now):
                 yield event
         finally:
             # A visitor who leaves early has still cost money, so a cancel must not skip this.
@@ -415,10 +421,15 @@ async def run_search(
 
 
 async def stream_search(
-    text: str, imported: Sequence[str], near: Place | None, services: Services, now: dt.datetime
+    asked: str | Reading,
+    imported: Sequence[str],
+    near: Place | None,
+    services: Services,
+    now: dt.datetime,
 ) -> AsyncIterator[ServerSentEvent]:
+    """`asked` is the Search's words, or a Reading the person corrected."""
     try:
-        async for event in _steps(text, imported, near, services, now):
+        async for event in _steps(asked, imported, near, services, now):
             yield event
     except InterpreterError as exc:
         logger.warning("Interpreter failed: %s", exc)

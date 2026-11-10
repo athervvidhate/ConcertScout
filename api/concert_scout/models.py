@@ -1,10 +1,35 @@
 import datetime as dt
-from typing import Literal
+import unicodedata
+from typing import Annotated, Literal, Self, get_args
 
-from pydantic import BaseModel
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints, model_validator
 
 # A circle this wide already covers most of a large country.
 MAX_RADIUS_MILES = 500
+
+# Sources may send a letter and its accent as two characters, such as E and a combining macron.
+# A display face places a precomposed letter well but may not stack the pair. NFC is the same text.
+Text = Annotated[str, AfterValidator(lambda value: unicodedata.normalize("NFC", value))]
+
+# The broad listing genres a Taste can fall under.
+Genre = Literal[
+    "Rock",
+    "Alternative",
+    "Pop",
+    "Hip-Hop/Rap",
+    "R&B",
+    "Dance/Electronic",
+    "Country",
+    "Folk",
+    "Jazz",
+    "Blues",
+    "Metal",
+    "Latin",
+    "Reggae",
+    "World",
+    "Classical",
+]
+GENRES: frozenset[str] = frozenset(get_args(Genre))
 
 
 class Price(BaseModel):
@@ -16,7 +41,7 @@ class Price(BaseModel):
 class Artist(BaseModel):
     """A Lineup entry, as reported by the Concert's source. A missing fact stays None."""
 
-    name: str
+    name: Text
     mbid: str | None = None
     # A public catalog identity when the source does not expose a MusicBrainz ID.
     source_id: str | None = None
@@ -25,7 +50,7 @@ class Artist(BaseModel):
 
 
 class Presale(BaseModel):
-    name: str
+    name: Text
     start: dt.datetime
     end: dt.datetime
 
@@ -34,7 +59,7 @@ class Concert(BaseModel):
     """A Concert's facts, as reported by its source. A missing fact stays None."""
 
     id: str
-    name: str
+    name: Text
     url: str
     artists: list[Artist]
     source: Literal["ticketmaster", "jambase"] = "ticketmaster"
@@ -42,9 +67,9 @@ class Concert(BaseModel):
     time: dt.time | None = None
     # The venue's IANA zone. `date` and `time` already read in it.
     time_zone: str | None = None
-    venue: str | None = None
-    city: str | None = None
-    region: str | None = None
+    venue: Text | None = None
+    city: Text | None = None
+    region: Text | None = None
     price: Price | None = None
     image: str | None = None
     general_sale: dt.datetime | None = None
@@ -92,7 +117,7 @@ class Place(BaseModel):
 class SeedArtist(BaseModel):
     """An Artist named in a Search. With no MusicBrainz match, only the name is known."""
 
-    name: str
+    name: Text
     mbid: str | None = None
     tags: list[str] = []
 
@@ -100,7 +125,7 @@ class SeedArtist(BaseModel):
 class SimilarArtist(BaseModel):
     """A neighbour from a similarity source. `score` is that source's own raw number."""
 
-    name: str
+    name: Text
     mbid: str | None = None
     score: float
 
@@ -138,14 +163,39 @@ class Status(BaseModel):
     message: str
 
 
-class Interpreted(BaseModel):
-    place: str | None = None
-    region: str | None = None
-    radius_miles: int | None = None
+Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+Word = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+
+# Bounds on a Reading. A Search's 500 characters hold no more than this, so a corrected Reading
+# can ask for nothing a typed Search could not.
+MAX_ARTISTS = 20
+MAX_WORDS = 30
+
+
+class Reading(BaseModel):
+    """What a Search was taken to mean. The interpreter writes it, and a person can correct it."""
+
+    artists: Annotated[list[Name], Field(max_length=MAX_ARTISTS)] = []
+    # The Search's own words for a sound, and the music tags they expand to.
+    descriptors: Annotated[list[Word], Field(max_length=MAX_WORDS)] = []
+    tags: Annotated[list[Word], Field(max_length=MAX_WORDS)] = []
+    genres: Annotated[list[Genre], Field(max_length=len(GENRES))] = []
+    place: Name | None = None
+    # A named area wider than a city. `place` is then a large city near its middle.
+    region: Word | None = None
+    radius_miles: Annotated[int, Field(ge=1, le=MAX_RADIUS_MILES)] | None = None
     start: dt.date | None = None
     end: dt.date | None = None
-    artists: list[str]
-    genres: list[str]
+
+    @model_validator(mode="after")
+    def holds_together(self) -> Self:
+        if self.start and self.end and self.end < self.start:
+            raise ValueError("end is before start")
+        if self.radius_miles and not self.place:
+            raise ValueError("a radius needs a place")
+        if self.region and not self.radius_miles:
+            raise ValueError("a region needs a radius")
+        return self
 
 
 class PoolTotal(BaseModel):

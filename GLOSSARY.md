@@ -35,6 +35,10 @@ The Artists in a festival's Lineup who suit the Search, named best first. _Avoid
 Concert Scout's judgment that a Concert suits one Search, with the reason why. The same Concert can have different Recommendations in different Searches.
 _Avoid_: Result, suggestion, match
 
+**Reading**:
+What a Search was taken to mean: its Taste, place, Region and dates. The interpreter writes it, and a person can correct it.
+_Avoid_: Interpretation, parse
+
 **Region**:
 A named area wider than a city and narrower than or different from a state, such as Southern California. A Search reaches it as a circle around a large city.
 

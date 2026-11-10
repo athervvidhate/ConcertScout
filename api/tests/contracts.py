@@ -107,6 +107,7 @@ def contract_model() -> FunctionModel:
                 if "place only" in text
                 else ["empty" if "empty" in text else "UKG"],
                 "tags": [] if "place only" in text else ["ukg"],
+                "genres": ["Dance/Electronic"] if "sound" in text else [],
                 "place": None if "near me" in text else "SF",
                 "start": None,
                 "end": None,

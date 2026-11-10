@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from redis.asyncio import Redis
 
 from concert_scout import assemble
-from concert_scout.models import Interpreted, Recommendation
+from concert_scout.models import Reading, Recommendation
 
 # A Search ID is only good for sharing soon after its Search.
 SEARCH_TTL = dt.timedelta(hours=6)
@@ -28,7 +28,7 @@ class Made(BaseModel):
     """What one Search produced. This is all a Shared Poster ever holds."""
 
     made: dt.date
-    interpreted: Interpreted | None
+    reading: Reading | None = None
     recommendations: list[Recommendation]
 
 

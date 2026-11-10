@@ -10,9 +10,9 @@ const concert = (artist: string): Concert => ({
   url: "https://tickets.example",
   artists: [{ name: artist }],
 });
-const poster = (artists: string[], interpreted?: SharedPoster["interpreted"]): SharedPoster => ({
+const poster = (artists: string[], reading?: SharedPoster["reading"]): SharedPoster => ({
   made: "2026-11-09",
-  interpreted,
+  reading,
   recommendations: artists.map((artist) => ({ concert: concert(artist) })),
 });
 

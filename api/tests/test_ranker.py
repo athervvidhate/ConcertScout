@@ -10,12 +10,11 @@ from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, UserProm
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from concert_scout import assemble, ranker, telemetry
-from concert_scout.interpreter import Interpretation
 from concert_scout.matching import Candidate, Match, Signal
-from concert_scout.models import Artist, Concert
+from concert_scout.models import Artist, Concert, Reading
 from concert_scout.sources import jev
 
-EMPTY = Interpretation(artists=[], descriptors=[], tags=[], place=None, start=None, end=None)
+EMPTY = Reading()
 
 
 def candidate(
