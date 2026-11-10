@@ -6,7 +6,7 @@ This spec governs the live application's layouts, motion and palette (Moss, ligh
 
 Role tokens: light paper `#f3f5f2`, surface `#ffffff`, ink `#12261f`, pine band `#12352b`, coral action `#c4461f`. Dark paper is `#0d1915`, surface `#14241f`, ink `#e8f0eb`, pine band `#1f4a3b`, coral action `#ff7449`. Derive hairlines from ink. Flat surfaces and a small shadow; photographs provide colour. Gradients may support photo legibility, never decorate the page.
 
-Anton is display type and Bricolage Grotesque is UI/body type, loaded with `next/font/local`. Dates and prices use tabular numbers. The ticket/compass identity has standalone outlined SVG variants for light, dark and pine surfaces; header colour follows the page before paint. The adaptive SVG favicon and PNG/ICO renditions use the symbol alone.
+Anton is display type and Bricolage Grotesque is UI/body type, self-hosted with `next/font/google`. Every subset ships with its `unicode-range`, so a name like GIVĒON keeps its typeface; only Latin is preloaded. Dates and prices use tabular numbers. The ticket/compass identity has standalone outlined SVG variants for light, dark and pine surfaces; header colour follows the page before paint. The adaptive SVG favicon and PNG/ICO renditions use the symbol alone.
 
 Follow the system colour scheme on first visit. The header menu switches light/dark and remembers the choice when storage permits. Failure to persist must not prevent switching for the visit.
 
@@ -40,7 +40,7 @@ List switching fades/lifts the old view over 200 ms then raises the new Concerts
 
 A Share button sits beside the Grid and List views, in a solo Ticket's actions and as an icon beside Save in the Ticket dialog, so the dialog keeps its height. The visitor sees "Link copied" or "Shared" briefly, and a failed link says so beside the button. Closing the share sheet is not a failure.
 
-`/p/[id]` opens a Poster at once, without the working view or the name flight, under a "Shared Poster" pill, the Search's reading as a heading and chips, and the date it was made. A Ticket link opens its dialog without a flight. When every Concert has passed it says so, and an unknown or expired link has its own page. A Search box below the Poster sends its words to the home Search. The link preview image is 1200×630 in the dark Moss palette, set in Anton: the label, the heading and up to five picks with dates and cities. Satori cannot read WOFF2, so `app/fonts/anton.ttf` is the same typeface unpacked for it.
+`/p/[id]` opens a Poster at once, without the working view or the name flight, under a "Shared Poster" pill, the Search's reading as a heading and chips, and the date it was made. A Ticket link opens its dialog without a flight. When every Concert has passed it says so, and an unknown or expired link has its own page. A Search box below the Poster sends its words to the home Search. The link preview image is 1200×630 in the dark Moss palette, set in Anton: the label, the heading and up to five picks with dates and cities. Satori cannot read WOFF2, so `app/fonts/anton.ttf` is the full Anton TTF, Latin Extended included.
 
 ## Empty, errors and existing features
 
