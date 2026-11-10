@@ -103,21 +103,6 @@ export function formatPrice({ min, max, currency }: Price, compact = false): str
   return min === max ? format.format(min) : `${format.format(min)} to ${format.format(max)}`;
 }
 
-function formatDates({ start, end }: Interpreted): string | null {
-  if (start && end) {
-    return start === end ? formatDate(start) : `${formatDate(start)} to ${formatDate(end)}`;
-  }
-  if (start) return `from ${formatDate(start)}`;
-  if (end) return `until ${formatDate(end)}`;
-  return null;
-}
-
-export function formatInterpreted(interpreted: Interpreted): string {
-  return [interpreted.region ?? interpreted.place, formatDates(interpreted), ...interpreted.artists]
-    .filter(Boolean)
-    .join(" · ");
-}
-
 function headingDates(start?: string, end?: string): string | null {
   if (start && end) {
     if (start === end) return formatMonthDay(start);

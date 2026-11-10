@@ -21,7 +21,6 @@ import { SearchExamples } from "@/components/search-examples";
 import { SpotifyShelf } from "@/components/spotify-shelf";
 import { useSpotifyConnection } from "@/lib/spotify";
 import { countOf, TastePanel } from "@/components/taste-panel";
-import { formatInterpreted, formatPosterHeading } from "@/lib/format";
 import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/place";
 import { API_URL } from "@/lib/search";
 import { createSharedPoster, sharedUrl } from "@/lib/share";
@@ -352,9 +351,6 @@ export function Search() {
       <div aria-live="polite" className="search-context">
         {searchedFor && (
           <>
-            <p title={formatInterpreted(searchedFor)}>
-              {formatPosterHeading(searchedFor)}
-            </p>
             <motion.div
               key={JSON.stringify(searchedFor)}
               className="understood"
