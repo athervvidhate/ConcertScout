@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArtistPanel } from "@/components/artist-panel";
 import { ConcertPhoto, SourceLink } from "@/components/concert-source";
 import { ListenButton, ListenStage } from "@/components/listen";
+import { Paged } from "@/components/paged";
 import {
   byVenue,
   formatDate,
@@ -14,12 +15,13 @@ import {
   formatPrice,
   presaleLine,
 } from "@/lib/format";
+import { headlinerOf, listenTo, nameOf } from "@/lib/lineup";
 import type { Concert, Recommendation } from "@/lib/search";
 
-/** What a Recommendation is called. With no Lineup that is the Concert's own name, never an Artist. */
-export function nameOf({ concert }: Recommendation): string {
-  return concert.artists[0]?.name ?? concert.name;
-}
+// The festival Artists named on the details pane, so it keeps its size. The Lineup holds the rest.
+const NAMED_MATCHES = 3;
+
+type View = "details" | "dates" | "lineup";
 
 function Price({ text }: { text: string }) {
   const parts = text.split(" to ");
@@ -45,6 +47,50 @@ function placeOf({ venue, city, region }: Concert): string {
 
 function moreDates(count: number): string {
   return count === 1 ? "1 more date" : `${count} more dates`;
+}
+
+function suitCount(count: number): string {
+  return count === 1 ? "An Artist you might like" : `${count} Artists you might like`;
+}
+
+/** A festival's whole Lineup, the Artists who suit the Search first. Each name opens its panel. */
+function LineupPane({ concert, matched }: { concert: Concert; matched: string[] }) {
+  const rest = concert.artists.map((artist) => artist.name).filter((name) => !matched.includes(name));
+  return (
+    <ul className="lineup-all">
+      {[...matched, ...rest].map((name) => (
+        <li key={name} data-match={matched.includes(name) || undefined}>
+          <ArtistPanel name={name} className="lineup-row" />
+          {matched.includes(name) && <span className="sr-only">, you might like them</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The festival's best-suited Artists in one line of names, so the details keep their size. */
+function MatchLine({ matched, onOpen, onMore }: { matched: string[]; onOpen?: () => void; onMore: () => void }) {
+  const shown = matched.slice(0, NAMED_MATCHES);
+  const more = matched.length - shown.length;
+  return (
+    <p className="lineup-match">
+      <span className="lineup-match-label">{suitCount(matched.length)}: </span>
+      {shown.map((name, index) => (
+        <Fragment key={name}>
+          {index > 0 && (index === shown.length - 1 && !more ? " and " : ", ")}
+          <ArtistPanel name={name} className="lineup-inline" onOpen={onOpen} />
+        </Fragment>
+      ))}
+      {more > 0 && (
+        <>
+          {" and "}
+          <button type="button" className="lineup-inline" onClick={onMore}>
+            {more} more
+          </button>
+        </>
+      )}
+    </p>
+  );
 }
 
 /** The headliner's other dates, by venue. It takes the details' place rather than adding to them. */
@@ -106,22 +152,29 @@ export function Ticket({
   const [own, setOwn] = useState(false);
   const listening = onListen ? !!shared : own;
   const listen = onListen ?? setOwn;
-  const [view, setView] = useState<"details" | "dates">("details");
+  const [view, setView] = useState<View>("details");
   const reduced = useReducedMotion();
+  // A swapped pane takes the exact size the details had, and pages anything that does not fit.
+  const main = useRef<HTMLDivElement>(null);
+  const [paneHeight, setPaneHeight] = useState<number>();
   // After a swap, focus lands on the control that swaps back, once the new pane mounts.
-  const moved = useRef(false);
-  const focusAfterSwap = (node: HTMLButtonElement | null) => {
-    if (node && moved.current) {
-      moved.current = false;
+  const moved = useRef<View | null>(null);
+  const focusAfterSwap = (to: View) => (node: HTMLButtonElement | null) => {
+    if (node && moved.current === to) {
+      moved.current = null;
       node.focus();
     }
   };
-  const swap = (next: "details" | "dates") => {
-    moved.current = true;
+  const swap = (next: View) => {
+    moved.current = next === "details" ? view : "details";
+    if (next !== "details") setPaneHeight(main.current?.clientHeight);
     setView(next);
   };
-  // Only an Artist has a panel or a Preview. A Concert with no Lineup is just its title.
-  const headliner = concert.artists[0]?.name;
+  // Only an Artist has a panel or a Preview. A Concert with no Lineup, or a festival, is its title.
+  const headliner = headlinerOf(concert);
+  const heard = listenTo(recommendation);
+  const matched = concert.festival ? (recommendation.lineup_match ?? []) : [];
+  const lineup = concert.festival ? concert.artists.length : 0;
   const details = [
     placeOf(concert),
     concert.date && formatDayShort(concert.date),
@@ -139,10 +192,10 @@ export function Ticket({
             sizes="(max-width: 600px) 100vw, 800px"
             draggable={false}
           />
-          {headliner && <ListenStage name={headliner} listening={listening} />}
+          {heard && <ListenStage name={heard} listening={listening} />}
         </div>
       )}
-      <div className="ticket-main">
+      <div className="ticket-main" ref={main}>
         {/* One pane at a time, so the Ticket never grows to fit both. */}
         <AnimatePresence mode="wait" initial={false}>
           {view === "details" ? (
@@ -176,17 +229,35 @@ export function Ticket({
                   Tap the name for more
                 </p>
               )}
-              {reason && <p>{reason}</p>}
+              {matched.length > 0 && (
+                <MatchLine matched={matched} onOpen={onArtistOpen} onMore={() => swap("lineup")} />
+              )}
+              {reason && (
+                <p>
+                  {/* A festival's reason describes its best-suited Artist, so it says who. */}
+                  {matched[0] && <strong>{matched[0]}: </strong>}
+                  {reason}
+                </p>
+              )}
               <p className="venue">{details.join(", ")}</p>
               {presale && <p className="presale">{presale}</p>}
-              {(headliner || also.length > 0) && (
+              {(heard || lineup > 0 || also.length > 0) && (
                 <div className="ticket-pills">
-                  {headliner && (
-                    <ListenButton name={headliner} listening={listening} onListen={listen} />
+                  {heard && <ListenButton name={heard} listening={listening} onListen={listen} />}
+                  {lineup > 0 && (
+                    <button
+                      ref={focusAfterSwap("lineup")}
+                      type="button"
+                      className="ticket-pill"
+                      onClick={() => swap("lineup")}
+                    >
+                      Lineup · {lineup}
+                      <ChevronRight aria-hidden size={16} />
+                    </button>
                   )}
                   {also.length > 0 && (
                     <button
-                      ref={focusAfterSwap}
+                      ref={focusAfterSwap("dates")}
                       type="button"
                       className="ticket-pill"
                       onClick={() => swap("dates")}
@@ -200,15 +271,16 @@ export function Ticket({
             </motion.div>
           ) : (
             <motion.div
-              key="dates"
-              className="ticket-pane"
+              key={view}
+              className="ticket-pane ticket-pane-paged"
+              style={{ height: paneHeight }}
               initial={{ opacity: 0, x: reduced ? 0 : 16 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: reduced ? 0 : 16 }}
               transition={{ duration: reduced ? 0 : 0.18 }}
             >
               <button
-                ref={focusAfterSwap}
+                ref={focusAfterSwap("details")}
                 type="button"
                 className="ticket-back"
                 onClick={() => swap("details")}
@@ -217,8 +289,15 @@ export function Ticket({
                 <span className="sr-only">Back to </span>
                 {nameOf(recommendation)}
               </button>
-              <p className="dates-heading">{moreDates(also.length)}</p>
-              <DatesPane concerts={also} />
+              {view === "lineup" ? (
+                <Paged columns={2} heading={<p className="dates-heading">Lineup · {lineup}</p>}>
+                  <LineupPane concert={concert} matched={matched} />
+                </Paged>
+              ) : (
+                <Paged columns={1} heading={<p className="dates-heading">{moreDates(also.length)}</p>}>
+                  <DatesPane concerts={also} />
+                </Paged>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

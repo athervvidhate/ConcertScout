@@ -15,7 +15,8 @@ import {
 } from "react";
 import { AnimatedCount } from "@/components/animated-count";
 import { AddToCalendar } from "@/components/add-to-calendar";
-import { nameOf, Ticket } from "@/components/ticket";
+import { Ticket } from "@/components/ticket";
+import { listenTo, matchLine, nameOf } from "@/lib/lineup";
 import { WorkingSearch } from "@/components/working-search";
 import { SaveButton } from "@/components/save-button";
 import { ShareButton } from "@/components/share-button";
@@ -369,6 +370,7 @@ export function Poster({
                     {recommendations.map((r, rank) => {
                       const { concert, reason } = r;
                       const name = nameOf(r);
+                      const listen = listenTo(r);
                       const date = concert.date
                         ? formatDate(concert.date)
                         : null;
@@ -379,7 +381,7 @@ export function Poster({
                       ]
                         .filter(Boolean)
                         .join(" · ");
-                      const bill = showTitle(concert, name);
+                      const bill = matchLine(r) ?? showTitle(concert, name);
                       if (recommendations.length === 1 && view === "grid")
                         return (
                           <article
@@ -388,9 +390,9 @@ export function Poster({
                           >
                             <div className="solo-photo">
                               {photo(r)}
-                              {concert.artists[0] && (
+                              {listen && (
                                 <ListenStage
-                                  name={concert.artists[0].name}
+                                  name={listen}
                                   listening={listeningTo === `solo:${concert.id}`}
                                 />
                               )}
@@ -480,9 +482,9 @@ export function Poster({
                           listeningTo === `dialog:${current.concert.id}`) && (
                           <div className="dialog-media">
                             {photo(current, true)}
-                            {current.concert.artists[0] && (
+                            {listenTo(current) && (
                               <ListenStage
-                                name={current.concert.artists[0].name}
+                                name={listenTo(current) ?? ""}
                                 listening={listeningTo === `dialog:${current.concert.id}`}
                               />
                             )}

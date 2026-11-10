@@ -7,7 +7,8 @@ import { useState, useSyncExternalStore } from "react";
 import { AddToCalendar } from "@/components/add-to-calendar";
 import { AccountDialog } from "@/components/account-dialog";
 import { MovedSaves } from "@/components/moved-saves";
-import { nameOf, Ticket } from "@/components/ticket";
+import { Ticket } from "@/components/ticket";
+import { nameOf } from "@/lib/lineup";
 import { useAccount } from "@/lib/account";
 import { removeSaved, upcoming, useSavedConcerts } from "@/lib/saved";
 

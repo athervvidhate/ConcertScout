@@ -30,6 +30,12 @@ POINT_PRECISION = 5
 type OnPage = Callable[[list[Concert]], None]
 # Ticketmaster's words for having no classification.
 NO_GENRE = {"other", "undefined"}
+# Ticketmaster's types for an attraction that names no kind of performer. Event Style is meant for
+# event brands, such as a festival's, but it also marks some bands.
+NOT_A_PERFORMER = NO_GENRE | {"event style"}
+# The fewest other Artists beside an attraction named like the event that make it a festival's
+# brand. Fewer, and it is more often a headliner whose tour has its name ("Slayer: Reign In Blood").
+FESTIVAL_LINEUP = 4
 IMAGE_RATIO = "16_9"
 IMAGE_MIN_WIDTH = 640
 
@@ -204,15 +210,16 @@ def parse_concert(record: dict[str, Any]) -> Concert:
     attractions: list[dict[str, Any]] = embedded.get("attractions", [])
     lead: dict[str, Any] = attractions[0] if attractions else {}
     general_sale, presales = _parse_sales(record.get("sales", {}))
+    named = [a for a in attractions if "name" in a]
+    performers = [a for a in named if not _bills_the_event(a, record["name"], len(named) - 1)]
+    # A festival billed alone keeps its one entry, so it can still match by genre as before.
+    festival = 0 < len(performers) < len(named)
     return Concert(
         id=record["id"],
         name=record["name"],
         url=record["url"],
-        artists=[
-            _parse_artist(a, classifications)
-            for a in embedded.get("attractions", [])
-            if "name" in a
-        ],
+        artists=[_parse_artist(a, classifications) for a in (performers if festival else named)],
+        festival=festival,
         date=_parse_date(start),
         time=_parse_time(start),
         time_zone=venue.get("timezone") if clock.known_zone(venue.get("timezone")) else None,
@@ -279,6 +286,23 @@ def _image(images: list[dict[str, Any]]) -> str | None:
         default=None,
     )
     return best["url"] if best else None
+
+
+def _bills_the_event(attraction: dict[str, Any], title: str, others: int) -> bool:
+    """Whether an attraction is the event itself, such as "Insomniac Countdown", not a performer.
+
+    The event's title starts with its name, Ticketmaster gives it no performer type and no
+    MusicBrainz link, and a festival-sized Lineup shares the bill.
+    """
+    classifications: list[dict[str, Any]] = attraction.get("classifications") or [{}]
+    kind_record: dict[str, Any] = classifications[0].get("type") or {}
+    kind: str = (kind_record.get("name") or "").casefold()
+    return (
+        others >= FESTIVAL_LINEUP
+        and (not kind or kind in NOT_A_PERFORMER)
+        and not attraction.get("externalLinks", {}).get("musicbrainz")
+        and normalize(title).startswith(normalize(attraction["name"]))
+    )
 
 
 def _parse_artist(

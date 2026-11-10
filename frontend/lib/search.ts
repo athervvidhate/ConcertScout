@@ -37,10 +37,19 @@ export type Concert = {
   image?: string;
   general_sale?: string;
   presales?: Presale[];
+  // Billed under its own name, such as a festival's, above its Lineup.
+  festival?: boolean;
 };
 
-// `also` holds the same Artist's other dates.
-export type Recommendation = { concert: Concert; score?: number; reason?: string; also?: Concert[] };
+// `also` holds the same Artist's other dates. `lineup_match` names a festival's Artists who suit the
+// Search, best first, and `reason` describes the first of them.
+export type Recommendation = {
+  concert: Concert;
+  score?: number;
+  reason?: string;
+  also?: Concert[];
+  lineup_match?: string[];
+};
 
 // What the interpreter read from a Search. Anything it did not find is left out.
 export type Interpreted = {

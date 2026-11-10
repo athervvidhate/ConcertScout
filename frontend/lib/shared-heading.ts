@@ -1,9 +1,6 @@
 import { formatMonthDay, formatPosterHeading } from "@/lib/format";
 import type { SharedPoster } from "@/lib/share";
-import type { Recommendation } from "@/lib/search";
-
-// Server pages use these, so they cannot come from the Ticket's client module.
-const headliner = ({ concert }: Recommendation) => concert.artists[0]?.name ?? concert.name;
+import { nameOf as headliner } from "@/lib/lineup";
 
 // What a Shared Poster is about, from the Search's reading or else its first Artists.
 export function sharedHeading({

@@ -1,5 +1,6 @@
 import { SourceLink } from "@/components/concert-source";
 import { formatConcertTime, formatMonthDay, presaleLine } from "@/lib/format";
+import { headlinerOf } from "@/lib/lineup";
 import type { Concert } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
 
@@ -16,7 +17,7 @@ type Props = {
 };
 
 export function Listing({ concert, artist, href, note, anywhere = false }: Props) {
-  const name = artist ?? concert.artists[0]?.name ?? concert.name;
+  const name = artist ?? headlinerOf(concert) ?? concert.name;
   const title = showTitle(concert, name);
   const presale = presaleLine(concert);
   const city = [concert.city, anywhere ? concert.region : undefined].filter(Boolean).join(", ");

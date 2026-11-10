@@ -1,5 +1,6 @@
 """National JamBase catalog, background sync and MusicBrainz IDs, using captured responses."""
 
+import copy
 import datetime as dt
 import json
 from pathlib import Path
@@ -68,6 +69,21 @@ def test_captured_listing_preserves_lineup_clock_photo_and_event_page() -> None:
     assert concert.url == "https://www.jambase.com/show/hit-the-lights-lodge-room-20261108"
     assert concert.image == captured("jambase-lodge.json")["events"][0]["performer"][0]["image"]
     assert concert.price is None and concert.general_sale is None and not concert.presales
+
+
+def test_a_festival_keeps_its_name_and_poster_over_its_first_performer() -> None:
+    record = copy.deepcopy(captured("jambase-lodge.json")["events"][0])
+    record["@type"] = "Festival"
+    record["name"] = "Dreamstate SoCal"
+    record["image"] = "https://www.jambase.com/wp-content/uploads/2026/08/dreamstate.jpg"
+
+    concert = jambase.parse_listing(record).concert
+
+    assert concert.festival
+    assert concert.name == "Dreamstate SoCal"
+    assert concert.image == record["image"]
+    assert [a.name for a in concert.artists][0] == "Hit the Lights"
+    assert not lodge()[0].concert.festival
 
 
 async def test_search_reads_nearby_cells_and_state_without_provider_http(
