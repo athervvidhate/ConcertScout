@@ -1,9 +1,9 @@
-import { API_URL, refusal, UNREACHABLE, type Interpreted, type Recommendation } from "@/lib/search";
+import { API_URL, refusal, UNREACHABLE, type Reading, type Recommendation } from "@/lib/search";
 
 // What the API keeps for a Shared Poster: the Recommendations and the Search's reading.
 export type SharedPoster = {
   made: string;
-  interpreted?: Interpreted;
+  reading?: Reading;
   recommendations: Recommendation[];
 };
 

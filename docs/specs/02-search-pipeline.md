@@ -26,6 +26,12 @@ class Interpretation(BaseModel):
     end: date | None
 ```
 
+Code turns the answer into the Search's Reading. A Reading holds at most 20 Artists, 30 descriptors and 30 tags, only the 15 listing genres the prompt names, and a radius only with a place and a Region only with a radius. The interpreter's Reading is cut to those bounds, and an answer that cannot meet them is an interpreter failure.
+
+### A corrected Reading
+
+A person can correct the Reading above a Poster and run the Search again without retyping it. `POST /search` then carries a `reading` in place of `text`. The server checks it against the same bounds, plus dates no more than 400 days ahead in the visitor's zone, and refuses anything else as an invalid Search. It skips the interpreter, so the rerun makes no interpreter call; the place still gets the alias map and goes to the geocoder, and Artists still go to MusicBrainz. The visitor limit, spend cap and bot token apply as for any Search. A blank date stays blank. A Reading with no Taste takes an imported Taste, as typed words do. The empty Poster's next-three-months and anywhere Searches are corrected Readings too.
+
 Common genre aliases (UKG, DnB/D&B, RnB, EDM) are normalized in code, including source tags. The existing interpreter call expands other familiar genre and place shorthand without an extra model call. A small explicit place alias map resolves common local shorthand before geocoding; unfamiliar names and explicit qualifiers are preserved.
 
 The prompt receives today's date in the visitor's own time zone, which the browser sends with the Search, so "this weekend" means their weekend. An unreadable zone falls back to UTC. `tags` must include related styles, because exact tags are sparse: the spike found 4 Artists tagged "shoegaze" in Chicago and none tagged "techno".
@@ -172,7 +178,7 @@ POST /auth/spotify/disconnect
 | Event | Payload |
 |---|---|
 | `status` | `{step, message}` |
-| `interpreted` | `{place, start, end, artists}` |
+| `reading` | `{artists, descriptors, tags, genres, place, region, radius_miles, start, end}`, without the fields not set |
 | `pool` | `{total}` |
 | `candidates` | `{names, total}` |
 | `poster` | `{recommendations}` |

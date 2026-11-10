@@ -2,53 +2,60 @@
 import { motion, useReducedMotion } from "motion/react";
 import { CalendarDays, MapPin, Music2, UserRound } from "lucide-react";
 import { formatMonthDay } from "@/lib/format";
-import type { Interpreted } from "@/lib/search";
+import type { Reading } from "@/lib/search";
 import { BACK_OUT_CURVE } from "@/lib/choreography";
 
+// An open-ended range says which end is open, so one date never reads as a single day.
+function whenOf(start?: string, end?: string): string {
+  if (start && end) {
+    return start === end
+      ? formatMonthDay(start)
+      : `${formatMonthDay(start)} – ${formatMonthDay(end)}`;
+  }
+  return start
+    ? `From ${formatMonthDay(start)}`
+    : `Until ${formatMonthDay(end!)}`;
+}
+
 export function SearchChips({
-  interpreted,
+  reading,
   compact = false,
 }: {
-  interpreted: Interpreted;
+  reading: Reading;
   compact?: boolean;
 }) {
   const reduced = useReducedMotion();
   const chips = [
-    ...interpreted.artists.map((value) => ({
+    ...reading.artists.map((value) => ({
       kind: "artist",
       label: "Artist",
       value,
       Icon: UserRound,
     })),
-    ...(interpreted.region || interpreted.place
+    ...(reading.region || reading.place
       ? [
           {
             kind: "place",
             label: "Place",
             value: compact
-              ? (interpreted.region ?? interpreted.place!).split(",")[0]
-              : (interpreted.region ?? interpreted.place!),
+              ? (reading.region ?? reading.place!).split(",")[0]
+              : (reading.region ?? reading.place!),
             Icon: MapPin,
           },
         ]
       : []),
-    ...interpreted.genres.map((value) => ({
+    ...reading.genres.map((value) => ({
       kind: "sound",
       label: "Sound",
       value,
       Icon: Music2,
     })),
-    ...(interpreted.start
+    ...(reading.start || reading.end
       ? [
           {
             kind: "when",
             label: "When",
-            value: [
-              formatMonthDay(interpreted.start),
-              interpreted.end && formatMonthDay(interpreted.end),
-            ]
-              .filter(Boolean)
-              .join(" – "),
+            value: whenOf(reading.start, reading.end),
             Icon: CalendarDays,
           },
         ]

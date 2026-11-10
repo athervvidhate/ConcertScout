@@ -40,7 +40,7 @@ async def test_a_finished_search_shares_the_poster_the_server_produced() -> None
     assert opened.status_code == 200
     body = opened.json()
     assert body["recommendations"] == events["poster"]["recommendations"]
-    assert body["interpreted"]["place"] == events["interpreted"]["place"]
+    assert body["reading"]["place"] == events["reading"]["place"]
     assert body["made"] == dt.datetime.now(dt.UTC).date().isoformat()
 
 
@@ -51,7 +51,7 @@ async def test_sharing_a_search_again_gives_the_same_link_and_changes_nothing() 
         first = (await api.post("/share", json={"search_id": search_id})).json()["id"]
         stored = await redis.get(f"share:poster:{first}")
         # Even a record swapped under the Search ID cannot replace the Poster already shared.
-        swapped = share.Made(made=DAY, interpreted=None, recommendations=[])
+        swapped = share.Made(made=DAY, reading=None, recommendations=[])
         await redis.set(f"share:search:{search_id}", swapped.model_dump_json())
         second = (await api.post("/share", json={"search_id": search_id})).json()["id"]
     assert first == second and len(first) == 12
@@ -114,7 +114,7 @@ async def test_concerts_that_have_passed_are_dropped_when_read() -> None:
     over_also = CONCERTS[1].model_copy(update={"date": yesterday})
     made = share.Made(
         made=yesterday,
-        interpreted=None,
+        reading=None,
         recommendations=[
             Recommendation(concert=over, reason="Over"),
             Recommendation(concert=CONCERTS[2], reason="Fits", also=[over_also, CONCERTS[0]]),

@@ -22,6 +22,8 @@ Typed Taste beats imported Taste when they conflict. An imported Taste fills in 
 
 The page streams real progress. See the loader in [04-interface](04-interface.md).
 
+Chips above the Poster show the Search's Reading: its Artists, place, sound and dates. When the Reading is wrong, such as the wrong Portland or no dates, a person corrects it and reruns the Search without retyping. The rerun skips the interpreter.
+
 ## Poster
 
 A Poster shows up to 8 Recommendations in Grid or List view. Grid follows the number of picks: a solo Ticket, two halves, a large pick and two stacked, four halves, or a larger composition for five to eight. It never pads with weak picks.
@@ -48,7 +50,7 @@ A Poster or a single Ticket can be shared by link. The Share button uses the bro
 
 The browser never sends a Poster. When a Search finishes with picks, the server keeps what it produced under a Search ID it hands to that browser, and sharing promotes it. A Shared Poster holds the Recommendations and the Search's reading and lasts 90 days. It never holds the person's coordinates. Artists from their Taste can appear in its reading and reasons, as they do on screen. Past Concerts drop out whenever it is read, so an old link shows only what is still to come. A cached example Poster has no Search ID, so it has no Share button.
 
-The `/p/[id]` page says "Shared Poster", shows the date it was made and the reading as chips, and has a Search box that fills the home Search without running it. A link preview shows a generated Poster image.
+The `/p/[id]` page says "Shared Poster", shows the date it was made and the Reading as chips, and has a Search box that fills the home Search without running it. A link preview shows a generated Poster image.
 
 ## Saved Concerts
 

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  type Asked,
   type Candidates,
   type Coordinates,
   type Elsewhere,
-  type Interpreted,
+  type Reading,
   NEEDS_A_NEW_SEARCH,
   type Recommendation,
   SearchRefused,
@@ -17,10 +18,13 @@ export type SearchState = {
   phase: "idle" | "searching" | "finished";
   // Counts Searches, because running the same text again is still a new Poster.
   run: number;
+  // The words typed for this Search. A corrected Reading keeps the words it corrects.
   searched: string;
+  // What the latest Search sent, so Try again and a reload repeat it exactly.
+  asked: Asked | null;
   status: string | null;
   step: string | null;
-  interpreted: Interpreted | null;
+  reading: Reading | null;
   candidates: Candidates | null;
   recommendations: Recommendation[];
   hasPoster: boolean;
@@ -37,9 +41,10 @@ const IDLE: SearchState = {
   phase: "idle",
   run: 0,
   searched: "",
+  asked: null,
   status: null,
   step: null,
-  interpreted: null,
+  reading: null,
   candidates: null,
   recommendations: [],
   hasPoster: false,
@@ -89,7 +94,7 @@ export function useSearch() {
 
   const search = useCallback(
     async (
-      text: string,
+      asked: Asked,
       token: string,
       taste: string[],
       near: Coordinates | null,
@@ -97,11 +102,14 @@ export function useSearch() {
       current.current?.abort();
       const controller = new AbortController();
       current.current = controller;
-      setState(({ run }) => ({
+      // A corrected Reading shows at once, so its chips never blink out while it runs.
+      setState(({ run, searched }) => ({
         ...IDLE,
         phase: "searching",
         run: run + 1,
-        searched: text,
+        searched: "text" in asked ? asked.text : searched,
+        asked,
+        reading: "reading" in asked ? asked.reading : null,
       }));
 
       let finished = false;
@@ -109,7 +117,7 @@ export function useSearch() {
       let retryable = true;
       try {
         for await (const { event, data } of streamSearch(
-          text,
+          asked,
           token,
           taste,
           near,
@@ -121,8 +129,8 @@ export function useSearch() {
               status: data.message,
               step: data.step,
             }));
-          } else if (event === "interpreted") {
-            setState((state) => ({ ...state, interpreted: data }));
+          } else if (event === "reading") {
+            setState((state) => ({ ...state, reading: data }));
           } else if (event === "candidates") {
             setState((state) => ({ ...state, candidates: data }));
           } else if (event === "poster") {
@@ -173,7 +181,7 @@ export function useSearch() {
   const showExample = useCallback(
     (example: {
       text: string;
-      interpreted: Interpreted | null;
+      reading: Reading | null;
       candidates: Candidates | null;
       poster: { recommendations: Recommendation[] };
     }) => {
@@ -183,7 +191,8 @@ export function useSearch() {
         run: run + 1,
         phase: "finished",
         searched: example.text,
-        interpreted: example.interpreted,
+        asked: { text: example.text },
+        reading: example.reading,
         candidates: example.candidates,
         hasPoster: true,
         recommendations: example.poster.recommendations,

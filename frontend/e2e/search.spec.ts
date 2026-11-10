@@ -517,7 +517,7 @@ test("connecting Spotify retires Make it yours", async ({page, context}) => {
 test("an empty Search shows what matches its words elsewhere", async ({page}) => {
   const concert = {id: "far", name: "Hyperpop Night", url: "https://tickets.example/far", artists: [], date: "2026-12-11", venue: "Far Hall", city: "Miami", region: "FL"};
   const events = [
-    ["interpreted", {place: "San Francisco", artists: [], genres: []}],
+    ["reading", {place: "San Francisco", artists: [], genres: []}],
     ["poster", {recommendations: []}],
     ["elsewhere", {keyword: "hyperpop", concerts: [concert]}],
     ["done", {}],
@@ -599,7 +599,7 @@ test("a reload during a Search offers a retry of the same words", async ({page})
 test("a Ticket for a Concert with no Lineup shows its title and offers no Artist panel", async ({page}) => {
   const concert = {id: "unbilled", name: "JEFF CROSBY'S ANNUAL HOMECOMING RUN", artists: [], date: "2027-05-15", venue: "Neurolux", city: "Boise", url: "https://tickets.example/unbilled"};
   const events = [
-    ["interpreted", {place: "Boise", artists: [], genres: []}],
+    ["reading", {place: "Boise", artists: [], genres: []}],
     ["poster", {recommendations: [{concert, reason: "A source-backed recommendation."}]}],
     ["done", {}],
   ];
@@ -620,4 +620,69 @@ test("a Ticket for a Concert with no Lineup shows its title and offers no Artist
   await expect(ticket.getByText("Tap the name for more")).toHaveCount(0);
   await expect(ticket.getByRole("link", {name: `Tickets for ${concert.name}`})).toHaveAttribute("href", concert.url);
   expect(artistRequests).toBe(0);
+});
+
+const CHANGE = { name: "Change how we read your Search" };
+
+test("changing the place reruns the Search for the new place without reading its words again", {tag: "@phone"}, async ({ page, isMobile }) => {
+  const press = (target: ReturnType<Page["locator"]>) => (isMobile ? target.tap() : target.click());
+  await page.goto("/");
+  await search(page, "UKG in SF", false);
+  await expect(page.locator('.chip[data-kind="place"]')).toContainText("San Francisco");
+  const firstPicks = await page.locator(".card-open").count();
+  expect(firstPicks).toBeGreaterThan(0);
+
+  await press(page.getByRole("button", CHANGE));
+  const editor = page.getByRole("form", CHANGE);
+  await editor.getByRole("textbox", { name: "Place" }).fill("Portland, Maine");
+  await expect(editor.getByRole("button", { name: "Update Search" })).toBeEnabled();
+  await noOverflow(page);
+  const request = page.waitForRequest(r => r.url().endsWith("/search"));
+  await press(editor.getByRole("button", { name: "Update Search" }));
+
+  const body = (await request).postDataJSON();
+  expect(body.text).toBeUndefined();
+  expect(body.reading).toMatchObject({ place: "Portland, Maine", descriptors: ["UKG"] });
+  expect(body.reading).not.toHaveProperty("start");
+  await expect(page.locator('.chip[data-kind="place"]')).toHaveText(/Portland, Maine/);
+  await expect(page.getByRole("button", CHANGE)).toBeFocused();
+  await page.locator(".card-open").first().waitFor({ state: "visible" });
+  await expect(page.getByRole("form", CHANGE)).toHaveCount(0);
+});
+
+test("every part of the Reading can be corrected from the keyboard", async ({ page }) => {
+  await page.goto("/");
+  await search(page, "UKG sound in SF", false);
+  await page.getByRole("button", CHANGE).focus();
+  await page.keyboard.press("Enter");
+  const editor = page.getByRole("form", CHANGE);
+
+  // Escape puts the Reading back as it was and returns to the button.
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Escape");
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByRole("button", CHANGE)).toBeFocused();
+  await page.keyboard.press("Enter");
+
+  await editor.getByRole("button", { name: "Add an Artist" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(editor.getByRole("textbox", { name: "Artist 1" })).toBeFocused();
+  await page.keyboard.type("Disclosure");
+  await editor.getByRole("button", { name: "Clear the place" }).focus();
+  await page.keyboard.press("Enter");
+  const end = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+  await editor.getByLabel("To").focus();
+  await page.keyboard.type(`${end.slice(5, 7)}${end.slice(8)}${end.slice(0, 4)}`);
+  await editor.getByRole("button", { name: "Remove the sound" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(editor.getByRole("button", { name: "Update Search" })).toBeEnabled();
+  await editor.getByRole("textbox", { name: "Artist 1" }).focus();
+
+  const request = page.waitForRequest(r => r.url().endsWith("/search"));
+  await page.keyboard.press("Enter");
+  const { reading } = (await request).postDataJSON();
+  expect(reading).toEqual({ artists: ["Disclosure"], descriptors: [], tags: [], genres: [], end });
+  await expect(page.locator('.chip[data-kind="when"]')).toContainText("Until");
+  await expect(page.locator('.chip[data-kind="artist"]')).toContainText("Disclosure");
+  await expect(page.locator('.chip[data-kind="place"]')).toHaveCount(0);
 });

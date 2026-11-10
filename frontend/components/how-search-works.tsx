@@ -264,7 +264,7 @@ export function HowSearchWorks() {
                 <span className="caret" aria-hidden />
               </div>
               <div className="demo-chips" data-demo-part>
-                <SearchChips interpreted={example.interpreted!} compact />
+                <SearchChips reading={example.reading!} compact />
               </div>
             </div>
           </li>
@@ -275,7 +275,7 @@ export function HowSearchWorks() {
             <div className="how-demo demo-pool" data-how-panel>
               <div className="demo-count" data-demo-part>
                 <b data-count>{candidates.total}</b>Concerts considered near{" "}
-                {example.interpreted?.region ?? example.interpreted?.place}
+                {example.reading?.region ?? example.reading?.place}
               </div>
               <div className="demo-names" data-demo-part>
                 {sample.map((name) => (

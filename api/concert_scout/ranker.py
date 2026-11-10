@@ -10,8 +10,8 @@ from pydantic_ai.models import Model
 from pydantic_ai.models.anthropic import AnthropicModelSettings
 from pydantic_ai.usage import RunUsage
 
-from concert_scout.interpreter import Interpretation
 from concert_scout.matching import Candidate, usable_tags
+from concert_scout.models import Reading
 from concert_scout.sources import jev
 from concert_scout.telemetry import record_usage
 
@@ -77,11 +77,11 @@ _writer = Agent(
 )
 
 
-def taste(interpretation: Interpretation) -> dict[str, list[str]]:
+def taste(reading: Reading) -> dict[str, list[str]]:
     return {
-        "artists": interpretation.artists,
-        "descriptors": interpretation.descriptors,
-        "tags": interpretation.tags,
+        "artists": reading.artists,
+        "descriptors": reading.descriptors,
+        "tags": reading.tags,
     }
 
 
@@ -120,36 +120,34 @@ def rows(
 
 
 async def grade(
-    client: httpx.AsyncClient, interpretation: Interpretation, graded: Mapping[str, Row]
+    client: httpx.AsyncClient, reading: Reading, graded: Mapping[str, Row]
 ) -> dict[str, int]:
     """Each row's level: 0 a miss, 1 a stretch, 2 a fair suggestion, 3 a strong fit."""
     if not graded:
         return {}
     as_json = {id_: found.model_dump_json() for id_, found in graded.items()}
     try:
-        return await jev.grade(client, taste(interpretation), as_json)
+        return await jev.grade(client, taste(reading), as_json)
     except jev.JevError as exc:
         raise RankerError(f"Jev {exc}") from None
 
 
-def reasons_prompt(interpretation: Interpretation, shown: Sequence[Row]) -> str:
+def reasons_prompt(reading: Reading, shown: Sequence[Row]) -> str:
     """Rows go by number, because a short number is easy to copy exactly."""
     numbered = [
         NumberedRow(id=str(n), **found.model_dump()) for n, found in enumerate(shown, start=1)
     ]
-    return Prompt(taste=taste(interpretation), candidates=numbered).model_dump_json()
+    return Prompt(taste=taste(reading), candidates=numbered).model_dump_json()
 
 
-async def explain(interpretation: Interpretation, shown: Sequence[Row], model: Model) -> list[str]:
+async def explain(reading: Reading, shown: Sequence[Row], model: Model) -> list[str]:
     """One reason per row, in order. A row the model skipped gets an empty one."""
     if not shown:
         return []
     usage = RunUsage()
     try:
         async with asyncio.timeout(REASONS_DEADLINE_SECONDS):
-            answer = await _writer.run(
-                reasons_prompt(interpretation, shown), model=model, usage=usage
-            )
+            answer = await _writer.run(reasons_prompt(reading, shown), model=model, usage=usage)
     except Exception as exc:  # Any failure leaves the neutral reasons, which are still true.
         raise RankerError(type(exc).__name__) from None
     finally:

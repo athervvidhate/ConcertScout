@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from redis.asyncio import Redis
 
 from concert_scout import assemble, cache, limits
-from concert_scout.models import Candidates, Interpreted, Poster
+from concert_scout.models import Candidates, Poster, Reading
 from concert_scout.pipeline import Services, run_search
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ TTL = dt.timedelta(hours=30)
 
 class Example(BaseModel):
     text: str
-    interpreted: Interpreted | None = None
+    reading: Reading | None = None
     candidates: Candidates | None = None
     poster: Poster
 
@@ -38,7 +38,7 @@ async def read(redis: Redis, today: dt.date) -> Examples:
         return Examples()
     visible: list[Example] = []
     for example in stored.examples:
-        if example.interpreted and example.interpreted.end and example.interpreted.end < today:
+        if example.reading and example.reading.end and example.reading.end < today:
             continue
         picks = assemble.upcoming(example.poster.recommendations, today)
         visible.append(example.model_copy(update={"poster": Poster(recommendations=picks)}))
@@ -66,12 +66,12 @@ async def refresh(services: Services) -> None:
 
 
 async def _build(text: str, services: Services) -> Example | None:
-    interpreted = None
+    reading = None
     candidates = None
     poster = None
     async for event in run_search(text, [], None, "UTC", services):
-        if event.event == "interpreted":
-            interpreted = Interpreted.model_validate(event.data)
+        if event.event == "reading":
+            reading = Reading.model_validate(event.data)
         elif event.event == "candidates":
             candidates = Candidates.model_validate(event.data)
         elif event.event == "poster":
@@ -81,4 +81,4 @@ async def _build(text: str, services: Services) -> Example | None:
             return None
     if poster is None:
         return None
-    return Example(text=text, interpreted=interpreted, candidates=candidates, poster=poster)
+    return Example(text=text, reading=reading, candidates=candidates, poster=poster)

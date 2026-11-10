@@ -117,7 +117,7 @@ test("reduced motion shows the complete How replay without typing or looping", a
 async function recordedSearch(page: Page) {
   const body = [
     ["status", { step: "rank", message: "Choosing the closest Concerts" }],
-    ["interpreted", RECORDED_SEARCH.interpreted],
+    ["reading", RECORDED_SEARCH.reading],
     ["candidates", RECORDED_SEARCH.candidates],
     ["poster", RECORDED_SEARCH.poster],
     ["done", {}],

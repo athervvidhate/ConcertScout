@@ -3,7 +3,7 @@ import hmac
 import logging
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 import httpx
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request
@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from pydantic_ai.models import Model
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
@@ -21,6 +21,7 @@ from concert_scout import (
     accounts,
     alerts,
     cache,
+    clock,
     feedback,
     home,
     interpreter,
@@ -35,9 +36,10 @@ from concert_scout.config import Settings
 from concert_scout.models import (
     ArtistProfiles,
     ImportedTaste,
-    Interpreted,
+    Name,
     Place,
     Poster,
+    Reading,
     SearchError,
 )
 from concert_scout.pipeline import (
@@ -75,22 +77,42 @@ class TasteRequest(BaseModel):
     username: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
 
 
-ArtistName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
-
-
 class Coordinates(BaseModel):
     lat: Annotated[float, Field(ge=-90, le=90)]
     lon: Annotated[float, Field(ge=-180, le=180)]
 
 
+# Ticketmaster lists little more than a year ahead, and every month of dates costs a call.
+FURTHEST_AHEAD = dt.timedelta(days=400)
+
+
 class SearchRequest(BaseModel):
-    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+    """A Search's words, or a Reading the person corrected, which skips the interpreter."""
+
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)] = (
+        ""
+    )
+    reading: Reading | None = None
     token: Annotated[str, StringConstraints(min_length=1, max_length=2048)]
-    taste: Annotated[list[ArtistName], Field(max_length=MAX_TASTE)] = []
+    taste: Annotated[list[Name], Field(max_length=MAX_TASTE)] = []
     # A location the visitor already shared, used when the Search names no place.
     near: Coordinates | None = None
     # The browser's zone, so "this weekend" and "today" mean the visitor's own days.
     time_zone: Annotated[str, StringConstraints(max_length=64)]
+
+    @model_validator(mode="after")
+    def asks_one_thing(self) -> Self:
+        if bool(self.text) == bool(self.reading):
+            raise ValueError("send the words or a Reading")
+        if self.reading:
+            furthest = clock.now_in(self.time_zone).date() + FURTHEST_AHEAD
+            if any(day and day > furthest for day in (self.reading.start, self.reading.end)):
+                raise ValueError("dates too far ahead")
+        return self
+
+    @property
+    def asked(self) -> str | Reading:
+        return self.reading or self.text
 
 
 class ShareRequest(BaseModel):
@@ -412,17 +434,17 @@ def create_app(
     async def search(search: SearchRequest) -> AsyncIterator[ServerSentEvent]:
         here = search.near
         near = Place(name="Near you", lat=here.lat, lon=here.lon) if here else None
-        reading: Interpreted | None = None
-        async for event in run_search(search.text, search.taste, near, search.time_zone, services):
+        reading: Reading | None = None
+        async for event in run_search(search.asked, search.taste, near, search.time_zone, services):
             yield event
-            if event.event == "interpreted":
-                reading = Interpreted.model_validate(event.data)
+            if event.event == "reading":
+                reading = Reading.model_validate(event.data)
             elif event.event == "poster":
                 poster = Poster.model_validate(event.data)
                 if poster.recommendations:
                     made = share.Made(
                         made=dt.datetime.now(dt.UTC).date(),
-                        interpreted=reading,
+                        reading=reading,
                         recommendations=poster.recommendations,
                     )
                     try:

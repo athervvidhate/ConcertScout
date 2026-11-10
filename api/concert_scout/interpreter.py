@@ -1,7 +1,7 @@
 import datetime as dt
-from typing import Self
+from typing import Self, cast
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ValidationError, model_validator
 from pydantic_ai import Agent, NativeOutput, RunContext
 from pydantic_ai.exceptions import AgentRunError
 from pydantic_ai.models import Model
@@ -10,7 +10,14 @@ from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.usage import RunUsage
 
 from concert_scout.aliases import music_tag, place_name
-from concert_scout.models import MAX_RADIUS_MILES
+from concert_scout.models import (
+    GENRES,
+    MAX_ARTISTS,
+    MAX_RADIUS_MILES,
+    MAX_WORDS,
+    Genre,
+    Reading,
+)
 from concert_scout.telemetry import record_usage
 
 MODEL_NAME = "claude-haiku-5-5"
@@ -58,6 +65,8 @@ for both."""
 
 
 class Interpretation(BaseModel):
+    """The model's answer. Code checks it and turns it into a Reading."""
+
     artists: list[str]
     descriptors: list[str]
     tags: list[str]
@@ -100,7 +109,7 @@ def make_model(api_key: str) -> Model:
     return AnthropicModel(MODEL_NAME, provider=AnthropicProvider(api_key=api_key))
 
 
-async def interpret(text: str, today: dt.date, model: Model) -> Interpretation:
+async def interpret(text: str, today: dt.date, model: Model) -> Reading:
     usage = RunUsage()
     try:
         result = await agent.run(text, model=model, deps=today, usage=usage)
@@ -116,11 +125,19 @@ async def interpret(text: str, today: dt.date, model: Model) -> Interpretation:
         if expanded != descriptor.casefold() and expanded not in tags:
             tags.append(expanded)
     radius = output.radius_miles if output.place and output.radius_miles else None
-    return output.model_copy(
-        update={
-            "place": place_name(output.place) if output.place else None,
-            "region": output.region if radius else None,
-            "radius_miles": min(max(radius, 1), MAX_RADIUS_MILES) if radius else None,
-            "tags": tags,
-        }
-    )
+    # A Reading holds the same bounds whether the interpreter or a person wrote it.
+    try:
+        return Reading(
+            artists=[name for name in output.artists if name.strip()][:MAX_ARTISTS],
+            descriptors=[word for word in output.descriptors if word.strip()][:MAX_WORDS],
+            tags=[tag for tag in tags if tag.strip()][:MAX_WORDS],
+            # The prompt names the genres a Reading accepts. Anything else is left out.
+            genres=cast(list[Genre], list(dict.fromkeys(g for g in output.genres if g in GENRES))),
+            place=place_name(output.place) if output.place else None,
+            region=output.region if radius else None,
+            radius_miles=min(max(radius, 1), MAX_RADIUS_MILES) if radius else None,
+            start=output.start,
+            end=output.end,
+        )
+    except ValidationError:
+        raise InterpreterError("Reading out of bounds") from None
