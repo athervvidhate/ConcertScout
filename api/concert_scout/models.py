@@ -1,10 +1,15 @@
 import datetime as dt
+import unicodedata
 from typing import Annotated, Literal, Self, get_args
 
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints, model_validator
 
 # A circle this wide already covers most of a large country.
 MAX_RADIUS_MILES = 500
+
+# Sources may send a letter and its accent as two characters, such as E and a combining macron.
+# A display face places a precomposed letter well but may not stack the pair. NFC is the same text.
+Text = Annotated[str, AfterValidator(lambda value: unicodedata.normalize("NFC", value))]
 
 # The broad listing genres a Taste can fall under.
 Genre = Literal[
@@ -36,7 +41,7 @@ class Price(BaseModel):
 class Artist(BaseModel):
     """A Lineup entry, as reported by the Concert's source. A missing fact stays None."""
 
-    name: str
+    name: Text
     mbid: str | None = None
     # A public catalog identity when the source does not expose a MusicBrainz ID.
     source_id: str | None = None
@@ -45,7 +50,7 @@ class Artist(BaseModel):
 
 
 class Presale(BaseModel):
-    name: str
+    name: Text
     start: dt.datetime
     end: dt.datetime
 
@@ -54,7 +59,7 @@ class Concert(BaseModel):
     """A Concert's facts, as reported by its source. A missing fact stays None."""
 
     id: str
-    name: str
+    name: Text
     url: str
     artists: list[Artist]
     source: Literal["ticketmaster", "jambase"] = "ticketmaster"
@@ -62,9 +67,9 @@ class Concert(BaseModel):
     time: dt.time | None = None
     # The venue's IANA zone. `date` and `time` already read in it.
     time_zone: str | None = None
-    venue: str | None = None
-    city: str | None = None
-    region: str | None = None
+    venue: Text | None = None
+    city: Text | None = None
+    region: Text | None = None
     price: Price | None = None
     image: str | None = None
     general_sale: dt.datetime | None = None
@@ -112,7 +117,7 @@ class Place(BaseModel):
 class SeedArtist(BaseModel):
     """An Artist named in a Search. With no MusicBrainz match, only the name is known."""
 
-    name: str
+    name: Text
     mbid: str | None = None
     tags: list[str] = []
 
@@ -120,7 +125,7 @@ class SeedArtist(BaseModel):
 class SimilarArtist(BaseModel):
     """A neighbour from a similarity source. `score` is that source's own raw number."""
 
-    name: str
+    name: Text
     mbid: str | None = None
     score: float
 
