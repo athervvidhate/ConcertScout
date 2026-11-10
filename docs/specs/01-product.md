@@ -46,7 +46,7 @@ A Ticket and each Saved Concert offer "Add to calendar", which downloads one `.i
 
 ## Shared Posters
 
-A Poster or a single Ticket can be shared by link. The Share button uses the browser's share sheet where there is one and copies the link otherwise. A link names a Shared Poster, which anyone can open on any device without a Search, a model call or a sign-in, and a Ticket link opens that Poster with the Ticket open.
+A Poster or a single Ticket can be shared by link. The Share button uses the browser's share sheet where there is one and copies the link otherwise, and the sheet titles a Poster link as its page is titled, by what the Search was for. A link names a Shared Poster, which anyone can open on any device without a Search, a model call or a sign-in, and a Ticket link opens that Poster with the Ticket open.
 
 The browser never sends a Poster. When a Search finishes with picks, the server keeps what it produced under a Search ID it hands to that browser, and sharing promotes it. A Shared Poster holds the Recommendations and the Search's reading and lasts 90 days. It never holds the person's coordinates. Artists from their Taste can appear in its reading and reasons, as they do on screen. Past Concerts drop out whenever it is read, so an old link shows only what is still to come. A cached example Poster has no Search ID, so it has no Share button.
 

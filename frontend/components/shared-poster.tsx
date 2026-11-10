@@ -9,7 +9,7 @@ import { SearchChips } from "@/components/search-chips";
 import { SiteHeader } from "@/components/site-header";
 import type { SharedPoster } from "@/lib/share";
 import { sharedUrl } from "@/lib/share";
-import { formatMade, sharedHeading } from "@/lib/shared-heading";
+import { formatMade, sharedHeading, sharedTitle } from "@/lib/shared-heading";
 
 type Props = { id: string; shared: SharedPoster; ticket?: string };
 
@@ -51,6 +51,7 @@ export function SharedPosterView({ id, shared, ticket }: Props) {
           instant
           openConcert={ticket}
           shareLink={async (concertId) => sharedUrl(id, concertId)}
+          shareTitle={sharedTitle(shared)}
         />
       ) : (
         <section className="empty" aria-label="Poster">
