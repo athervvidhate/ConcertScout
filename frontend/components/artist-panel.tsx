@@ -71,10 +71,10 @@ function Profile({ profile, named }: { profile: ArtistProfile; named: boolean })
   );
 }
 
-type Props = { name: string; onOpen?: () => void };
+type Props = { name: string; onOpen?: () => void; className?: string };
 
 /** The Artist's name, which opens what the sources report about them. */
-export function ArtistPanel({ name, onOpen }: Props) {
+export function ArtistPanel({ name, onOpen, className = "artist-name" }: Props) {
   const [open, setOpen] = useState(false);
   const profiles = useArtistProfiles(name, open);
 
@@ -86,7 +86,7 @@ export function ArtistPanel({ name, onOpen }: Props) {
         if (next) onOpen?.();
       }}
     >
-      <Dialog.Trigger className="artist-name">{name}</Dialog.Trigger>
+      <Dialog.Trigger className={className}>{name}</Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Backdrop className="taste-backdrop" />
         <Dialog.Popup className="taste-panel artist-panel">

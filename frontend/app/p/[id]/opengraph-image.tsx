@@ -5,6 +5,7 @@ import { ImageResponse } from "next/og";
 
 import { loadShared } from "@/app/p/[id]/load";
 import { formatMonthDay } from "@/lib/format";
+import { nameOf } from "@/lib/lineup";
 import { sharedHeading } from "@/lib/shared-heading";
 
 export const alt = "A Shared Poster on Concert Scout";
@@ -58,17 +59,20 @@ export default async function Image({ params }: { params: Promise<{ id: string }
           {shared ? sharedHeading(shared) : "Concerts worth going out for"}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {picks.map(({ concert }) => (
+          {picks.map((pick) => {
+            const { concert } = pick;
+            return (
             <div key={concert.id} style={{ display: "flex", alignItems: "baseline", gap: 24 }}>
               <span style={{ width: 130, fontSize: 28, color: CORAL }}>
                 {concert.date ? formatMonthDay(concert.date) : ""}
               </span>
               <span style={{ fontSize: 40, textTransform: "uppercase" }}>
-                {concert.artists[0]?.name ?? concert.name}
+                {nameOf(pick)}
               </span>
               <span style={{ fontSize: 26, color: MUTED }}>{concert.city ?? ""}</span>
             </div>
-          ))}
+            );
+          })}
           {more > 0 && <span style={{ fontSize: 26, color: MUTED }}>and {more} more</span>}
         </div>
       </div>

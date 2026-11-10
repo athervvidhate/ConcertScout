@@ -33,8 +33,10 @@ descriptors, leave this empty.
 Alternative, Pop, Hip-Hop/Rap, R&B, Dance/Electronic, Country, Folk, Jazz, Blues, Metal, Latin, \
 Reggae, World and Classical. UK garage is Dance/Electronic and shoegaze is Alternative. With no \
 descriptors, leave this empty.
-- place: the city, district or region. Expand familiar local abbreviations and nicknames to \
-a full place name with its state/country when clear: SF is San Francisco, LA is Los Angeles, \
+- place: the city, district or region. Visitors often type in lowercase, so read a place \
+the same in any capitalization: "socal" is SoCal and "nyc" is NYC. Expand familiar local \
+abbreviations and nicknames to a full place name with its state/country when clear: SF is \
+San Francisco, LA is Los Angeles, \
 PHL is Philadelphia, the Bay is the San Francisco Bay Area, DMV is Washington DC. Preserve \
 explicit qualifiers (LA, Louisiana means Louisiana). Keep a whole state as a state, not its \
 capital. Name a county with its state, so Orange County means Orange County, California unless \
@@ -78,11 +80,14 @@ class InterpreterError(Exception):
 
 
 # Native output needs no tool call, so the model has no tools at all and can still think.
+# On November 9, 2026, low effort dropped the place or put "this summer" in the past in 2 of 30
+# lowercase Searches ("techno in socal this summer"); medium made 0 of 30 such mistakes for about
+# 0.3 seconds more.
 agent = Agent(
     deps_type=dt.date,
     output_type=NativeOutput(Interpretation),
     instructions=INSTRUCTIONS,
-    model_settings=AnthropicModelSettings(anthropic_effort="low", max_tokens=2048, timeout=15.0),
+    model_settings=AnthropicModelSettings(anthropic_effort="medium", max_tokens=2048, timeout=15.0),
 )
 
 

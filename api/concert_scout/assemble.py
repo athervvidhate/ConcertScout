@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 POSTER_SIZE = 8
 # A fair suggestion or better. See jev.LEVELS.
 MIN_LEVEL = 2
+# A festival with this many Artists who suit the Search ranks a level higher than its best one
+# alone, so several fair fits can stand beside a single strong Concert. Counting, not judgment.
+LINEUP_MATCH_LIFT = 3
 # The most a genre alone can score, so with no ranker to drop them, genre fillers never qualify.
 QUALIFYING_SCORE = NARROW_GENRE_WEIGHT
 NOTABLE_REASON = "Coming up nearby"
@@ -32,7 +35,10 @@ def upcoming(recommendations: Sequence[Recommendation], today: dt.date) -> list[
 
 
 def _headliner(concert: Concert) -> str:
-    """The key that stacks one Artist's dates. A Concert with no Lineup stands alone."""
+    """The key that stacks one Artist's dates. A festival stacks by its name, so its nights stay
+    together and apart from its Artists' own Concerts. A Concert with no Lineup stands alone."""
+    if concert.festival:
+        return normalize(concert.name)
     return normalize(concert.artists[0].name) if concert.artists else f"concert:{concert.id}"
 
 
@@ -69,9 +75,10 @@ def _stacked(
 def from_levels(levels: Mapping[str, int], shortlist: Sequence[Candidate]) -> list[Recommendation]:
     """The best-graded Concerts in the shortlist, each with a neutral reason for now.
 
-    Ties go to the stronger match and then to shortlist order, so the grade is the only thing
-    that can move a Concert. A seed Artist was asked for by name, so they lead the Poster
-    whatever their grade.
+    A festival's Lineup match can lift it a level, and within a level more matched Artists go
+    first. Other ties go to the stronger match and then to shortlist order, so only the grade
+    and the Lineup's own names can move a Concert. A seed Artist was asked for by name, so they
+    lead the Poster whatever their grade.
     """
     position = {candidate.concert.id: n for n, candidate in enumerate(shortlist)}
     concerts = {candidate.concert.id: candidate for candidate in shortlist}
@@ -80,20 +87,30 @@ def from_levels(levels: Mapping[str, int], shortlist: Sequence[Candidate]) -> li
         logger.warning("Dropped %d grades with unknown IDs", unknown)
     good = [id_ for id_, level in levels.items() if id_ in concerts and level >= MIN_LEVEL]
 
-    def order(id_: str) -> tuple[int, float, int]:
+    def level(id_: str) -> int:
+        lift = 1 if len(concerts[id_].lineup_match) >= LINEUP_MATCH_LIFT else 0
+        return min(levels[id_] + lift, 3)
+
+    def order(id_: str) -> tuple[int, int, float, int]:
         match = concerts[id_].match
-        return (-levels[id_], -(match.score if match else 0), position[id_])
+        named = len(concerts[id_].lineup_match)
+        return (-level(id_), -named, -(match.score if match else 0), position[id_])
 
     chosen = [
         Recommendation(
             concert=concerts[id_].concert,
             reason=_reason(concerts[id_]),
             score=levels[id_],
+            lineup_match=concerts[id_].lineup_match,
         )
         for id_ in sorted(good, key=order)
     ]
     seeds = [
-        Recommendation(concert=candidate.concert, reason=_neutral_reason(match))
+        Recommendation(
+            concert=candidate.concert,
+            reason=_neutral_reason(match),
+            lineup_match=candidate.lineup_match,
+        )
         for candidate in shortlist
         if (match := candidate.match) and match.signal == "seed"
     ]
@@ -110,7 +127,11 @@ def from_matches(shortlist: Sequence[Candidate]) -> list[Recommendation]:
     dropped, so the Poster comes up short rather than padded.
     """
     recommendations = [
-        Recommendation(concert=candidate.concert, reason=_neutral_reason(match))
+        Recommendation(
+            concert=candidate.concert,
+            reason=_neutral_reason(match),
+            lineup_match=candidate.lineup_match,
+        )
         for candidate in shortlist
         if (match := candidate.match) and match.score > QUALIFYING_SCORE
     ]

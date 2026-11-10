@@ -4,7 +4,7 @@ import { useInView, useReducedMotion } from "motion/react";
 import { ConcertPhoto } from "@/components/concert-source";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { SearchChips } from "@/components/search-chips";
-import { nameOf } from "@/components/ticket";
+import { nameOf } from "@/lib/lineup";
 import { Choreography, BACK_OUT, EXPO_OUT } from "@/lib/choreography";
 import { HOW_EXAMPLE as example } from "@/lib/how-example";
 import { formatDayShort, formatMonthDay } from "@/lib/format";

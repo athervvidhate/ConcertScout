@@ -140,7 +140,8 @@ def subject(concerts: Sequence[Concert]) -> str:
     if len(concerts) == 1:
         concert = concerts[0]
         where = f" in {concert.city}" if concert.city else ""
-        return f"{concert.artists[0].name} has a new Concert{where}"
+        who = concert.name if concert.festival else concert.artists[0].name
+        return f"{who} has a new Concert{where}"
     return f"{len(concerts)} new Concerts from Artists you follow"
 
 

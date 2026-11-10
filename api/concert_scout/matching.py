@@ -22,6 +22,9 @@ GENRE_WEIGHT = 0.15
 NARROW_GENRE_WEIGHT = 0.3
 NARROW_GENRE_ARTISTS = 30
 SHORTLIST_SIZE = 40
+# The least a tag match scores to name a festival Artist. On November 9, 2026, Insomniac Countdown's
+# tag matches for a Calvin Harris Search scored 0.00 to 0.05; a described sound scores higher.
+LINEUP_TAG_SCORE = 0.1
 
 ERA_TAG = re.compile(r"\d{2,4}s?( music)?|(19|20)\d\d.*|(fif|six|seven|eigh|nine)ties")
 BLOCKED_TAGS = {
@@ -101,6 +104,9 @@ class Match(BaseModel):
 class Candidate(BaseModel):
     concert: Concert
     match: Match | None = None
+    # A festival's Lineup entries that match by name, similarity or strongly shared tags, best
+    # first. A genre or a broad tag such as "electronic" fits most of a festival, so names no one.
+    lineup_match: list[str] = []
 
 
 def usable_tags(tags: Iterable[str]) -> set[str]:
@@ -132,7 +138,12 @@ def score_concerts(
         return top and top.model_copy(update={"support": sum(m.score for m in matches)})
 
     def candidate(concert: Concert) -> Candidate:
-        matches = (m for m in map(best, concert.artists) if m)
+        matches = [m for m in map(best, concert.artists) if m]
+        fits = sorted((m for m in matches if _fits(m)), key=_rank, reverse=True)
+        if concert.festival and fits:
+            # The first Artist named is the one the reason describes.
+            names = list(dict.fromkeys(m.artist for m in fits))
+            return Candidate(concert=concert, match=fits[0], lineup_match=names)
         return Candidate(concert=concert, match=max(matches, key=_rank, default=None))
 
     return [candidate(concert) for concert in concerts]
@@ -165,6 +176,13 @@ def candidate_names(candidates: Sequence[Candidate]) -> list[str]:
         if c.match or c.concert.artists
     )
     return list(dict.fromkeys(names))
+
+
+def _fits(match: Match) -> bool:
+    """Whether a festival's Lineup entry is worth naming as a reason to go."""
+    if match.signal in ("seed", "one_hop", "two_hops"):
+        return True
+    return match.signal == "tags" and match.score >= LINEUP_TAG_SCORE
 
 
 def _rank(match: Match | None) -> tuple[float, float]:
