@@ -108,11 +108,13 @@ def rows(
     shortlist: Sequence[Candidate], artist_tags: Mapping[str, Sequence[str]]
 ) -> dict[str, Row]:
     """Each Artist's row under the Concert ID of their first date. Their other dates would only
-    repeat it, and assembly brings them back."""
+    repeat it, and assembly brings them back. A festival is graded on its own, because assembly
+    stacks it apart from the Artist who stands for it here."""
     by_artist: dict[str, tuple[str, Row]] = {}
     for candidate in shortlist:
         found = row(candidate, artist_tags)
-        key = found.artist.casefold() if found.artist else candidate.concert.id
+        own = candidate.concert.festival or not found.artist
+        key = candidate.concert.id if own else (found.artist or "").casefold()
         by_artist.setdefault(key, (candidate.concert.id, found))
     return dict(by_artist.values())
 

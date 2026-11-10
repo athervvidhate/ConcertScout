@@ -76,6 +76,9 @@ def parse_listing(record: dict[str, Any]) -> Listing:
         parsed.time().replace(tzinfo=None) if parsed and parsed.time() != dt.time() else None
     )
     zone = address.get("x-timezone")
+    # A festival's name says what it is, and its own poster beats its first performer's photo.
+    festival = record.get("@type") == "Festival"
+    image = (_image(record) or _image(lead)) if festival else (_image(lead) or _image(record))
     return Listing(
         concert=Concert(
             id=record["identifier"],
@@ -96,7 +99,8 @@ def parse_listing(record: dict[str, Any]) -> Listing:
             venue=location.get("name"),
             city=address.get("addressLocality"),
             region=region.get("alternateName"),
-            image=_image(lead) or _image(record),
+            image=image,
+            festival=festival,
         ),
         latitude=geo.get("latitude"),
         longitude=geo.get("longitude"),

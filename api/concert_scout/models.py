@@ -49,6 +49,9 @@ class Concert(BaseModel):
     image: str | None = None
     general_sale: dt.datetime | None = None
     presales: list[Presale] = []
+    # The source bills the Concert under its own name, such as a festival's, above its Lineup.
+    # Its name then says what the Concert is, and no one Artist stands for it.
+    festival: bool = False
 
 
 class Recommendation(BaseModel):
@@ -59,6 +62,8 @@ class Recommendation(BaseModel):
     # The ranker's level, 0 to 3. A seed or a fallback Recommendation has none.
     score: int | None = None
     also: list[Concert] = []
+    # A festival's Lineup entries that suit the Search, best first, named as the source names them.
+    lineup_match: list[str] = []
 
 
 class Poster(BaseModel):

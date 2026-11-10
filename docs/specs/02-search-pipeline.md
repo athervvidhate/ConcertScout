@@ -115,6 +115,10 @@ With a place, the Concert pool needs nothing from the Taste, so similar Artists 
 
 Keep the top 40 Concerts by score, deduplicated by Concert ID. Festivals count as one Concert, and the score comes from the best match in the Lineup.
 
+Ticketmaster lists a festival's own brand ("Insomniac Countdown") among its attractions, ahead of the Artists. Code treats an attraction as the event itself when the event's title starts with its name, it has no MusicBrainz link and no performer type (untyped or Event Style), and at least 4 other Artists share the bill. Ticketmaster also types some bands as Event Style and leaves many small-room headliners untyped, so a shorter bill keeps every entry. On November 9, 2026 the rule marked 17 festivals in 1,000 listings and no headliner. The brand leaves the Lineup and the Concert is a festival: its name says what it is, and it stacks by that name, apart from its Artists' own Concerts. A festival billed alone keeps its one entry. JamBase types a festival as one (`@type` Festival) and lists every performer, so its listing is a festival as given, with the festival's own image ahead of its first performer's.
+
+A festival's Lineup match names, best first, the Lineup entries matched by name, similarity (one or two hops) or tags scoring at least 0.1. A genre, or a tag nearly every Artist shares, fits most of a festival and names no one. The best of them is the festival's match, so the ranker grades and describes that Artist. Names come from the source Lineup. The match never reaches a model as a fact.
+
 This step emits the `candidates` event, whose names fill the loader. Names from a connected Spotify account never appear here, per [ADR 0003](../adr/0003-official-spotify-access-only.md).
 
 ## 6. Rank
@@ -148,7 +152,7 @@ The grade should drop poor fits. The spike showed tags pull in misses such as Ki
 
 ## 7. Assemble
 
-Code rejects any ID not in the shortlist and any level below 2. It orders by level, then by match score, then by shortlist order, so only the grade can move a Concert. It puts seed Artists first, keeps one Recommendation per Artist, cuts to 8 and fills in facts from the source record. Each Recommendation starts with a neutral reason built from its match, which Haiku's reason then replaces. A seed graded low still appears. An Artist's other dates travel with their Recommendation, and two listings of one Artist on one date count once. If grading fails, or returns nothing, the Search shows the top matches from step 5 with a neutral reason built from the match signal. It says why the Concert matched, such as "Similar to Khruangbin".
+Code rejects any ID not in the shortlist and any level below 2. A festival whose Lineup match names 3 or more Artists ranks one level above its grade, up to strong, so several fair fits can stand beside one strong Concert. It orders by that level, then by how many Lineup Artists match, then by match score, then by shortlist order, so only the grade and the Lineup's own names can move a Concert. It puts seed Artists first, keeps one Recommendation per Artist, cuts to 8 and fills in facts from the source record. Each Recommendation starts with a neutral reason built from its match, which Haiku's reason then replaces. A seed graded low still appears. An Artist's other dates travel with their Recommendation, and two listings of one Artist on one date count once. If grading fails, or returns nothing, the Search shows the top matches from step 5 with a neutral reason built from the match signal. It says why the Concert matched, such as "Similar to Khruangbin".
 
 ## API
 

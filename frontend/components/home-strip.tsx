@@ -2,7 +2,7 @@
 import { motion, useReducedMotion } from "motion/react";
 import { SEARCH_EXAMPLES } from "@/lib/search-examples";
 import { ConcertPhoto } from "@/components/concert-source";
-import { nameOf } from "@/components/ticket";
+import { nameOf } from "@/lib/lineup";
 import type { HomeExample } from "@/lib/home-examples";
 import { EXPO_OUT_CURVE } from "@/lib/choreography";
 

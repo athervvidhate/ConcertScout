@@ -28,6 +28,9 @@ _Avoid_: Attraction, act, band
 The Artists performing at a Concert.
 _Avoid_: Bill
 
+**Lineup match**:
+The Artists in a festival's Lineup who suit the Search, named best first. _Avoid_: score, overlap.
+
 **Recommendation**:
 Concert Scout's judgment that a Concert suits one Search, with the reason why. The same Concert can have different Recommendations in different Searches.
 _Avoid_: Result, suggestion, match
