@@ -144,6 +144,19 @@ test("returning home waits for the photo strip layout before revealing the green
   await expect(page.locator(".home-guide")).toHaveCount(1);
 });
 
+test("home asks the site's own cache for examples, never the API", async ({
+  page,
+}) => {
+  const origins: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/examples") origins.push(url.origin);
+  });
+  await page.goto("/");
+  await expect(page.locator(".home-guide")).toHaveCount(1);
+  expect(origins).toEqual([new URL(page.url()).origin]);
+});
+
 test("an example missing from the cache runs as a live Search", async ({
   page,
 }) => {
