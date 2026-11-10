@@ -19,7 +19,7 @@ CHICAGO = Place(name="Chicago, IL, United States of America", lat=41.8755616, lo
 def fast_limiter(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
     if request.node.get_closest_marker("live"):
         return
-    monkeypatch.setattr(limits, "SLOT_SECONDS", 0.001)
+    monkeypatch.setattr(limits, "TICKETMASTER_GAP", dt.timedelta(milliseconds=1))
     monkeypatch.setattr(limits, "MUSICBRAINZ_GAP", dt.timedelta(milliseconds=1))
 
 

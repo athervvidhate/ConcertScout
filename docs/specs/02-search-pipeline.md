@@ -52,7 +52,7 @@ A pool holds every Concert for a place and date window. A Geoapify state result 
 
 With no place, skip the pool. Look up the seeds and the top 15 similar Artists by name. This costs about 16 calls.
 
-Stay under Ticketmaster's 5 requests per second and 5,000 a day, with a shared limiter in Redis. All HTTP is async through `httpx`.
+Stay under Ticketmaster's 5 requests per second and 5,000 a day, with a shared limiter in Redis. Ticketmaster calls start at least a third of a second apart and MusicBrainz calls a second apart. Every worker books its turns in one line in Redis, so callers go in the order they asked. Each request holds one place in each line at a time, so a Search with many calls takes turns with the Searches around it instead of filling the line ahead of them. All HTTP is async through `httpx`.
 
 ### JamBase catalog
 

@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from pydantic_ai.models import Model
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from concert_scout import (
     accounts,
@@ -102,6 +103,17 @@ class ShareRequest(BaseModel):
 
 class Shared(BaseModel):
     id: str
+
+
+class OneCallerPerRequest:
+    """Each request takes its own turns at the rate-limited sources (see `limits.one_caller`)."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        with limits.one_caller():
+            await self.app(scope, receive, send)
 
 
 def _catalog_client(
@@ -208,6 +220,7 @@ def create_app(
             await mail.aclose()
 
     app = FastAPI(title="Concert Scout", lifespan=lifespan)
+    app.add_middleware(OneCallerPerRequest)
     app.add_middleware(SecurityHeaders)
     app.add_middleware(
         CORSMiddleware,
