@@ -4,8 +4,10 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { ArtistPanel } from "@/components/artist-panel";
 import { ConcertPhoto, SourceLink } from "@/components/concert-source";
+import { FollowVenueButton } from "@/components/follow-venue-button";
 import { ListenButton, ListenStage } from "@/components/listen";
 import { Paged } from "@/components/paged";
+import { VenueBadge } from "@/components/venue-badge";
 import {
   byVenue,
   formatDate,
@@ -239,9 +241,12 @@ export function Ticket({
                   {reason}
                 </p>
               )}
-              <p className="venue">{details.join(", ")}</p>
+              <p className="venue">
+                {details.join(", ")}
+                {concert.venue && <VenueBadge name={concert.venue} city={concert.city} />}
+              </p>
               {presale && <p className="presale">{presale}</p>}
-              {(heard || lineup > 0 || also.length > 0) && (
+              {(heard || lineup > 0 || also.length > 0 || concert.venue) && (
                 <div className="ticket-pills">
                   {heard && <ListenButton name={heard} listening={listening} onListen={listen} />}
                   {lineup > 0 && (
@@ -266,6 +271,7 @@ export function Ticket({
                       <ChevronRight aria-hidden size={16} />
                     </button>
                   )}
+                  {concert.venue && <FollowVenueButton name={concert.venue} city={concert.city} />}
                 </div>
               )}
             </motion.div>

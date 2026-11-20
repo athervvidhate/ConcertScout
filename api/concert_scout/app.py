@@ -60,6 +60,7 @@ from concert_scout.sources import (
     spotify_catalog,
     supabase,
     ticketmaster,
+    venues,
 )
 from concert_scout.sources.spotify import SpotifyError
 
@@ -219,6 +220,7 @@ def create_app(
         if settings.resend_api_key
         else None
     )
+    wikidata = venues.make_wikidata_client(transport)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -228,6 +230,7 @@ def create_app(
             await services.jambase.aclose()
         await services.geocoder.aclose()
         await services.musicbrainz.aclose()
+        await wikidata.aclose()
         await services.listenbrainz.aclose()
         await services.jev.aclose()
         if services.lastfm:
@@ -305,6 +308,8 @@ def create_app(
             return _failure(422, SearchError(code="invalid_share", message=message))
         if request.url.path == "/artist":
             return _failure(422, SearchError(code="invalid_artist", message="Choose an Artist."))
+        if request.url.path == "/venue":
+            return _failure(422, SearchError(code="invalid_venue", message="Choose a venue."))
         if request.url.path.startswith(accounts.PREFIX):
             message = "That is not a Concert you can save."
             return _failure(422, SearchError(code="invalid_save", message=message))
@@ -402,6 +407,21 @@ def create_app(
     ) -> ArtistProfiles:
         await limit_visitor(request, "artist", limits.ARTIST_PER_HOUR)
         return ArtistProfiles(profiles=await find_artist_profiles(name, services))
+
+    @app.get("/venue", response_model=venues.VenueCharacter, response_model_exclude_none=True)
+    async def venue(
+        request: Request,
+        name: Annotated[str, Query(min_length=1, max_length=200)],
+        city: Annotated[str | None, Query(min_length=1, max_length=120)] = None,
+        lat: Annotated[float | None, Query(ge=-90, le=90)] = None,
+        lon: Annotated[float | None, Query(ge=-180, le=180)] = None,
+    ) -> venues.VenueCharacter:
+        if (lat is None) != (lon is None):
+            raise Refused(422, "invalid_venue", "Send both latitude and longitude, or neither.")
+        await limit_visitor(request, "venue", venues.VENUE_PER_HOUR)
+        return await venues.lookup(
+            services.musicbrainz, wikidata, services.redis, name, city, lat, lon
+        )
 
     # A POST, so the username stays out of access logs.
     @app.post("/taste/{source}")

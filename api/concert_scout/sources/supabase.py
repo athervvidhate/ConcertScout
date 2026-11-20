@@ -29,6 +29,7 @@ REFETCH_GAP = 30.0
 CLOCK_LEEWAY = 10
 TABLE = "/rest/v1/saved_concerts"
 FOLLOWED = "/rest/v1/followed_artists"
+FOLLOWED_VENUES = "/rest/v1/followed_venues"
 SETTINGS = "/rest/v1/alert_settings"
 SENT = "/rest/v1/alerts_sent"
 
@@ -57,6 +58,14 @@ class SavedConcert(BaseModel):
 class FollowedArtist(BaseModel):
     artist_key: str
     name: str
+
+
+class FollowedVenue(BaseModel):
+    venue_key: str
+    name: str
+    city: str | None = None
+    lat: float | None = None
+    lon: float | None = None
 
 
 class AlertSettings(BaseModel):
@@ -268,6 +277,44 @@ async def unfollow(
     await _send(client, request)
 
 
+async def list_followed_venues(
+    client: httpx.AsyncClient, publishable_key: str, account: Account
+) -> list[FollowedVenue]:
+    request = client.build_request(
+        "GET",
+        FOLLOWED_VENUES,
+        params={"select": "venue_key,name,city,lat,lon", "order": "followed_at.asc"},
+        headers=_as_person(account, publishable_key),
+    )
+    return _rows(await _send(client, request), FollowedVenue)
+
+
+async def follow_venue(
+    client: httpx.AsyncClient, secret_key: SecretStr, account: Account, venue: FollowedVenue
+) -> None:
+    """Following a venue again keeps the first follow and its spelling."""
+    request = client.build_request(
+        "POST",
+        FOLLOWED_VENUES,
+        params={"on_conflict": "user_id,venue_key"},
+        json=[{"user_id": account.id} | venue.model_dump()],
+        headers=_as_server(secret_key) | {"Prefer": "resolution=ignore-duplicates,return=minimal"},
+    )
+    await _send(client, request)
+
+
+async def unfollow_venue(
+    client: httpx.AsyncClient, publishable_key: str, account: Account, venue_key: str
+) -> None:
+    request = client.build_request(
+        "DELETE",
+        FOLLOWED_VENUES,
+        params={"venue_key": f"eq.{venue_key}"},
+        headers=_as_person(account, publishable_key),
+    )
+    await _send(client, request)
+
+
 async def alert_settings(
     client: httpx.AsyncClient, publishable_key: str, account: Account
 ) -> AlertSettings:
@@ -344,6 +391,23 @@ async def followed_by(
     return followed
 
 
+async def followed_venues_by(
+    client: httpx.AsyncClient, secret_key: SecretStr, user_ids: list[str]
+) -> dict[str, list[FollowedVenue]]:
+    if not user_ids:
+        return {}
+    request = client.build_request(
+        "GET",
+        FOLLOWED_VENUES,
+        params={"select": "user_id,venue_key,name,city,lat,lon", "user_id": _among(user_ids)},
+        headers=_as_server(secret_key),
+    )
+    followed: dict[str, list[FollowedVenue]] = {}
+    for row in _rows(await _send(client, request), _FollowedVenueRow):
+        followed.setdefault(row.user_id, []).append(FollowedVenue(**row.model_dump()))
+    return followed
+
+
 async def sent_to(
     client: httpx.AsyncClient, secret_key: SecretStr, user_ids: list[str]
 ) -> dict[str, set[str]]:
@@ -388,6 +452,10 @@ async def email_of(client: httpx.AsyncClient, secret_key: SecretStr, user_id: st
 
 
 class _FollowedRow(FollowedArtist):
+    user_id: str
+
+
+class _FollowedVenueRow(FollowedVenue):
     user_id: str
 
 
