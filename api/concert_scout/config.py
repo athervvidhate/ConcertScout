@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     typesafe_api_key: SecretStr
     lastfm_key: SecretStr | None = None
     setlistfm_api_key: SecretStr | None = None
+    youtube_api_key: SecretStr | None = None
     jbd_api_key: SecretStr | None = None
     # How far ahead the national JamBase catalog reaches. The Developer plan allows 180.
     jambase_days: int = Field(default=90, ge=1, le=180)

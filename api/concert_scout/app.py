@@ -61,6 +61,7 @@ from concert_scout.sources import (
     spotify_catalog,
     supabase,
     ticketmaster,
+    youtube,
 )
 from concert_scout.sources.spotify import SpotifyError
 
@@ -76,6 +77,10 @@ def _failure(status: int, error: SearchError) -> JSONResponse:
 
 class TasteRequest(BaseModel):
     username: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
+
+
+class YouTubePlaylistRequest(BaseModel):
+    url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2048)]
 
 
 class Coordinates(BaseModel):
@@ -202,6 +207,54 @@ async def _top_artists(source: str, username: str, services: Services) -> list[s
     return artists
 
 
+async def _youtube_artists(url: str, client: httpx.AsyncClient | None, redis: Redis) -> list[str]:
+    """Playlist URLs stay out of the logs: they can identify a person."""
+    invalid = Refused(
+        422,
+        "invalid_playlist_url",
+        "Paste a public YouTube or YouTube Music playlist link (with ?list=...).",
+    )
+    private = Refused(
+        403,
+        "playlist_private",
+        "That playlist is private. Change its visibility to Public or Unlisted on YouTube "
+        "and try again.",
+    )
+    unavailable = Refused(503, "taste_unavailable", "YouTube is not answering. Try again soon.")
+    try:
+        youtube.parse_playlist_id(url)
+    except youtube.InvalidPlaylistUrl:
+        raise invalid from None
+    except youtube.PlaylistPrivate:
+        raise private from None
+    if client is None:
+        raise unavailable
+    try:
+        artists = await youtube.playlist_artists(client, redis, url, IMPORT_SIZE)
+    except youtube.InvalidPlaylistUrl:
+        raise invalid from None
+    except youtube.PlaylistPrivate:
+        raise private from None
+    except youtube.PlaylistNotFound:
+        message = (
+            "We could not find that playlist. Check the link and make sure it is "
+            "Public or Unlisted."
+        )
+        raise Refused(404, "playlist_not_found", message) from None
+    except youtube.QuotaExceeded:
+        message = "YouTube playlist import has reached its daily limit. Try again tomorrow."
+        raise Refused(503, "youtube_quota_exceeded", message) from None
+    except youtube.YouTubeError as exc:
+        logger.warning("YouTube taste import failed: %s", exc)
+        raise unavailable from None
+    if not artists:
+        message = (
+            "We could not find any Artists in that playlist. Try another public music playlist."
+        )
+        raise Refused(404, "taste_empty", message)
+    return artists
+
+
 def create_app(
     settings: Settings | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
@@ -223,6 +276,11 @@ def create_app(
     setlistfm_client = (
         setlistfm.make_client(settings.setlistfm_api_key.get_secret_value(), transport)
         if settings.setlistfm_api_key
+        else None
+    )
+    youtube_client = (
+        youtube.make_client(settings.youtube_api_key.get_secret_value(), transport)
+        if settings.youtube_api_key
         else None
     )
 
@@ -248,6 +306,8 @@ def create_app(
             await mail.aclose()
         if setlistfm_client:
             await setlistfm_client.aclose()
+        if youtube_client:
+            await youtube_client.aclose()
 
     app = FastAPI(title="Concert Scout", lifespan=lifespan)
     app.add_middleware(OneCallerPerRequest)
@@ -316,6 +376,9 @@ def create_app(
         if request.url.path.startswith(accounts.PREFIX):
             message = "That is not a Concert you can save."
             return _failure(422, SearchError(code="invalid_save", message=message))
+        if request.url.path == "/taste/youtube-playlist":
+            message = "Paste a public YouTube or YouTube Music playlist link (with ?list=...)."
+            return _failure(422, SearchError(code="invalid_playlist_url", message=message))
         if request.url.path.startswith("/taste/"):
             return _failure(422, SearchError(code="invalid_username", message="Enter a username."))
         return _failure(422, SearchError(code="invalid_place", message="Choose a place."))
@@ -429,6 +492,16 @@ def create_app(
         except setlistfm.SetlistfmError as exc:
             logger.warning("Setlist lookup failed: %s", exc)
             return setlistfm.SetlistSummary(artist=name)
+
+    # A POST, so the playlist URL stays out of access logs.
+    @app.post("/taste/youtube-playlist")
+    async def import_youtube_playlist(
+        request: Request, body: YouTubePlaylistRequest
+    ) -> ImportedTaste:
+        await limit_visitor(request, "taste", limits.TASTE_PER_HOUR)
+        return ImportedTaste(
+            artists=await _youtube_artists(body.url, youtube_client, services.redis)
+        )
 
     # A POST, so the username stays out of access logs.
     @app.post("/taste/{source}")

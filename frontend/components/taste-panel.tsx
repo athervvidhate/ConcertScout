@@ -8,6 +8,7 @@ import { ChevronDown, Info, X } from "lucide-react";
 import { type SubmitEvent, useState } from "react";
 
 import { SpotifyControl } from "@/components/spotify-shelf";
+import { YouTubeImport } from "@/components/youtube-import";
 import type { SpotifyConnection } from "@/lib/spotify";
 import { SearchRefused } from "@/lib/search";
 import {
@@ -24,6 +25,7 @@ const UNREACHABLE = "Concert Scout's API is not responding.";
 const UNREADABLE = "That could not be read. Try again.";
 const SPOTIFY_PRIVACY = "https://www.spotify.com/account/privacy/";
 const SOURCE_LABELS: Record<TasteSource, string> = {
+  youtube: "YouTube playlist",
   lastfm: "Last.fm",
   listenbrainz: "ListenBrainz",
   history: "Spotify history file",
@@ -70,7 +72,7 @@ function HistoryHelp() {
 }
 
 function ImportForm() {
-  const [source, setSource] = useState<TasteSource>("lastfm");
+  const [source, setSource] = useState<TasteSource>("youtube");
   const [username, setUsername] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [list, setList] = useState("");
@@ -83,6 +85,7 @@ function ImportForm() {
   function read(): Promise<string[]> {
     if (source === "history") return artistsFromHistory(files);
     if (source === "list") return Promise.resolve().then(() => artistsFromList(list));
+    if (source === "youtube") return Promise.resolve([]);
     return fetchTaste(source, username.trim());
   }
 
@@ -99,7 +102,7 @@ function ImportForm() {
   }
 
   return (
-    <form onSubmit={submit}>
+    <>
       <label>
         Import from
         <select
@@ -116,45 +119,51 @@ function ImportForm() {
           ))}
         </select>
       </label>
-      {source === "history" && (
-        <div className="taste-file">
-          <label>
-            Spotify history file
-            <input
-              type="file"
-              accept=".zip,.json"
-              multiple
-              onChange={(event) => setFiles([...(event.target.files ?? [])])}
-            />
-          </label>
-          <HistoryHelp />
-          <p>Your file stays on this device. Only your top 50 Artist names go with a Search.</p>
-        </div>
+      {source === "youtube" ? (
+        <YouTubeImport />
+      ) : (
+        <form onSubmit={submit}>
+          {source === "history" && (
+            <div className="taste-file">
+              <label>
+                Spotify history file
+                <input
+                  type="file"
+                  accept=".zip,.json"
+                  multiple
+                  onChange={(event) => setFiles([...(event.target.files ?? [])])}
+                />
+              </label>
+              <HistoryHelp />
+              <p>Your file stays on this device. Only your top 50 Artist names go with a Search.</p>
+            </div>
+          )}
+          {source === "list" && (
+            <label>
+              Artists, one per line, or a CSV
+              <textarea value={list} onChange={(event) => setList(event.target.value)} rows={7} />
+            </label>
+          )}
+          {(source === "lastfm" || source === "listenbrainz") && (
+            <label>
+              {SOURCE_LABELS[source]} username
+              <input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                required
+                maxLength={64}
+              />
+            </label>
+          )}
+          <Button type="submit" disabled={importing || !ready}>
+            {importing ? "Importing" : "Import"}
+          </Button>
+          {error && <p role="alert">{error}</p>}
+        </form>
       )}
-      {source === "list" && (
-        <label>
-          Artists, one per line, or a CSV
-          <textarea value={list} onChange={(event) => setList(event.target.value)} rows={7} />
-        </label>
-      )}
-      {(source === "lastfm" || source === "listenbrainz") && (
-        <label>
-          {SOURCE_LABELS[source]} username
-          <input
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-            required
-            maxLength={64}
-          />
-        </label>
-      )}
-      <Button type="submit" disabled={importing || !ready}>
-        {importing ? "Importing" : "Import"}
-      </Button>
-      {error && <p role="alert">{error}</p>}
-    </form>
+    </>
   );
 }
 
