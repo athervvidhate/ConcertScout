@@ -4,7 +4,7 @@ import math
 import re
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from pydantic import BaseModel
@@ -16,6 +16,7 @@ from concert_scout.names import normalize
 # Starting values, for the evals to tune. See docs/specs/02-search-pipeline.md.
 SEED_WEIGHT = 1.0
 ONE_HOP_WEIGHT = 0.8
+CO_BILLED_WEIGHT = 0.72
 TWO_HOP_WEIGHT = 0.5
 TAGS_WEIGHT = 0.6
 GENRE_WEIGHT = 0.15
@@ -60,7 +61,7 @@ BLOCKED_TAGS = {
     "welsh",
 }
 
-type Signal = Literal["seed", "one_hop", "two_hops", "tags", "genre"]
+type Signal = Literal["seed", "one_hop", "two_hops", "co_billed", "tags", "genre"]
 
 
 @dataclass(frozen=True)
@@ -75,15 +76,31 @@ class Neighbour:
 
 
 @dataclass(frozen=True)
+class CoBilledPeer:
+    """An Artist who has shared live bills with a seed.
+
+    `weight` is the accumulated bill-size weight across distinct Concerts.
+    """
+
+    artist_key: str
+    weight: float
+    shared_shows: int = 1
+
+
+@dataclass(frozen=True)
 class Taste:
     seeds: Sequence[SeedArtist]
     neighbours: Sequence[Neighbour]
     tags: Sequence[str]
     # Ticketmaster's broad genres, so a style with no tagged Artists still reaches its neighbours.
     genres: Sequence[str] = ()
+    # Pre-fetched live co-billing peers per seed, so matching stays pure with zero network calls.
+    cobilling: Mapping[str, Sequence[CoBilledPeer]] = field(
+        default_factory=dict[str, Sequence[CoBilledPeer]]
+    )
 
     def __bool__(self) -> bool:
-        return bool(self.seeds or self.tags)
+        return bool(self.seeds or self.tags or self.cobilling)
 
 
 class Match(BaseModel):
@@ -122,6 +139,7 @@ def score_concerts(
     lineups = [artist for concert in concerts for artist in concert.artists]
     tags = {a.mbid: usable_tags(artist_tags.get(a.mbid, [])) for a in lineups if a.mbid}
     known = _known_artists(taste)
+    cobilled = _cobilled_artists(taste)
     weights = _tag_weights(tags)
     tag_sets = _tag_sets(taste, weights)
     genres = _wanted_genres(lineups, taste, known)
@@ -130,6 +148,7 @@ def score_concerts(
     def best(artist: Artist) -> Match | None:
         options = [
             _known_match(artist, known),
+            _cobilled_match(artist, cobilled),
             _tag_match(artist, tags.get(artist.mbid or "", set()), tag_sets, weights),
             _genre_match(artist, genres, sizes),
         ]
@@ -180,7 +199,7 @@ def candidate_names(candidates: Sequence[Candidate]) -> list[str]:
 
 def _fits(match: Match) -> bool:
     """Whether a festival's Lineup entry is worth naming as a reason to go."""
-    if match.signal in ("seed", "one_hop", "two_hops"):
+    if match.signal in ("seed", "one_hop", "two_hops", "co_billed"):
         return True
     return match.signal == "tags" and match.score >= LINEUP_TAG_SCORE
 
@@ -227,6 +246,38 @@ def _known_artists(taste: Taste) -> dict[str, Match]:
 def _known_match(artist: Artist, known: Mapping[str, Match]) -> Match | None:
     # ID first: a name can belong to two Artists, so it only counts when the ID has nothing.
     match = (artist.mbid and known.get(artist.mbid)) or known.get(normalize(artist.name))
+    return match.model_copy(update={"artist": artist.name}) if match else None
+
+
+def _cobilled_artists(taste: Taste) -> dict[str, Match]:
+    """Pre-fetched live co-billing peers per seed, indexed by normalized name, best score kept.
+
+    Uses a 1.0 club-bill floor so a lone mid-festival appearance (0.15) never inflates to full
+    weight, and takes a square root like one-hop similarity so regular openers stay in range.
+    """
+    seed_names = {normalize(seed.name): seed.name for seed in taste.seeds}
+    cobilled: dict[str, Match] = {}
+    for seed_key, peers in taste.cobilling.items():
+        norm_seed = normalize(seed_key)
+        via = seed_names.get(norm_seed, seed_key)
+        valid = [
+            (key, peer)
+            for peer in peers
+            if peer.weight > 0 and (key := normalize(peer.artist_key)) and key != norm_seed
+        ]
+        if not valid:
+            continue
+        scale = max(max(peer.weight for _, peer in valid), 1.0)
+        for key, peer in valid:
+            score = CO_BILLED_WEIGHT * math.sqrt(min(1.0, peer.weight / scale))
+            match = Match(artist=peer.artist_key, signal="co_billed", score=score, via=via)
+            if key not in cobilled or cobilled[key].score < score:
+                cobilled[key] = match
+    return cobilled
+
+
+def _cobilled_match(artist: Artist, cobilled: Mapping[str, Match]) -> Match | None:
+    match = cobilled.get(normalize(artist.name))
     return match.model_copy(update={"artist": artist.name}) if match else None
 
 
