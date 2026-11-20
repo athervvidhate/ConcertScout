@@ -156,6 +156,11 @@ def make_services(
     lastfm_client = None
     if settings.lastfm_key:
         lastfm_client = lastfm.make_client(settings.lastfm_key.get_secret_value(), transport)
+    supabase_client = (
+        supabase.make_client(settings.supabase_url, transport)
+        if settings.supabase_url and settings.supabase_secret_key
+        else None
+    )
     return Services(
         ticketmaster=ticketmaster.make_client(settings.tm_key.get_secret_value(), transport),
         geocoder=geocoder.make_client(settings.geoapify_key.get_secret_value(), transport),
@@ -171,6 +176,8 @@ def make_services(
         if settings.jbd_api_key
         else None,
         jambase_days=settings.jambase_days,
+        supabase=supabase_client,
+        supabase_secret_key=settings.supabase_secret_key if supabase_client else None,
     )
 
 
@@ -209,11 +216,7 @@ def create_app(
 ) -> FastAPI:
     settings = settings or Settings()  # pyright: ignore[reportCallIssue]
     services = make_services(settings, transport, redis, model)
-    accounts_client = (
-        supabase.make_client(settings.supabase_url, transport)
-        if settings.supabase_url and settings.accounts_enabled
-        else None
-    )
+    accounts_client = services.supabase if settings.accounts_enabled else None
     mail = (
         resend.make_client(settings.resend_api_key.get_secret_value(), transport)
         if settings.resend_api_key
@@ -236,8 +239,8 @@ def create_app(
             await services.spotify_catalog.aclose()
         await services.turnstile.aclose()
         await services.redis.aclose()
-        if accounts_client:
-            await accounts_client.aclose()
+        if services.supabase:
+            await services.supabase.aclose()
         if mail:
             await mail.aclose()
 

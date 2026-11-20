@@ -155,6 +155,8 @@ def _neutral_reason(match: Match) -> str:
         return f"{match.artist} is similar to {match.via}"
     if match.signal == "two_hops":
         return f"{match.artist} is close to Artists similar to {match.via}"
+    if match.signal == "co_billed":
+        return f"Shares bills with {match.via}" if match.via else NOTABLE_REASON
     if match.via:
         return f"{match.artist} shares tags with {match.via}"
     return f"Tagged {_listed(match.styles[:MAX_STYLES])}" if match.styles else NOTABLE_REASON
