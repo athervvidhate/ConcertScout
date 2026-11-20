@@ -8,11 +8,11 @@ account ID from the browser.
 import asyncio
 import logging
 import time
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 import httpx
 from fastapi import APIRouter, Depends, Header, Path, Request, Response
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 from redis.exceptions import RedisError
 
 from concert_scout import limits, pool, security, taste_profile
@@ -21,8 +21,8 @@ from concert_scout.models import Concert, Place
 from concert_scout.names import normalize
 from concert_scout.pipeline import Services
 from concert_scout.security import Refused
-from concert_scout.sources import geocoder, supabase
-from concert_scout.sources.supabase import Account, FollowedArtist, SavedConcert
+from concert_scout.sources import geocoder, supabase, venues
+from concert_scout.sources.supabase import Account, FollowedArtist, FollowedVenue, SavedConcert
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,22 @@ class FollowRequest(BaseModel):
     name: ArtistName
 
 
+CityName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+
+
+class FollowVenueRequest(BaseModel):
+    name: ArtistName
+    city: CityName | None = None
+    lat: Annotated[float, Field(ge=-90, le=90)] | None = None
+    lon: Annotated[float, Field(ge=-180, le=180)] | None = None
+
+    @model_validator(mode="after")
+    def both_or_neither_coords(self) -> Self:
+        if (self.lat is None) != (self.lon is None):
+            raise ValueError("send both latitude and longitude, or neither")
+        return self
+
+
 class AlertPlaceRequest(BaseModel):
     place: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=120)]
     radius_miles: Literal[10, 25, 50, 100] = 50
@@ -70,6 +86,7 @@ class AlertsView(BaseModel):
     enabled: bool
     place: Place | None
     followed: list[FollowedArtist]
+    followed_venues: list[FollowedVenue] = []
 
 
 class Imported(BaseModel):
@@ -191,14 +208,20 @@ def router(settings: Settings, client: httpx.AsyncClient, services: Services) ->
     @routes.get("/alerts")
     async def alerts(account: Annotated[Account, Depends(current_account)]) -> AlertsView:
         try:
-            settings_row, followed = await asyncio.gather(
+            settings_row, followed, followed_venues = await asyncio.gather(
                 supabase.alert_settings(client, publishable, account),
                 supabase.list_followed(client, publishable, account),
+                supabase.list_followed_venues(client, publishable, account),
             )
         except supabase.SupabaseError as exc:
             logger.warning("Alerts read failed: %s", exc)
             raise unavailable() from None
-        return AlertsView(enabled=settings_row.enabled, place=settings_row.place, followed=followed)
+        return AlertsView(
+            enabled=settings_row.enabled,
+            place=settings_row.place,
+            followed=followed,
+            followed_venues=followed_venues,
+        )
 
     @routes.post("/followed")
     async def follow(
@@ -224,6 +247,35 @@ def router(settings: Settings, client: httpx.AsyncClient, services: Services) ->
             await supabase.unfollow(client, publishable, account, artist_key)
         except supabase.SupabaseError as exc:
             logger.warning("Unfollow failed: %s", exc)
+            raise unavailable() from None
+        return Response(status_code=204)
+
+    @routes.post("/followed-venues", response_model_exclude_none=True)
+    async def follow_venue(
+        body: FollowVenueRequest, account: Annotated[Account, Depends(current_account)]
+    ) -> FollowedVenue:
+        key = venues.venue_key(body.name, body.city)
+        if not key:
+            raise Refused(422, "venue_name", "That is not a venue name.")
+        venue = FollowedVenue(
+            venue_key=key, name=body.name, city=body.city, lat=body.lat, lon=body.lon
+        )
+        try:
+            await supabase.follow_venue(client, secret, account, venue)
+        except supabase.SupabaseError as exc:
+            logger.warning("Venue follow failed: %s", exc)
+            raise unavailable() from None
+        return venue
+
+    @routes.delete("/followed-venues/{venue_key}", status_code=204)
+    async def unfollow_venue(
+        venue_key: Annotated[str, Path(min_length=1, max_length=320)],
+        account: Annotated[Account, Depends(current_account)],
+    ) -> Response:
+        try:
+            await supabase.unfollow_venue(client, publishable, account, venue_key)
+        except supabase.SupabaseError as exc:
+            logger.warning("Venue unfollow failed: %s", exc)
             raise unavailable() from None
         return Response(status_code=204)
 

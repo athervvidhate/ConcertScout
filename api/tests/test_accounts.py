@@ -217,7 +217,12 @@ async def test_followed_artists_and_the_alert_place_follow_the_account(
     api: httpx.AsyncClient,
 ) -> None:
     person = stack.new_person()
-    assert await alerts_view(api, person) == {"enabled": False, "place": None, "followed": []}
+    assert await alerts_view(api, person) == {
+        "enabled": False,
+        "place": None,
+        "followed": [],
+        "followed_venues": [],
+    }
 
     for name in ("Contract Artist", "contract  artist", "Second Contract Artist"):
         followed = await api.post("/account/followed", json={"name": name}, headers=bearer(person))
