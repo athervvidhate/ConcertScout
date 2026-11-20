@@ -12,6 +12,8 @@ async function overflow(page:Page) {
 
 for (const reducedMotion of ["reduce","no-preference"] as const) {
   test(`all Poster counts, views and Ticket focus work with ${reducedMotion}`,async({page},info)=>{
+    // Six full reveal, open and fold animations take about 35 seconds on their own.
+    test.slow(reducedMotion==="no-preference");
     await page.emulateMedia({reducedMotion});
     const errors:string[]=[];
     page.on("pageerror",error=>errors.push(error.message));
