@@ -8,7 +8,8 @@ import logging
 import time
 from dataclasses import dataclass
 
-from concert_scout import limits, pool
+from concert_scout import cobilling, limits, pool
+from concert_scout.models import Concert
 from concert_scout.pipeline import Services
 from concert_scout.sources import geocoder, listenbrainz, ticketmaster
 
@@ -62,6 +63,7 @@ async def _warm_place(services: Services, name: str, now: dt.datetime) -> Warmed
         place = await geocoder.geocode(services.geocoder, services.redis, name)
         if place is None:
             return Warmed(name, 0, 0, time.perf_counter() - started, "not found")
+        refreshed: list[Concert] = []
         concerts = await pool.find_concerts(
             services.ticketmaster,
             services.musicbrainz,
@@ -72,7 +74,12 @@ async def _warm_place(services: Services, name: str, now: dt.datetime) -> Warmed
             None,
             now,
             on_found=tag_fetch.add,
+            on_refresh=refreshed.extend,
         )
+        if refreshed:
+            await cobilling.ingest_concerts(
+                services.supabase, services.supabase_secret_key, refreshed, now.date()
+            )
         tags = await tag_fetch.tags()
         return Warmed(name, len(concerts), len(tags), time.perf_counter() - started)
     except (geocoder.GeocoderError, ticketmaster.TicketmasterError) as exc:

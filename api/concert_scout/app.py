@@ -29,6 +29,7 @@ from concert_scout import (
     security,
     share,
     spotify,
+    suggest,
     sync,
     warm,
 )
@@ -61,6 +62,7 @@ from concert_scout.sources import (
     supabase,
     ticketmaster,
     venues,
+    youtube,
 )
 from concert_scout.sources.spotify import SpotifyError
 
@@ -76,6 +78,10 @@ def _failure(status: int, error: SearchError) -> JSONResponse:
 
 class TasteRequest(BaseModel):
     username: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
+
+
+class YouTubePlaylistRequest(BaseModel):
+    url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2048)]
 
 
 class Coordinates(BaseModel):
@@ -157,6 +163,11 @@ def make_services(
     lastfm_client = None
     if settings.lastfm_key:
         lastfm_client = lastfm.make_client(settings.lastfm_key.get_secret_value(), transport)
+    supabase_client = (
+        supabase.make_client(settings.supabase_url, transport)
+        if settings.supabase_url and settings.supabase_secret_key
+        else None
+    )
     return Services(
         ticketmaster=ticketmaster.make_client(settings.tm_key.get_secret_value(), transport),
         geocoder=geocoder.make_client(settings.geoapify_key.get_secret_value(), transport),
@@ -172,6 +183,8 @@ def make_services(
         if settings.jbd_api_key
         else None,
         jambase_days=settings.jambase_days,
+        supabase=supabase_client,
+        supabase_secret_key=settings.supabase_secret_key if supabase_client else None,
     )
 
 
@@ -202,6 +215,54 @@ async def _top_artists(source: str, username: str, services: Services) -> list[s
     return artists
 
 
+async def _youtube_artists(url: str, client: httpx.AsyncClient | None, redis: Redis) -> list[str]:
+    """Playlist URLs stay out of the logs: they can identify a person."""
+    invalid = Refused(
+        422,
+        "invalid_playlist_url",
+        "Paste a public YouTube or YouTube Music playlist link (with ?list=...).",
+    )
+    private = Refused(
+        403,
+        "playlist_private",
+        "That playlist is private. Change its visibility to Public or Unlisted on YouTube "
+        "and try again.",
+    )
+    unavailable = Refused(503, "taste_unavailable", "YouTube is not answering. Try again soon.")
+    try:
+        youtube.parse_playlist_id(url)
+    except youtube.InvalidPlaylistUrl:
+        raise invalid from None
+    except youtube.PlaylistPrivate:
+        raise private from None
+    if client is None:
+        raise unavailable
+    try:
+        artists = await youtube.playlist_artists(client, redis, url, IMPORT_SIZE)
+    except youtube.InvalidPlaylistUrl:
+        raise invalid from None
+    except youtube.PlaylistPrivate:
+        raise private from None
+    except youtube.PlaylistNotFound:
+        message = (
+            "We could not find that playlist. Check the link and make sure it is "
+            "Public or Unlisted."
+        )
+        raise Refused(404, "playlist_not_found", message) from None
+    except youtube.QuotaExceeded:
+        message = "YouTube playlist import has reached its daily limit. Try again tomorrow."
+        raise Refused(503, "youtube_quota_exceeded", message) from None
+    except youtube.YouTubeError as exc:
+        logger.warning("YouTube taste import failed: %s", exc)
+        raise unavailable from None
+    if not artists:
+        message = (
+            "We could not find any Artists in that playlist. Try another public music playlist."
+        )
+        raise Refused(404, "taste_empty", message)
+    return artists
+
+
 def create_app(
     settings: Settings | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
@@ -210,17 +271,18 @@ def create_app(
 ) -> FastAPI:
     settings = settings or Settings()  # pyright: ignore[reportCallIssue]
     services = make_services(settings, transport, redis, model)
-    accounts_client = (
-        supabase.make_client(settings.supabase_url, transport)
-        if settings.supabase_url and settings.accounts_enabled
-        else None
-    )
+    accounts_client = services.supabase if settings.accounts_enabled else None
     mail = (
         resend.make_client(settings.resend_api_key.get_secret_value(), transport)
         if settings.resend_api_key
         else None
     )
     wikidata = venues.make_wikidata_client(transport)
+    youtube_client = (
+        youtube.make_client(settings.youtube_api_key.get_secret_value(), transport)
+        if settings.youtube_api_key
+        else None
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -239,10 +301,12 @@ def create_app(
             await services.spotify_catalog.aclose()
         await services.turnstile.aclose()
         await services.redis.aclose()
-        if accounts_client:
-            await accounts_client.aclose()
+        if services.supabase:
+            await services.supabase.aclose()
         if mail:
             await mail.aclose()
+        if youtube_client:
+            await youtube_client.aclose()
 
     app = FastAPI(title="Concert Scout", lifespan=lifespan)
     app.add_middleware(OneCallerPerRequest)
@@ -310,9 +374,16 @@ def create_app(
             return _failure(422, SearchError(code="invalid_artist", message="Choose an Artist."))
         if request.url.path == "/venue":
             return _failure(422, SearchError(code="invalid_venue", message="Choose a venue."))
+        if request.url.path.startswith("/artists/"):
+            return _failure(
+                422, SearchError(code="invalid_artist", message="Enter an Artist name.")
+            )
         if request.url.path.startswith(accounts.PREFIX):
             message = "That is not a Concert you can save."
             return _failure(422, SearchError(code="invalid_save", message=message))
+        if request.url.path == "/taste/youtube-playlist":
+            message = "Paste a public YouTube or YouTube Music playlist link (with ?list=...)."
+            return _failure(422, SearchError(code="invalid_playlist_url", message=message))
         if request.url.path.startswith("/taste/"):
             return _failure(422, SearchError(code="invalid_username", message="Enter a username."))
         return _failure(422, SearchError(code="invalid_place", message="Choose a place."))
@@ -421,6 +492,46 @@ def create_app(
         await limit_visitor(request, "venue", venues.VENUE_PER_HOUR)
         return await venues.lookup(
             services.musicbrainz, wikidata, services.redis, name, city, lat, lon
+        )
+
+    @app.get("/artists/suggest", response_model=suggest.ArtistSuggestions)
+    async def artists_suggest(
+        request: Request,
+        q: Annotated[str, Query(min_length=1, max_length=100)],
+        limit: Annotated[int, Query(ge=1, le=suggest.MAX_SUGGEST_LIMIT)] = (
+            suggest.DEFAULT_SUGGEST_LIMIT
+        ),
+    ) -> suggest.ArtistSuggestions:
+        if not q.strip():
+            raise Refused(422, "invalid_artist", "Enter an Artist name.")
+        await limit_visitor(request, "suggest", suggest.SUGGEST_PER_HOUR)
+        return suggest.ArtistSuggestions(
+            artists=await suggest.suggest_artists(q, services, limit=limit)
+        )
+
+    @app.get("/artists/related", response_model=suggest.ArtistSuggestions)
+    async def artists_related(
+        request: Request,
+        names: Annotated[list[str], Query(min_length=1, max_length=suggest.MAX_INPUT_NAMES)],
+        limit: Annotated[int, Query(ge=1, le=suggest.MAX_RELATED_LIMIT)] = (
+            suggest.DEFAULT_RELATED_LIMIT
+        ),
+    ) -> suggest.ArtistSuggestions:
+        if not suggest.parse_names(names):
+            raise Refused(422, "invalid_artist", "Choose at least one Artist.")
+        await limit_visitor(request, "related", suggest.RELATED_PER_HOUR)
+        return suggest.ArtistSuggestions(
+            artists=await suggest.related_artists(names, services, limit=limit)
+        )
+
+    # A POST, so the playlist URL stays out of access logs.
+    @app.post("/taste/youtube-playlist")
+    async def import_youtube_playlist(
+        request: Request, body: YouTubePlaylistRequest
+    ) -> ImportedTaste:
+        await limit_visitor(request, "taste", limits.TASTE_PER_HOUR)
+        return ImportedTaste(
+            artists=await _youtube_artists(body.url, youtube_client, services.redis)
         )
 
     # A POST, so the username stays out of access logs.

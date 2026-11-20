@@ -19,8 +19,11 @@ from cryptography.fernet import Fernet
 from fastapi import FastAPI
 from pydantic import SecretStr
 
+from concert_scout import suggest
 from concert_scout.app import create_app
-from concert_scout.sources import resend
+from concert_scout.models import SeedArtist, SimilarArtist
+from concert_scout.names import normalize
+from concert_scout.sources import listenbrainz, musicbrainz, resend, youtube
 from concert_scout.sources.spotify import Client, Credentials, SpotifyArtist, not_allowed
 from tests import supabase_stack
 from tests.contracts import contract_model, forbidden_http, install_sources, settings_with
@@ -84,16 +87,132 @@ async def check(token: Credentials) -> None:
     await artists(token)
 
 
+async def youtube_items(_: httpx.AsyncClient, playlist_id: str) -> list[dict[str, object]]:
+    if playlist_id == "PLcontractPublic123":
+        return [
+            {"snippet": {"title": "White Gloves", "videoOwnerChannelTitle": "Khruangbin - Topic"}},
+            {"snippet": {"title": "Time", "videoOwnerChannelTitle": "Khruangbin - Topic"}},
+            {
+                "snippet": {
+                    "title": "Tame Impala - Let It Happen (Official Video)",
+                    "videoOwnerChannelTitle": "TameImpalaVEVO",
+                }
+            },
+            {
+                "snippet": {
+                    "title": "Stray Podcast - Episode 1",
+                    "videoOwnerChannelTitle": "RandomUploader",
+                }
+            },
+        ]
+    if playlist_id == "PLcontractPrivate123":
+        raise youtube.PlaylistPrivate
+    if playlist_id == "PLcontractEmpty123":
+        return []
+    raise youtube.PlaylistNotFound
+
+
+CONTRACT_SUGGEST_POOL = [
+    "Khruangbin",
+    "Khris Royal",
+    "Tame Impala",
+    "Bonobo",
+    "Four Tet",
+    "Fred again..",
+    "Parcels",
+    "Glass Beams",
+    "Hermanos Gutiérrez",
+    "Caribou",
+    "Floating Points",
+    "BadBadNotGood",
+    "Toro y Moi",
+    "Tycho",
+    "Bicep",
+    "Jamie xx",
+    "Kaytranada",
+]
+
+CONTRACT_RELATED: dict[str, list[str]] = {
+    "khruangbin": [
+        "Hermanos Gutiérrez",
+        "Glass Beams",
+        "Parcels",
+        "Toro y Moi",
+        "BadBadNotGood",
+        "Bonobo",
+        "Skinshape",
+        "Balthazar",
+    ],
+    "bonobo": [
+        "Four Tet",
+        "Caribou",
+        "Floating Points",
+        "Tycho",
+        "Bicep",
+        "Jamie xx",
+        "Parcels",
+        "Kaytranada",
+    ],
+    "tame impala": [
+        "Pond",
+        "Unknown Mortal Orchestra",
+        "Toro y Moi",
+        "Parcels",
+        "MGMT",
+        "Beach House",
+        "Metronomy",
+        "Crumb",
+    ],
+    "four tet": [
+        "Floating Points",
+        "Caribou",
+        "Fred again..",
+        "Jamie xx",
+        "Bicep",
+        "Overmono",
+        "Bonobo",
+        "Kieran Hebden",
+    ],
+}
+
+
+async def contract_suggest(
+    _: httpx.AsyncClient, __: object, query: str, limit: int = 10
+) -> list[str]:
+    needle = normalize(query)
+    return [name for name in CONTRACT_SUGGEST_POOL if needle in normalize(name)][:limit]
+
+
+async def contract_resolve(_: httpx.AsyncClient, __: object, name: str) -> SeedArtist:
+    key = normalize(name)
+    if key in CONTRACT_RELATED:
+        return SeedArtist(name=name, mbid=f"mbid-{key}")
+    return SeedArtist(name="Contract Artist")
+
+
+async def contract_similar(_: httpx.AsyncClient, __: object, mbid: str) -> list[SimilarArtist]:
+    key = mbid.removeprefix("mbid-")
+    names = CONTRACT_RELATED.get(key, [])
+    return [
+        SimilarArtist(name=artist, score=float(100 - idx * 8)) for idx, artist in enumerate(names)
+    ]
+
+
 patch.setattr(Client, "exchange", AsyncMock(side_effect=exchange))
 patch.setattr(Client, "artists", AsyncMock(side_effect=artists))
 patch.setattr(Client, "check", AsyncMock(side_effect=check))
 patch.setattr(resend, "send", AsyncMock())
+patch.setattr(youtube, "fetch_playlist_items", AsyncMock(side_effect=youtube_items))
+patch.setattr(suggest, "musicbrainz_suggest", AsyncMock(side_effect=contract_suggest))
+patch.setattr(musicbrainz, "resolve", AsyncMock(side_effect=contract_resolve))
+patch.setattr(listenbrainz, "similar_artists", AsyncMock(side_effect=contract_similar))
 
 app = create_app(
     settings_with(
         redis_url=f"redis://127.0.0.1:{redis_port}/0",
         searches_per_hour=1000,
         resend_api_key=SecretStr("test-resend"),
+        youtube_api_key=SecretStr("test-youtube"),
         feedback_email="owner@example.com",
         spotify_client_id="test-client",
         spotify_client_secret=SecretStr("test-secret"),

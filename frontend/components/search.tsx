@@ -21,7 +21,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SearchExamples } from "@/components/search-examples";
 import { SpotifyShelf } from "@/components/spotify-shelf";
 import { useSpotifyConnection } from "@/lib/spotify";
-import { countOf, TastePanel } from "@/components/taste-panel";
+import { countOf, type ImportOption, TastePanel } from "@/components/taste-panel";
 import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/place";
 import { dateIn, viewerZone } from "@/lib/format";
 import { anywhere, overNextMonths } from "@/lib/reading";
@@ -50,6 +50,7 @@ export function Search() {
   const input = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [tasteOpen, setTasteOpen] = useState(false);
+  const [tasteSource, setTasteSource] = useState<ImportOption | undefined>(undefined);
   const [token, setToken] = useState<string | null>(null);
   const [botCheckFailed, setBotCheckFailed] = useState(false);
   const botCheck = useRef<TurnstileInstance>(null);
@@ -211,7 +212,10 @@ export function Search() {
     <>
       <SiteHeader
         onHome={goHome}
-        onTaste={() => setTasteOpen(true)}
+        onTaste={() => {
+          setTasteSource(undefined);
+          setTasteOpen(true);
+        }}
         tasteLabel={
           taste ? `Your Taste: ${countOf(taste.artists)}` : "Your Taste"
         }
@@ -219,7 +223,11 @@ export function Search() {
       <TastePanel
         spotify={spotify}
         open={tasteOpen}
-        onOpenChange={setTasteOpen}
+        onOpenChange={(nextOpen) => {
+          setTasteOpen(nextOpen);
+          if (!nextOpen) setTasteSource(undefined);
+        }}
+        initialSource={tasteSource}
       />
 
       <AnimatePresence>
@@ -515,7 +523,14 @@ export function Search() {
               personal={!spotify.connected}
               locationLabel={locationLabel}
               onLocation={toggleLocation}
-              onTaste={() => setTasteOpen(true)}
+              onTaste={() => {
+                setTasteSource(undefined);
+                setTasteOpen(true);
+              }}
+              onPickArtists={() => {
+                setTasteSource("seed");
+                setTasteOpen(true);
+              }}
             />
           </motion.div>
         )}

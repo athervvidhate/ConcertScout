@@ -8,6 +8,7 @@ here, and the owner is always the verified token's subject.
 
 import datetime as dt
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,6 +33,8 @@ FOLLOWED = "/rest/v1/followed_artists"
 FOLLOWED_VENUES = "/rest/v1/followed_venues"
 SETTINGS = "/rest/v1/alert_settings"
 SENT = "/rest/v1/alerts_sent"
+COBILLING_RECORD = "/rest/v1/rpc/record_cobilling_bills"
+COBILLING_NEIGHBORS = "/rest/v1/rpc/cobilling_neighbors"
 
 
 class SupabaseError(Exception):
@@ -462,3 +465,64 @@ class _FollowedVenueRow(FollowedVenue):
 class _SentRow(BaseModel):
     user_id: str
     concert_id: str
+
+
+class CoBillingBill(BaseModel):
+    """One eligible multi-Artist Concert Lineup queued for co-billing accumulation."""
+
+    concert_id: str
+    concert_date: dt.date
+    weight: float
+    artists: list[str]
+
+
+class CoBillingEdge(BaseModel):
+    """One co-billed peer returned for a normalized seed Artist key."""
+
+    seed: str
+    peer: str
+    weight: float
+    shared_shows: int
+    last_seen: dt.date
+
+
+async def record_cobilling_bills(
+    client: httpx.AsyncClient,
+    secret_key: SecretStr,
+    bills: Sequence[CoBillingBill],
+) -> int:
+    """Atomically record unseen Concert bills and accumulate co-billing edge weights."""
+    if not bills:
+        return 0
+    request = client.build_request(
+        "POST",
+        COBILLING_RECORD,
+        json={"p_bills": [bill.model_dump(mode="json") for bill in bills]},
+        headers=_as_server(secret_key),
+    )
+    response = await _send(client, request)
+    try:
+        recorded = response.json()
+        if not isinstance(recorded, int) or isinstance(recorded, bool):
+            raise ValueError("expected integer count")
+        return recorded
+    except ValueError as exc:
+        raise SupabaseError(f"unreadable response: {type(exc).__name__}") from None
+
+
+async def cobilling_neighbors(
+    client: httpx.AsyncClient,
+    secret_key: SecretStr,
+    artists: Sequence[str],
+    limit: int = 50,
+) -> list[CoBillingEdge]:
+    """Top co-billed peers for each normalized seed Artist key, strongest first."""
+    if not artists:
+        return []
+    request = client.build_request(
+        "POST",
+        COBILLING_NEIGHBORS,
+        json={"p_artists": list(artists), "p_limit": limit},
+        headers=_as_server(secret_key),
+    )
+    return _rows(await _send(client, request), CoBillingEdge)

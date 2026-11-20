@@ -3,13 +3,13 @@ import datetime as dt
 import hashlib
 import logging
 from collections.abc import AsyncIterator, Coroutine, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import anyio
 import httpx
 from fastapi.sse import ServerSentEvent
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 from pydantic_ai.models import Model
 from redis.asyncio import Redis
 
@@ -17,6 +17,7 @@ from concert_scout import (
     assemble,
     cache,
     clock,
+    cobilling,
     interpreter,
     limits,
     matching,
@@ -78,6 +79,8 @@ class Services:
     turnstile: httpx.AsyncClient
     jambase: httpx.AsyncClient | None = None
     jambase_days: int = 90
+    supabase: httpx.AsyncClient | None = None
+    supabase_secret_key: SecretStr | None = None
 
 
 async def find_artist_profile(name: str, services: Services) -> ArtistProfile:
@@ -308,6 +311,26 @@ async def _steps(
         with telemetry.step("resolve_artists"):
             return await _find_taste(reading, names_only, services)
 
+    async def find_cobilling() -> dict[str, list[matching.CoBilledPeer]]:
+        if not (services.supabase and services.supabase_secret_key and reading.artists):
+            return {}
+        with telemetry.step("cobilling"):
+            return await cobilling.find_peers(
+                services.supabase, services.supabase_secret_key, reading.artists
+            )
+
+    ingest_tasks: list[asyncio.Task[int]] = []
+
+    def record_refreshed(concerts: list[Concert]) -> None:
+        if services.supabase and services.supabase_secret_key:
+            ingest_tasks.append(
+                asyncio.create_task(
+                    cobilling.ingest_concerts(
+                        services.supabase, services.supabase_secret_key, concerts, now.date()
+                    )
+                )
+            )
+
     async def find_pool(place: Place | None, lookups: Sequence[str]) -> list[Concert]:
         with telemetry.step("pool"):
             return await pool.find_concerts(
@@ -320,6 +343,9 @@ async def _steps(
                 reading.end,
                 now,
                 on_found=tag_fetch.add if wants_tags else None,
+                on_refresh=record_refreshed
+                if services.supabase and services.supabase_secret_key
+                else None,
             )
 
     # Tags only score a Taste, so a place-only Search never asks for them.
@@ -334,70 +360,84 @@ async def _steps(
         return task
 
     try:
-        place_lookup = start(find_place())
-        taste_lookup = start(find_taste())
-        if reading.place:
-            message = f"Finding {reading.region or reading.place}"
-            yield _event("status", Status(step="resolve", message=message))
-        if reading.artists:
-            message = f"Finding Artists like {', '.join(reading.artists)}"
-            yield _event("status", Status(step="resolve", message=message))
+        try:
+            place_lookup = start(find_place())
+            taste_lookup = start(find_taste())
+            cobilling_lookup = start(find_cobilling())
+            if reading.place:
+                message = f"Finding {reading.region or reading.place}"
+                yield _event("status", Status(step="resolve", message=message))
+            if reading.artists:
+                message = f"Finding Artists like {', '.join(reading.artists)}"
+                yield _event("status", Status(step="resolve", message=message))
 
-        place = await place_lookup
-        if reading.place and place is None:
-            where = reading.region or reading.place
-            message = f"We could not find {where}. Check the spelling."
-            yield _error("place_not_found", message)
-            return
+            place = await place_lookup
+            if reading.place and place is None:
+                where = reading.region or reading.place
+                message = f"We could not find {where}. Check the spelling."
+                yield _error("place_not_found", message)
+                return
 
-        if place:
-            near_place = "you" if place is near else reading.region or place.name
-            message = f"Looking for Concerts near {near_place}"
-            yield _event("status", Status(step="pool", message=message))
-            concert_lookup = start(find_pool(place, reading.artists))
-            taste = await taste_lookup
-        else:
-            taste = await taste_lookup
-            closest = similarity.closest(taste.neighbours, DIRECT_LOOKUPS)
-            names = ", ".join(reading.artists)
-            message = f"Looking for Concerts by {names} and similar Artists"
-            yield _event("status", Status(step="pool", message=message))
-            concert_lookup = start(find_pool(None, [*reading.artists, *closest]))
-        concerts = await concert_lookup
-        yield _event("pool", PoolTotal(total=len(concerts)))
+            if place:
+                near_place = "you" if place is near else reading.region or place.name
+                message = f"Looking for Concerts near {near_place}"
+                yield _event("status", Status(step="pool", message=message))
+                concert_lookup = start(find_pool(place, reading.artists))
+                taste, cobilled = await asyncio.gather(taste_lookup, cobilling_lookup)
+            else:
+                taste, cobilled = await asyncio.gather(taste_lookup, cobilling_lookup)
+                closest = similarity.closest(taste.neighbours, DIRECT_LOOKUPS)
+                names = ", ".join(reading.artists)
+                message = f"Looking for Concerts by {names} and similar Artists"
+                yield _event("status", Status(step="pool", message=message))
+                concert_lookup = start(find_pool(None, [*reading.artists, *closest]))
+            if cobilled:
+                taste = replace(taste, cobilling=cobilled)
+            concerts = await concert_lookup
+            yield _event("pool", PoolTotal(total=len(concerts)))
 
-        artist_tags: dict[str, list[str]] = {}
-        if taste:
-            yield _event("status", Status(step="match", message="Matching Concerts to your Taste"))
-            with telemetry.step("match"):
-                # Most batches started while the pool was still arriving.
-                tag_fetch.add(concerts)
-                artist_tags = await tag_fetch.tags()
-                shortlist = matching.shortlist(
-                    matching.score_concerts(concerts, taste, artist_tags)
+            artist_tags: dict[str, list[str]] = {}
+            if taste:
+                yield _event(
+                    "status", Status(step="match", message="Matching Concerts to your Taste")
                 )
-        else:
-            shortlist = matching.notable(concerts)
-    finally:
-        for task in tasks:
-            task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        await tag_fetch.close()
-    names = matching.candidate_names(shortlist)
-    yield _event("candidates", Candidates(names=names, total=len(shortlist)))
+                with telemetry.step("match"):
+                    # Most batches started while the pool was still arriving.
+                    tag_fetch.add(concerts)
+                    artist_tags = await tag_fetch.tags()
+                    shortlist = matching.shortlist(
+                        matching.score_concerts(concerts, taste, artist_tags)
+                    )
+            else:
+                shortlist = matching.notable(concerts)
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            await tag_fetch.close()
+        names = matching.candidate_names(shortlist)
+        yield _event("candidates", Candidates(names=names, total=len(shortlist)))
 
-    if not taste:
-        # Product rule for place-only Searches: notable means Ticketmaster-listed; order by date.
-        recommendations = assemble.from_notable(shortlist)
-    else:
-        yield _event("status", Status(step="rank", message="Choosing the closest Concerts"))
-        with telemetry.step("rank"):
-            recommendations = await _recommend(reading, shortlist, artist_tags, services)
-    yield _event("poster", Poster(recommendations=recommendations))
-    if place and taste and not recommendations:
-        elsewhere = await _find_elsewhere(reading, place, services, now)
-        if elsewhere:
-            yield _event("elsewhere", elsewhere)
+        if not taste:
+            # Place-only Searches keep notable Ticketmaster listings, soonest first.
+            recommendations = assemble.from_notable(shortlist)
+        else:
+            yield _event("status", Status(step="rank", message="Choosing the closest Concerts"))
+            with telemetry.step("rank"):
+                recommendations = await _recommend(reading, shortlist, artist_tags, services)
+        yield _event("poster", Poster(recommendations=recommendations))
+        if place and taste and not recommendations:
+            elsewhere = await _find_elsewhere(reading, place, services, now)
+            if elsewhere:
+                yield _event("elsewhere", elsewhere)
+        if ingest_tasks:
+            await asyncio.gather(*ingest_tasks, return_exceptions=True)
+    finally:
+        for task in ingest_tasks:
+            if not task.done():
+                task.cancel()
+        if ingest_tasks:
+            await asyncio.gather(*ingest_tasks, return_exceptions=True)
 
 
 async def run_search(
