@@ -100,12 +100,15 @@ language sql
 stable
 set search_path = ''
 as $$
-  with scored as (
+  with q as materialized (
+    select p_query::extensions.vector(512) as v
+  ),
+  scored as (
     select
       e.artist_key,
-      (1 - (e.embedding operator(extensions.<=>) p_query::extensions.vector(512)))::double precision
-        as cosine
-    from public.artist_embeddings e
+      (1 - (e.embedding operator(extensions.<=>) q.v))::double precision as cosine
+    from q
+    cross join public.artist_embeddings e
     where e.artist_key = any(p_artists)
   )
   select s.artist_key, s.cosine

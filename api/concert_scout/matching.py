@@ -18,8 +18,10 @@ SEED_WEIGHT = 1.0
 ONE_HOP_WEIGHT = 0.8
 CO_BILLED_WEIGHT = 0.72
 SEMANTIC_WEIGHT = 0.65
-# The least cosine similarity that counts, so an unrelated Artist never qualifies.
-SEMANTIC_FLOOR = 0.42
+# The least cosine similarity that counts, so an unrelated Artist never qualifies. Gemini's 512
+# dimensions put unrelated music near 0.58 and a fitting Artist near 0.70 on November 20, 2026,
+# so the spec's 0.42 would admit everyone. Two probes only: the evals still have to tune this.
+SEMANTIC_FLOOR = 0.65
 TWO_HOP_WEIGHT = 0.5
 TAGS_WEIGHT = 0.6
 GENRE_WEIGHT = 0.15

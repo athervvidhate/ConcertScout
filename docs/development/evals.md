@@ -56,7 +56,7 @@ Deezer answers and grades are cached in `evals/snapshots/silver-cache.json` and 
 
 ## Semantic retrieval
 
-A Snapshot replays with no Supabase and no Google key, so `evals.run` and `evals.scorecard` show matching without the semantic signal. [The hybrid retrieval spec](../specs/09-hybrid-retrieval.md#4-acceptance--evals) records how the signal was measured against the same recorded pools.
+A Snapshot replays with no Supabase and no Google key, so `evals.run` and `evals.scorecard` show matching without the semantic signal. [The hybrid retrieval spec](../specs/09-hybrid-retrieval.md#4-acceptance--evals) says where the measurement of that signal stands.
 
 ## Compare two runs
 
