@@ -25,6 +25,7 @@ from concert_scout import (
 from concert_scout.app import create_app, make_services
 from concert_scout.matching import CoBilledPeer, Neighbour, Taste
 from concert_scout.models import Artist, Concert, SeedArtist
+from concert_scout.names import normalize
 from concert_scout.sources import geocoder, jev, listenbrainz, musicbrainz, supabase, ticketmaster
 from tests import supabase_stack as stack
 from tests.conftest import interpretation, model_returning
@@ -518,18 +519,17 @@ async def test_supabase_migration_accumulates_deduplicates_and_enforces_rls() ->
 
     assert (first, second) == (2, 0)
     assert [(p.artist_key, p.weight, p.shared_shows) for p in peers[b_name]] == [
-        (a_name, 2.0, 2),
-        (c_name, 1.0, 1),
+        (normalize(a_name), 2.0, 2),
+        (normalize(c_name), 1.0, 1),
     ]
 
     # Browser roles cannot read, write, or invoke co-billing RPCs.
     with stack.rest(person.token) as rest:
         assert rest.get("/artist_cobilling").status_code in (401, 403)
         assert rest.get("/cobilling_seen_concerts").status_code in (401, 403)
-        assert rest.post("/rpc/cobilling_neighbors", json={"p_artists": [b_name]}).status_code in (
-            401,
-            403,
-        )
+        assert rest.post(
+            "/rpc/cobilling_neighbors", json={"p_artists": [normalize(b_name)]}
+        ).status_code in (401, 403)
         assert rest.post("/rpc/record_cobilling_bills", json={"p_bills": []}).status_code in (
             401,
             403,
