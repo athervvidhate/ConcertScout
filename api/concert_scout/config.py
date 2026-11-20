@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # Typesafe's Jev grades the shortlist. Required.
     typesafe_api_key: SecretStr
     lastfm_key: SecretStr | None = None
+    setlistfm_api_key: SecretStr | None = None
     youtube_api_key: SecretStr | None = None
     jbd_api_key: SecretStr | None = None
     # Gemini embeddings for semantic retrieval. Unset, Search runs without that signal.

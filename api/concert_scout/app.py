@@ -59,6 +59,7 @@ from concert_scout.sources import (
     listenbrainz,
     musicbrainz,
     resend,
+    setlistfm,
     spotify_catalog,
     supabase,
     ticketmaster,
@@ -280,6 +281,11 @@ def create_app(
         if settings.resend_api_key
         else None
     )
+    setlistfm_client = (
+        setlistfm.make_client(settings.setlistfm_api_key.get_secret_value(), transport)
+        if settings.setlistfm_api_key
+        else None
+    )
     youtube_client = (
         youtube.make_client(settings.youtube_api_key.get_secret_value(), transport)
         if settings.youtube_api_key
@@ -306,6 +312,8 @@ def create_app(
             await services.supabase.aclose()
         if mail:
             await mail.aclose()
+        if setlistfm_client:
+            await setlistfm_client.aclose()
         if youtube_client:
             await youtube_client.aclose()
 
@@ -371,7 +379,7 @@ def create_app(
         if request.url.path.startswith("/share"):
             message = "That is not a Search you can share."
             return _failure(422, SearchError(code="invalid_share", message=message))
-        if request.url.path == "/artist":
+        if request.url.path in ("/artist", "/artist/setlist"):
             return _failure(422, SearchError(code="invalid_artist", message="Choose an Artist."))
         if request.url.path.startswith("/artists/"):
             return _failure(
@@ -477,6 +485,25 @@ def create_app(
     ) -> ArtistProfiles:
         await limit_visitor(request, "artist", limits.ARTIST_PER_HOUR)
         return ArtistProfiles(profiles=await find_artist_profiles(name, services))
+
+    @app.get(
+        "/artist/setlist",
+        response_model=setlistfm.SetlistSummary,
+        response_model_exclude_none=True,
+    )
+    async def artist_setlist(
+        request: Request,
+        name: Annotated[str, Query(min_length=1, max_length=200)],
+        mbid: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
+    ) -> setlistfm.SetlistSummary:
+        await limit_visitor(request, "setlist", limits.ARTIST_PER_HOUR)
+        if not setlistfm_client:
+            return setlistfm.SetlistSummary(artist=name)
+        try:
+            return await setlistfm.artist_setlist(setlistfm_client, services.redis, name, mbid=mbid)
+        except setlistfm.SetlistfmError as exc:
+            logger.warning("Setlist lookup failed: %s", exc)
+            return setlistfm.SetlistSummary(artist=name)
 
     @app.get("/artists/suggest", response_model=suggest.ArtistSuggestions)
     async def artists_suggest(
