@@ -5,9 +5,10 @@ import { API_URL, refusal } from "@/lib/search";
 const TASTE_KEY = "concert-scout-taste";
 
 export type UsernameSource = "lastfm" | "listenbrainz";
-export type TasteSource = UsernameSource | "history" | "list";
+export type TasteSource = UsernameSource | "youtube" | "history" | "list";
 
 export const SOURCE_NAMES: Record<TasteSource, string> = {
+  youtube: "your YouTube playlist",
   lastfm: "Last.fm",
   listenbrainz: "ListenBrainz",
   history: "your Spotify history file",
@@ -22,6 +23,17 @@ export async function fetchTaste(source: UsernameSource, username: string): Prom
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username }),
+  });
+  if (!response.ok) throw await refusal(response);
+  const { artists }: { artists: string[] } = await response.json();
+  return artists;
+}
+
+export async function fetchYouTubePlaylistTaste(url: string): Promise<string[]> {
+  const response = await fetch(`${API_URL}/taste/youtube-playlist`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
   });
   if (!response.ok) throw await refusal(response);
   const { artists }: { artists: string[] } = await response.json();
