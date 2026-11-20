@@ -21,6 +21,8 @@ TICKETMASTER_GAP = dt.timedelta(milliseconds=334)
 DAILY_CALLS = 5000
 # MusicBrainz blocks clients that average over 1 request a second.
 MUSICBRAINZ_GAP = dt.timedelta(seconds=1)
+# Setlist.fm allows 2 requests a second on free keys.
+SETLISTFM_GAP = dt.timedelta(milliseconds=550)
 
 # Books the caller the gate's next free start, so callers go in the order they asked. Returns the
 # milliseconds to wait. Times are whole milliseconds, which Lua writes back without an exponent.
@@ -82,6 +84,11 @@ async def ticketmaster_call(redis: Redis) -> None:
 async def musicbrainz_call(redis: Redis) -> None:
     """Wait for this caller's turn, a full gap after the last MusicBrainz call by any worker."""
     await _take_turn(redis, "musicbrainz:next", MUSICBRAINZ_GAP)
+
+
+async def setlistfm_call(redis: Redis) -> None:
+    """Wait for this caller's turn, a full gap after the last Setlist.fm call by any worker."""
+    await _take_turn(redis, "setlistfm:next", SETLISTFM_GAP)
 
 
 # Each caller holds at most one place in each gate's line at a time. A Search with many calls then

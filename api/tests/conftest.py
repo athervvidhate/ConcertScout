@@ -21,6 +21,7 @@ def fast_limiter(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
         return
     monkeypatch.setattr(limits, "TICKETMASTER_GAP", dt.timedelta(milliseconds=1))
     monkeypatch.setattr(limits, "MUSICBRAINZ_GAP", dt.timedelta(milliseconds=1))
+    monkeypatch.setattr(limits, "SETLISTFM_GAP", dt.timedelta(milliseconds=1))
 
 
 def interpretation(**overrides: Any) -> dict[str, Any]:

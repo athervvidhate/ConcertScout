@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Pointer } from "lucide-react";
+import { ChevronLeft, ChevronRight, ListMusic, Pointer } from "lucide-react";
 import { Fragment, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
@@ -7,6 +7,7 @@ import { ConcertPhoto, SourceLink } from "@/components/concert-source";
 import { FollowVenueButton } from "@/components/follow-venue-button";
 import { ListenButton, ListenStage } from "@/components/listen";
 import { Paged } from "@/components/paged";
+import { SetlistDnaPane } from "@/components/setlist-dna";
 import { VenueBadge } from "@/components/venue-badge";
 import {
   byVenue,
@@ -19,11 +20,12 @@ import {
 } from "@/lib/format";
 import { headlinerOf, listenTo, nameOf } from "@/lib/lineup";
 import type { Concert, Recommendation } from "@/lib/search";
+import { artistMbid } from "@/lib/setlist";
 
 // The festival Artists named on the details pane, so it keeps its size. The Lineup holds the rest.
 const NAMED_MATCHES = 3;
 
-type View = "details" | "dates" | "lineup";
+type View = "details" | "dates" | "lineup" | "setlist";
 
 function Price({ text }: { text: string }) {
   const parts = text.split(" to ");
@@ -175,6 +177,7 @@ export function Ticket({
   // Only an Artist has a panel or a Preview. A Concert with no Lineup, or a festival, is its title.
   const headliner = headlinerOf(concert);
   const heard = listenTo(recommendation);
+  const heardMbid = heard ? artistMbid(concert, heard) : undefined;
   const matched = concert.festival ? (recommendation.lineup_match ?? []) : [];
   const lineup = concert.festival ? concert.artists.length : 0;
   const details = [
@@ -220,7 +223,11 @@ export function Ticket({
               )}
               <h2>
                 {headliner ? (
-                  <ArtistPanel name={headliner} onOpen={onArtistOpen} />
+                  <ArtistPanel
+                    name={headliner}
+                    mbid={concert.artists[0]?.mbid}
+                    onOpen={onArtistOpen}
+                  />
                 ) : (
                   concert.name
                 )}
@@ -249,6 +256,18 @@ export function Ticket({
               {(heard || lineup > 0 || also.length > 0 || concert.venue) && (
                 <div className="ticket-pills">
                   {heard && <ListenButton name={heard} listening={listening} onListen={listen} />}
+                  {heard && (
+                    <button
+                      ref={focusAfterSwap("setlist")}
+                      type="button"
+                      className="ticket-pill"
+                      onClick={() => swap("setlist")}
+                    >
+                      <ListMusic aria-hidden size={15} />
+                      Setlist
+                      <ChevronRight aria-hidden size={16} />
+                    </button>
+                  )}
                   {lineup > 0 && (
                     <button
                       ref={focusAfterSwap("lineup")}
@@ -299,6 +318,8 @@ export function Ticket({
                 <Paged columns={2} heading={<p className="dates-heading">Lineup · {lineup}</p>}>
                   <LineupPane concert={concert} matched={matched} />
                 </Paged>
+              ) : view === "setlist" && heard ? (
+                <SetlistDnaPane name={heard} mbid={heardMbid} />
               ) : (
                 <Paged columns={1} heading={<p className="dates-heading">{moreDates(also.length)}</p>}>
                   <DatesPane concerts={also} />

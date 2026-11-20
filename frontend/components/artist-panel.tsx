@@ -5,11 +5,22 @@ import { X } from "lucide-react";
 import { useState } from "react";
 
 import { FollowButton } from "@/components/follow-button";
+import { SetlistDnaSection } from "@/components/setlist-dna";
 import { type ArtistProfile, spotifyHref, useArtistProfiles } from "@/lib/artist";
 
 const count = new Intl.NumberFormat("en-US");
 
-function Profile({ profile, named }: { profile: ArtistProfile; named: boolean }) {
+function Profile({
+  profile,
+  named,
+  mbid,
+  open,
+}: {
+  profile: ArtistProfile;
+  named: boolean;
+  mbid?: string;
+  open: boolean;
+}) {
   const { listeners, bio, tags, top_tracks: tracks, similar } = profile;
   const nothing = listeners === undefined && !bio && !tags.length && !tracks.length && !similar.length;
 
@@ -59,6 +70,7 @@ function Profile({ profile, named }: { profile: ArtistProfile; named: boolean })
           <p>{profile.similar.join(", ")}</p>
         </section>
       )}
+      <SetlistDnaSection name={profile.name} mbid={mbid} open={open} />
       {profile.lastfm_url && (
         <p className="artist-credit">
           Details from{" "}
@@ -71,10 +83,10 @@ function Profile({ profile, named }: { profile: ArtistProfile; named: boolean })
   );
 }
 
-type Props = { name: string; onOpen?: () => void; className?: string };
+type Props = { name: string; mbid?: string; onOpen?: () => void; className?: string };
 
 /** The Artist's name, which opens what the sources report about them. */
-export function ArtistPanel({ name, onOpen, className = "artist-name" }: Props) {
+export function ArtistPanel({ name, mbid, onOpen, className = "artist-name" }: Props) {
   const [open, setOpen] = useState(false);
   const profiles = useArtistProfiles(name, open);
 
@@ -98,7 +110,13 @@ export function ArtistPanel({ name, onOpen, className = "artist-name" }: Props) 
           </header>
           {!profiles && <p role="status">Looking up {name}</p>}
           {profiles?.map((profile) => (
-            <Profile key={profile.name} profile={profile} named={profiles.length > 1} />
+            <Profile
+              key={profile.name}
+              profile={profile}
+              named={profiles.length > 1}
+              mbid={profiles.length === 1 ? mbid : undefined}
+              open={open}
+            />
           ))}
         </Dialog.Popup>
       </Dialog.Portal>
