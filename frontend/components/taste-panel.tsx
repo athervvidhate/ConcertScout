@@ -10,6 +10,7 @@ import { type SubmitEvent, useState } from "react";
 import { SpotifyControl } from "@/components/spotify-shelf";
 import { PlaylistCsvImport, TasteSeedPicker } from "@/components/taste-seed-picker";
 import { YouTubeImport } from "@/components/youtube-import";
+import { useAccount } from "@/lib/account";
 import type { SpotifyConnection } from "@/lib/spotify";
 import { SearchRefused } from "@/lib/search";
 import {
@@ -241,6 +242,8 @@ function TastePanelBody({
   initialSource?: ImportOption;
 }) {
   const taste = useImportedTaste();
+  // A signed-in Account keeps its Taste on every device it signs in to.
+  const kept = useAccount().status === "signed-in" ? "Synced to your account." : "Saved on this device.";
   const [otherOpen, setOtherOpen] = useState(initialSource !== undefined);
   const [source, setSource] = useState<ImportOption>(initialSource ?? "seed");
   const [updating, setUpdating] = useState(false);
@@ -294,7 +297,7 @@ function TastePanelBody({
             </p>
           ) : (
             importedDate && (
-              <p className={pickerStyles.currentMeta}>Saved {importedDate} · Saved on this device.</p>
+              <p className={pickerStyles.currentMeta}>Saved {importedDate} · {kept}</p>
             )
           )}
           <div className={pickerStyles.currentActions}>
@@ -360,7 +363,7 @@ function TastePanelBody({
           <Collapsible.Panel className="taste-other-panel">
             <p>
               Searches that don&apos;t name an Artist or style use this list. It stays on this
-              device.
+              device, and an account syncs it.
             </p>
             <ImportForm source={source} onSourceChange={setSource} />
           </Collapsible.Panel>

@@ -20,6 +20,9 @@ import { SearchFeedback } from "@/components/search-feedback";
 import { SiteHeader } from "@/components/site-header";
 import { SearchExamples } from "@/components/search-examples";
 import { SpotifyShelf } from "@/components/spotify-shelf";
+import { ForYouShelf } from "@/components/for-you-shelf";
+import { useAccount } from "@/lib/account";
+import { useTasteSync } from "@/lib/for-you";
 import { useSpotifyConnection } from "@/lib/spotify";
 import { countOf, type ImportOption, TastePanel } from "@/components/taste-panel";
 import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/place";
@@ -55,6 +58,9 @@ export function Search() {
   const [botCheckFailed, setBotCheckFailed] = useState(false);
   const botCheck = useRef<TurnstileInstance>(null);
   const taste = useImportedTaste();
+  const signedIn = useAccount().status === "signed-in";
+  // A signed-in Account's Taste Profile and this device's Taste settle before the shelf asks.
+  const tasteSynced = useTasteSync();
   const spotify = useSpotifyConnection();
   const [place, setPlace] = useState<Place | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -484,6 +490,15 @@ export function Search() {
           reading={reading}
           recommendations={recommendations}
           error={error}
+        />
+      )}
+      {home && taste && tasteSynced && (
+        <ForYouShelf
+          key={JSON.stringify([taste, place, signedIn])}
+          taste={taste}
+          place={place}
+          signedIn={signedIn}
+          onLocate={shareLocation}
         />
       )}
       {spotify.connected &&

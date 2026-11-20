@@ -45,11 +45,14 @@ Any visitor can paste a public or unlisted YouTube or YouTube Music playlist URL
 - **Schema (`supabase/migrations/`)**: New table `public.taste_profiles` (`user_id uuid primary key references auth.users(id) on delete cascade`, `source text`, `artists jsonb not null`, `updated_at timestamptz not null default now()`).
   - RLS enabled: `authenticated` may `select` and `delete` own row; only the FastAPI API writes using the secret key (matching [ADR 0004](../adr/0004-optional-accounts-on-supabase.md)).
   - **Strict ADR 0003 boundary**: Spotify OAuth session data NEVER enters `taste_profiles`. Only non-Spotify-OAuth sources (YouTube playlist, Last.fm, ListenBrainz, Taste Seed, pasted list, user-held privacy archive) may sync here.
-- **API routes**:
-  - `GET /account/taste` → returns saved Taste Profile.
-  - `PUT /account/taste` → validates max 100 `Name` entries, stores source + timestamp.
-  - `DELETE /account/taste` → clears profile.
-  - `POST /account/for-you` (or `GET /account/for-you?lat=&lon=` / using Alert place) → deterministic exact-name + 1-hop/co-billed matches from the cached local pool for the next 60 days. Zero LLM calls, zero model spend.
+- **API routes** (all deterministic: no LLM call, no model spend):
+  - `GET /account/taste` → the saved Taste Profile (`source`, `artists`, `updated_at`), or `null`.
+  - `PUT /account/taste` → replaces it. Takes `{source, artists}` with 1–100 names; a source outside the non-Spotify list is refused (ADR 0003). Names are deduplicated by normalized name, favourites first.
+  - `DELETE /account/taste` → clears it.
+  - `POST /account/for-you` → body `{near?, time_zone}`. Reads the Account's own Taste Profile server-side, so the browser sends no names. With no `near`, it uses the Alert place; with neither, it answers `for_you_needs_place`.
+  - `POST /for-you` → the same shelf for a guest, from `{artists, near, time_zone}`. Nothing is kept.
+  - The shelf looks 60 days ahead in the cached local pool. An Artist matches by exact normalized Lineup name, a one-hop similar Artist of the top 5, or a Co-Billing peer of the top 5 (`matching.score_concerts`; genre and tag signals are dropped). Exact names come first, then by score, the Taste's own order and date. At most 3 dates per Artist and 20 Concerts. Each row names its `signal` and the Taste Artist it comes `via`.
+- **Sync**: on sign-in the newer of the device's Taste and the Account's Taste Profile wins; afterwards a change or Remove on the device follows to the Account. Deleting the Account deletes the row with it.
 - **Home experience**: Any visitor (guest with saved local Taste or signed-in Account with `taste_profiles` + place/Alert place) sees a **"For You near [Place]"** shelf on home—eliminating the Spotify-only cliff.
 
 ## Out of scope for $0 stack

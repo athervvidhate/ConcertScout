@@ -31,6 +31,7 @@ from concert_scout import (
     spotify,
     suggest,
     sync,
+    taste_profile,
     warm,
 )
 from concert_scout.config import Settings
@@ -373,6 +374,9 @@ def create_app(
             return _failure(
                 422, SearchError(code="invalid_artist", message="Enter an Artist name.")
             )
+        if request.url.path in taste_profile.PATHS:
+            message = "Check your Taste and place, then try again."
+            return _failure(422, SearchError(code="invalid_taste", message=message))
         if request.url.path.startswith(accounts.PREFIX):
             message = "That is not a Concert you can save."
             return _failure(422, SearchError(code="invalid_save", message=message))
@@ -407,12 +411,9 @@ def create_app(
         )
     )
     app.include_router(feedback.router(settings, services.redis, transport))
+    app.include_router(taste_profile.guest_router(settings, services))
     if accounts_client:
-        app.include_router(
-            accounts.router(
-                settings, accounts_client, services.redis, services.ticketmaster, services.geocoder
-            )
-        )
+        app.include_router(accounts.router(settings, accounts_client, services))
         assert settings.supabase_secret_key
         app.include_router(alerts.router(accounts_client, settings.supabase_secret_key))
 

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Sequence
+from typing import Literal
 
 import httpx
 from redis.asyncio import Redis
@@ -25,8 +26,10 @@ async def find_neighbours(
     lastfm_client: httpx.AsyncClient | None,
     redis: Redis,
     seeds: Sequence[SeedArtist],
+    hops: Literal[1, 2] = 2,
 ) -> list[Neighbour]:
-    """Every seed's neighbours at one and two hops. A failure only leaves a seed with fewer."""
+    """Every seed's neighbours at one hop, or at one and two. A failure only leaves a seed with
+    fewer."""
     slots = asyncio.Semaphore(MAX_CONCURRENT)
 
     async def from_listenbrainz(artist: SeedArtist | SimilarArtist) -> list[SimilarArtist]:
@@ -45,7 +48,7 @@ async def find_neighbours(
 
         lookups.append(from_lastfm)
 
-    found = await asyncio.gather(*(_neighbours(seed, lookups) for seed in seeds))
+    found = await asyncio.gather(*(_neighbours(seed, lookups, hops) for seed in seeds))
     return [neighbour for group in found for neighbour in group]
 
 
@@ -55,13 +58,17 @@ def closest(neighbours: Sequence[Neighbour], count: int) -> list[str]:
     return list(dict.fromkeys(n.name for n in ranked))[:count]
 
 
-async def _neighbours(seed: SeedArtist, lookups: Sequence[Lookup]) -> list[Neighbour]:
+async def _neighbours(
+    seed: SeedArtist, lookups: Sequence[Lookup], hops: Literal[1, 2]
+) -> list[Neighbour]:
     for lookup in lookups:
         try:
             first_hop = await lookup(seed)
         except (listenbrainz.ListenBrainzError, lastfm.LastfmError) as exc:
             logger.warning("Similar Artists failed: %s", exc)
             continue
+        if first_hop and hops == 1:
+            return _ranked(seed, first_hop, [])
         if first_hop:
             # The second hop stays on the source that answered, so a dead one costs a single call.
             sources = first_hop[:SECOND_HOP_FROM]

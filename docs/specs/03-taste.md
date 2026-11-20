@@ -11,6 +11,8 @@ Every source reduces to the same thing: a list of Artist names, favourites first
 | Pasted list or CSV | Parsed in the browser | Yes |
 | Spotify account | Official OAuth, allowlisted | Never |
 
+A signed-in Account also keeps its Taste, from any source above but the Spotify account, as its Taste Profile on every device. See [08-universal-taste-hub](08-universal-taste-hub.md).
+
 The chosen imported Taste stays in `localStorage`, and each Search sends it. The server keeps none of it after the Search ends. A Taste typed into a Search beats the import for that Search.
 
 Imports fetch the top 50 Artists. Only the top 5 get MusicBrainz and similar-Artist lookups. The rest match the Concert pool by name, so a long list costs no extra API calls or time.
