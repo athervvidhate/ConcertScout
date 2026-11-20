@@ -521,7 +521,13 @@ def create_app(
         if youtube_client is None:
             raise unavailable
         try:
-            clip = await live_index.find_clip(youtube_client, services.lastfm, services.redis, name)
+            clip = await live_index.find_clip(
+                youtube_client,
+                services.redis,
+                name,
+                lastfm_client=services.lastfm,
+                setlistfm_client=setlistfm_client,
+            )
         except (youtube.QuotaExceeded, limits.DailyLimitReached):
             message = "Live clips have reached their limit for today. Try again tomorrow."
             raise Refused(503, "live_clips_limit", message) from None

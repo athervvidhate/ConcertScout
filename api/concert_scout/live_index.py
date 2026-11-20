@@ -21,7 +21,7 @@ from redis.asyncio import Redis
 
 from concert_scout import cache, limits
 from concert_scout.names import normalize
-from concert_scout.sources import lastfm, live_clips, youtube
+from concert_scout.sources import lastfm, live_clips, setlistfm, youtube
 from concert_scout.sources.live_clips import Details, LiveClip, LiveVideo
 
 logger = logging.getLogger(__name__)
@@ -198,16 +198,28 @@ def _clip_key(artist_key: str) -> str:
 type TrackNames = Callable[[], Awaitable[list[str]]]
 
 
-async def _track_names(client: httpx.AsyncClient | None, redis: Redis, name: str) -> list[str]:
-    """The Artist's best-known tracks, most played first, from Last.fm."""
-    if client is None:
-        return []
-    try:
-        profile = await lastfm.artist_profile(client, redis, name)
-    except lastfm.LastfmError as exc:
-        logger.warning("Last.fm tracks for a live clip not read: %s", exc)
-        return []
-    return [track.name for track in profile.top_tracks]
+async def _track_names(
+    lastfm_client: httpx.AsyncClient | None,
+    setlistfm_client: httpx.AsyncClient | None,
+    redis: Redis,
+    name: str,
+) -> list[str]:
+    """Songs the Artist plays on stage, from Setlist.fm's staples, then their best-known tracks,
+    most played first, from Last.fm. Either source may be off or fail, and the other still helps."""
+    names: list[str] = []
+    if setlistfm_client:
+        try:
+            summary = await setlistfm.artist_setlist(setlistfm_client, redis, name)
+            names += [staple.name for staple in summary.staples]
+        except setlistfm.SetlistfmError as exc:
+            logger.warning("Setlist.fm staples for a live clip not read: %s", exc)
+    if lastfm_client:
+        try:
+            profile = await lastfm.artist_profile(lastfm_client, redis, name)
+            names += [track.name for track in profile.top_tracks]
+        except lastfm.LastfmError as exc:
+            logger.warning("Last.fm tracks for a live clip not read: %s", exc)
+    return names
 
 
 async def _start(
@@ -242,7 +254,12 @@ async def _clip_of(
 
 
 async def find_clip(
-    client: httpx.AsyncClient, lastfm_client: httpx.AsyncClient | None, redis: Redis, name: str
+    client: httpx.AsyncClient,
+    redis: Redis,
+    name: str,
+    *,
+    lastfm_client: httpx.AsyncClient | None = None,
+    setlistfm_client: httpx.AsyncClient | None = None,
 ) -> LiveClip | None:
     """The Artist's live clip, or None when YouTube has no official, embeddable one.
 
@@ -253,7 +270,7 @@ async def find_clip(
     key = normalize(name)
     if cached := await cache.read(redis, _clip_key(key), LiveClipResult):
         return cached.clip
-    tracks: TrackNames = partial(_track_names, lastfm_client, redis, name)
+    tracks: TrackNames = partial(_track_names, lastfm_client, setlistfm_client, redis, name)
     indexed = await cache.read(redis, _index_key(key), IndexedVideos)
     clip = await _clip_of(client, indexed.videos, tracks) if indexed else None
     if clip is None:

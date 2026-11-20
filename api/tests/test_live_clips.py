@@ -3,6 +3,7 @@
 import datetime as dt
 import logging
 from typing import Any
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -11,7 +12,7 @@ from pydantic import SecretStr
 
 from concert_scout import cache, limits, live_index
 from concert_scout.app import create_app
-from concert_scout.sources import lastfm, live_clips, youtube
+from concert_scout.sources import lastfm, live_clips, setlistfm, youtube
 from concert_scout.sources.live_clips import Chapter, Comment
 from tests.contracts import contract_model, forbidden_http, install_sources, settings_with
 
@@ -363,7 +364,7 @@ async def test_a_curated_artist_opens_at_the_stamp_of_its_most_liked_comment() -
         redis, "khruangbin", ("desk1", "Khruangbin: Tiny Desk Concert", "Tiny Desk Concert")
     )
     async with api.client() as client:
-        clip = await live_index.find_clip(client, None, redis, "Khruangbin")
+        clip = await live_index.find_clip(client, redis, "Khruangbin")
 
     assert clip == live_clips.LiveClip(
         video_id="desk1",
@@ -390,10 +391,55 @@ async def test_a_chapter_of_a_top_track_beats_comments_and_costs_no_comment_call
         redis, "khruangbin", ("desk1", "Khruangbin: Tiny Desk Concert", "Tiny Desk Concert")
     )
     async with api.client() as client, lastfm_tracks(["Evaluation", "Maria Tambien"]) as lf:
-        clip = await live_index.find_clip(client, lf, redis, "Khruangbin")
+        clip = await live_index.find_clip(client, redis, "Khruangbin", lastfm_client=lf)
 
     assert clip and clip.start == 400
     assert api.paths() == ["/videos"]
+
+
+async def test_a_setlist_staple_is_matched_before_a_studio_track(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    summary = setlistfm.SetlistSummary(
+        artist="Khruangbin", staples=[setlistfm.SetlistStaple(name="Maria Tambien", shows=5)]
+    )
+    monkeypatch.setattr(setlistfm, "artist_setlist", AsyncMock(return_value=summary))
+    description = "0:00 Intro\n2:30 Maria Tambien\n6:40 Evaluation\n"
+    api = Youtube(videos={"desk1": video("PT15M", description)})
+    redis = FakeAsyncRedis()
+    await indexed(
+        redis, "khruangbin", ("desk1", "Khruangbin: Tiny Desk Concert", "Tiny Desk Concert")
+    )
+    async with (
+        api.client() as client,
+        lastfm_tracks(["Evaluation"]) as lf,
+        setlistfm.make_client("key") as setlist,
+    ):
+        clip = await live_index.find_clip(
+            client, redis, "Khruangbin", lastfm_client=lf, setlistfm_client=setlist
+        )
+    assert clip and clip.start == 150
+
+
+async def test_a_setlist_fm_failure_leaves_lastfm_to_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failing = AsyncMock(side_effect=setlistfm.SetlistfmError("status 500"))
+    monkeypatch.setattr(setlistfm, "artist_setlist", failing)
+    api = Youtube(videos={"desk1": video("PT15M", "0:00 Intro\n6:40 Evaluation\n")})
+    redis = FakeAsyncRedis()
+    await indexed(
+        redis, "khruangbin", ("desk1", "Khruangbin: Tiny Desk Concert", "Tiny Desk Concert")
+    )
+    async with (
+        api.client() as client,
+        lastfm_tracks(["Evaluation"]) as lf,
+        setlistfm.make_client("key") as setlist,
+    ):
+        clip = await live_index.find_clip(
+            client, redis, "Khruangbin", lastfm_client=lf, setlistfm_client=setlist
+        )
+    assert clip and clip.start == 400
 
 
 async def test_chapters_with_no_top_track_in_them_fall_through_to_comments() -> None:
@@ -407,7 +453,7 @@ async def test_chapters_with_no_top_track_in_them_fall_through_to_comments() -> 
         redis, "khruangbin", ("desk1", "Khruangbin: Tiny Desk Concert", "Tiny Desk Concert")
     )
     async with api.client() as client, lastfm_tracks(["Evaluation"]) as lf:
-        clip = await live_index.find_clip(client, lf, redis, "Khruangbin")
+        clip = await live_index.find_clip(client, redis, "Khruangbin", lastfm_client=lf)
     assert clip and clip.start == 305
 
 
@@ -428,7 +474,7 @@ async def test_with_no_chapter_or_comment_stamp_the_start_is_the_lengths(
     redis = FakeAsyncRedis()
     await indexed(redis, "khruangbin", ("v", "Khruangbin - Live", "KEXP"))
     async with api.client() as client:
-        clip = await live_index.find_clip(client, None, redis, "Khruangbin")
+        clip = await live_index.find_clip(client, redis, "Khruangbin")
     assert clip and clip.start == start
 
 
@@ -437,7 +483,7 @@ async def test_a_video_with_comments_off_still_opens() -> None:
     redis = FakeAsyncRedis()
     await indexed(redis, "khruangbin", ("v", "Khruangbin - Live", "KEXP"))
     async with api.client() as client:
-        clip = await live_index.find_clip(client, None, redis, "Khruangbin")
+        clip = await live_index.find_clip(client, redis, "Khruangbin")
     assert clip and clip.start == 180
 
 
@@ -458,7 +504,7 @@ async def test_the_next_embeddable_public_video_stands_in_for_one_that_cannot_pl
         ("ok", "Khruangbin | Boiler Room: Osaka", "Boiler Room"),
     )
     async with api.client() as client:
-        clip = await live_index.find_clip(client, None, redis, "Khruangbin")
+        clip = await live_index.find_clip(client, redis, "Khruangbin")
     assert clip and (clip.video_id, clip.session, clip.start) == ("ok", "Boiler Room", 0)
     # One videos.list for all three candidates.
     assert api.paths() == ["/videos", "/commentThreads"]
@@ -469,8 +515,8 @@ async def test_a_clip_is_cached_for_30_days_and_asked_for_once() -> None:
     redis = FakeAsyncRedis()
     await indexed(redis, "khruangbin", ("v", "Khruangbin - Live", "KEXP"))
     async with api.client() as client:
-        first = await live_index.find_clip(client, None, redis, "Khruangbin")
-        second = await live_index.find_clip(client, None, redis, "khruangbin")
+        first = await live_index.find_clip(client, redis, "Khruangbin")
+        second = await live_index.find_clip(client, redis, "khruangbin")
     assert first == second and first is not None
     assert api.paths() == ["/videos", "/commentThreads"]
     assert 29 * 86400 < await redis.ttl("live:clip:khruangbin") <= 30 * 86400
@@ -480,8 +526,8 @@ async def test_an_artist_the_index_lacks_costs_one_search_and_a_miss_is_kept_14_
     api = Youtube()
     redis = FakeAsyncRedis()
     async with api.client() as client:
-        assert await live_index.find_clip(client, None, redis, "Nobody Known") is None
-        assert await live_index.find_clip(client, None, redis, "Nobody Known") is None
+        assert await live_index.find_clip(client, redis, "Nobody Known") is None
+        assert await live_index.find_clip(client, redis, "Nobody Known") is None
     assert api.paths() == ["/search"]
     params = api.params("/search")
     assert params["q"] == "Nobody Known live performance"
@@ -501,7 +547,7 @@ async def test_a_search_result_must_carry_the_artists_name_and_embeds_by_its_cha
     )
     redis = FakeAsyncRedis()
     async with api.client() as client:
-        clip = await live_index.find_clip(client, None, redis, "Khruangbin")
+        clip = await live_index.find_clip(client, redis, "Khruangbin")
     assert clip == live_clips.LiveClip(
         video_id="theirs", title="Khruangbin: Live at Funkhaus Berlin", session="Funkhaus", start=0
     )
@@ -518,7 +564,7 @@ async def test_an_indexed_artist_whose_videos_cannot_play_falls_back_to_a_search
         redis, "khruangbin", ("locked", "Khruangbin: Tiny Desk Concert", "Tiny Desk Concert")
     )
     async with api.client() as client:
-        clip = await live_index.find_clip(client, None, redis, "Khruangbin")
+        clip = await live_index.find_clip(client, redis, "Khruangbin")
     assert clip and clip.video_id == "found"
 
 
@@ -530,14 +576,14 @@ async def test_sixty_searches_a_day_then_none_and_a_limited_artist_is_not_cached
     api = Youtube()
     redis = FakeAsyncRedis()
     async with api.client() as client:
-        await live_index.find_clip(client, None, redis, "One")
-        await live_index.find_clip(client, None, redis, "Two")
+        await live_index.find_clip(client, redis, "One")
+        await live_index.find_clip(client, redis, "Two")
         with pytest.raises(limits.DailyLimitReached):
-            await live_index.find_clip(client, None, redis, "Three")
+            await live_index.find_clip(client, redis, "Three")
         # An Artist the index holds needs no search, so the limit does not touch it.
         await indexed(redis, "four", ("v", "Four - Live", "KEXP"))
         api.videos["v"] = video("PT3M")
-        assert await live_index.find_clip(client, None, redis, "Four")
+        assert await live_index.find_clip(client, redis, "Four")
     assert api.paths().count("/search") == 2
     assert await redis.get("live:clip:three") is None
 
@@ -557,7 +603,7 @@ async def test_youtube_failures_raise_without_the_key_and_are_not_cached(
     redis = FakeAsyncRedis()
     async with Youtube(failure=(status, reason)).client() as client:
         with pytest.raises(error) as caught:
-            await live_index.find_clip(client, None, redis, "Khruangbin")
+            await live_index.find_clip(client, redis, "Khruangbin")
     assert API_KEY not in str(caught.value)
     assert await redis.get("live:clip:khruangbin") is None
 
