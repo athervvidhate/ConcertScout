@@ -30,7 +30,14 @@ for (const reducedMotion of ["reduce","no-preference"] as const) {
       await page.getByRole("button",{name:"List view"}).click();
       await expect(page.locator(".concerts-list .concert-card")).toHaveCount(n);
       expect(await page.getByRole("button",{name:/^Open Ticket for/}).evaluateAll(els=>els.map(e=>e.getAttribute("aria-label")))).toEqual(ids);
-      await page.getByRole("button",{name:"Grid view"}).click();
+      // The list fading out takes no clicks, so the Ticket below opens from, and returns to, the grid.
+      const leaving=await page.getByRole("button",{name:"Grid view"}).evaluate(async(grid:HTMLElement)=>{
+        grid.click();
+        await new Promise(requestAnimationFrame);
+        const list=document.querySelector(".concerts-list");
+        return list ? list.hasAttribute("inert") : null;
+      });
+      expect(leaving ?? reducedMotion==="reduce").toBe(true);
       const trigger=page.getByRole("button",{name:"Open Ticket for Source Artist 1",exact:true});
       await trigger.click();
       const dialog=page.getByRole("dialog",{name:"Ticket for Source Artist 1",exact:true});

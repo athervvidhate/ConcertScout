@@ -2,7 +2,13 @@
 
 import { Dialog } from "@base-ui/react/dialog";
 import { LayoutGrid, List, X } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import {
+  AnimatePresence,
+  type HTMLMotionProps,
+  motion,
+  useIsPresent,
+  useReducedMotion,
+} from "motion/react";
 import { ConcertPhoto } from "@/components/concert-source";
 import { ListenStage } from "@/components/listen";
 import { WatchLiveStage } from "@/components/watch-live";
@@ -359,7 +365,7 @@ export function Poster({
                 }}
               >
                 <AnimatePresence mode="wait" initial={false}>
-                  <motion.div
+                  <PosterView
                     key={view}
                     ref={setResults}
                     className={`concerts-${view}`}
@@ -469,7 +475,7 @@ export function Poster({
                         </article>
                       );
                     })}
-                  </motion.div>
+                  </PosterView>
                 </AnimatePresence>
                 <Dialog.Portal>
                   <Dialog.Backdrop className="ticket-backdrop" />
@@ -622,4 +628,11 @@ export function Poster({
       )}
     </section>
   );
+}
+
+/** One view of the Poster. While it fades out for the other view, it takes no clicks or focus,
+ * so a Ticket never opens from, or returns focus to, a card that is about to go. */
+function PosterView(props: HTMLMotionProps<"div">) {
+  const present = useIsPresent();
+  return <motion.div {...props} inert={!present} />;
 }
