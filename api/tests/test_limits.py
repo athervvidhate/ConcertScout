@@ -53,6 +53,7 @@ def workers_sharing_one_redis(count: int) -> list[Redis]:
     [
         (limits.ticketmaster_call, "TICKETMASTER_GAP"),
         (limits.musicbrainz_call, "MUSICBRAINZ_GAP"),
+        (limits.setlistfm_call, "SETLISTFM_GAP"),
     ],
 )
 async def test_callers_on_every_worker_go_first_come_first_served_a_full_gap_apart(
