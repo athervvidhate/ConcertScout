@@ -41,6 +41,14 @@ class CachedTags(BaseModel):
     tags: list[str]
 
 
+class ArtistMetadata(BaseModel):
+    """MusicBrainz's identity for an Artist, as ListenBrainz relays it. A gap stays None."""
+
+    tags: list[str] = []
+    kind: str | None = None
+    area: str | None = None
+
+
 def make_client(transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
     return http.make_client(BASE_URL, {}, transport)
 
@@ -143,6 +151,46 @@ def parse_tags(body: list[dict[str, Any]]) -> dict[str, list[str]]:
         record["artist_mbid"]: [tag["tag"] for tag in record.get("tag", {}).get("artist", [])]
         for record in body
     }
+
+
+async def artist_metadata(
+    client: httpx.AsyncClient, redis: Redis, mbids: Sequence[str]
+) -> dict[str, ArtistMetadata]:
+    """Type, country and tags, strongest first, by MusicBrainz ID. A failed batch leaves its
+    Artists out, so a Sonic Card falls back to what else is known."""
+    unique = list(dict.fromkeys(mbids))
+    keys = {mbid: f"metadata:{mbid}" for mbid in unique}
+    cached = await cache.read_many(redis, list(keys.values()), ArtistMetadata)
+    found = {mbid: cached[key] for mbid, key in keys.items() if key in cached}
+    missing = [mbid for mbid in unique if mbid not in found]
+    for start in range(0, len(missing), TAG_BATCH_SIZE):
+        batch = missing[start : start + TAG_BATCH_SIZE]
+        params = {"artist_mbids": ",".join(batch), "inc": "tag"}
+        try:
+            parsed = parse_metadata(await _get(client, "/metadata/artist/", params))
+        except ListenBrainzError as exc:
+            logger.warning("ListenBrainz metadata failed: %s", exc)
+            continue
+        except (KeyError, TypeError) as exc:
+            logger.warning("ListenBrainz metadata unreadable: %s", type(exc).__name__)
+            continue
+        # An Artist the metadata leaves out has nothing to say, which is worth remembering too.
+        settled = {mbid: parsed.get(mbid, ArtistMetadata()) for mbid in batch}
+        await cache.write_many(redis, {keys[m]: v for m, v in settled.items()}, CACHE_TTL)
+        found |= settled
+    return found
+
+
+def parse_metadata(body: list[dict[str, Any]]) -> dict[str, ArtistMetadata]:
+    parsed: dict[str, ArtistMetadata] = {}
+    for record in body:
+        tags = sorted(record.get("tag", {}).get("artist", []), key=lambda t: -t.get("count", 0))
+        parsed[record["artist_mbid"]] = ArtistMetadata(
+            tags=[tag["tag"] for tag in tags],
+            kind=record.get("type") or None,
+            area=record.get("area") or None,
+        )
+    return parsed
 
 
 async def top_artists(client: httpx.AsyncClient, username: str, limit: int) -> list[str]:

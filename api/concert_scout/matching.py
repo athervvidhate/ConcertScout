@@ -17,6 +17,9 @@ from concert_scout.names import normalize
 SEED_WEIGHT = 1.0
 ONE_HOP_WEIGHT = 0.8
 CO_BILLED_WEIGHT = 0.72
+SEMANTIC_WEIGHT = 0.65
+# The least cosine similarity that counts, so an unrelated Artist never qualifies.
+SEMANTIC_FLOOR = 0.42
 TWO_HOP_WEIGHT = 0.5
 TAGS_WEIGHT = 0.6
 GENRE_WEIGHT = 0.15
@@ -61,7 +64,7 @@ BLOCKED_TAGS = {
     "welsh",
 }
 
-type Signal = Literal["seed", "one_hop", "two_hops", "co_billed", "tags", "genre"]
+type Signal = Literal["seed", "one_hop", "two_hops", "co_billed", "semantic", "tags", "genre"]
 
 
 @dataclass(frozen=True)
@@ -98,9 +101,12 @@ class Taste:
     cobilling: Mapping[str, Sequence[CoBilledPeer]] = field(
         default_factory=dict[str, Sequence[CoBilledPeer]]
     )
+    # Pre-fetched cosine similarity between the Taste's words and each pool Artist's vector, by
+    # normalized name, so matching stays pure.
+    semantic: Mapping[str, float] = field(default_factory=dict[str, float])
 
     def __bool__(self) -> bool:
-        return bool(self.seeds or self.tags or self.cobilling)
+        return bool(self.seeds or self.tags or self.cobilling or self.semantic)
 
 
 class Match(BaseModel):
@@ -149,6 +155,7 @@ def score_concerts(
         options = [
             _known_match(artist, known),
             _cobilled_match(artist, cobilled),
+            _semantic_match(artist, taste.semantic),
             _tag_match(artist, tags.get(artist.mbid or "", set()), tag_sets, weights),
             _genre_match(artist, genres, sizes),
         ]
@@ -201,7 +208,7 @@ def _fits(match: Match) -> bool:
     """Whether a festival's Lineup entry is worth naming as a reason to go."""
     if match.signal in ("seed", "one_hop", "two_hops", "co_billed"):
         return True
-    return match.signal == "tags" and match.score >= LINEUP_TAG_SCORE
+    return match.signal in ("tags", "semantic") and match.score >= LINEUP_TAG_SCORE
 
 
 def _rank(match: Match | None) -> tuple[float, float]:
@@ -279,6 +286,15 @@ def _cobilled_artists(taste: Taste) -> dict[str, Match]:
 def _cobilled_match(artist: Artist, cobilled: Mapping[str, Match]) -> Match | None:
     match = cobilled.get(normalize(artist.name))
     return match.model_copy(update={"artist": artist.name}) if match else None
+
+
+def _semantic_match(artist: Artist, semantic: Mapping[str, float]) -> Match | None:
+    """Cosine similarity above the floor, stretched so the floor scores 0 and a twin scores 1."""
+    cosine = semantic.get(normalize(artist.name))
+    if cosine is None or cosine < SEMANTIC_FLOOR:
+        return None
+    score = SEMANTIC_WEIGHT * min(1.0, (cosine - SEMANTIC_FLOOR) / (1 - SEMANTIC_FLOOR))
+    return Match(artist=artist.name, signal="semantic", score=score) if score > 0 else None
 
 
 def _tag_weights(tags: Mapping[str, set[str]]) -> dict[str, float]:

@@ -13,6 +13,8 @@ from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 from pydantic_ai.usage import RunUsage
 
+from concert_scout import limits
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,6 +73,17 @@ def record_cost(cost: Decimal) -> None:
     """A priced call outside pydantic-ai, such as Jev, which bills by the request."""
     trace.get_current_span().set_attribute("jev_cost_usd", float(cost))
     if total := _current.get():
+        total.cost += cost
+
+
+def record_embedding(tokens: int) -> None:
+    """Gemini's embedding API reports no usage, so callers pass an estimate of the input tokens."""
+    cost = Decimal(tokens) * limits.EMBEDDING_USD_PER_MILLION_TOKENS / limits.MICRODOLLARS
+    span = trace.get_current_span()
+    span.set_attribute("embedding_tokens", tokens)
+    span.set_attribute("embedding_cost_usd", float(cost))
+    if total := _current.get():
+        total.input_tokens += tokens
         total.cost += cost
 
 

@@ -74,6 +74,10 @@ _Avoid_: Notification, newsletter, digest
 The one place, with a radius, where an Account wants to hear about Concerts.
 _Avoid_: Home, location, area
 
+**Sonic Card**:
+The plain text Concert Scout builds about one Artist from public source facts, to turn into a vector for semantic retrieval. An Artist with too little to describe takes the average of their Co-Billed peers' vectors instead. No model writes it.
+_Avoid_: Bio, description, embedding text
+
 **Artist panel**: the side panel opened from an Artist's name on a Ticket, showing public facts from Last.fm and a link to Spotify. It never calls a model.
 
 **Shared Poster**: a Poster kept at its own link, which anyone can open without running a Search.

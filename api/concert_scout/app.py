@@ -51,6 +51,7 @@ from concert_scout.pipeline import (
 )
 from concert_scout.security import Refused, SecurityHeaders
 from concert_scout.sources import (
+    embedder,
     geocoder,
     jambase,
     jev,
@@ -184,6 +185,9 @@ def make_services(
         jambase_days=settings.jambase_days,
         supabase=supabase_client,
         supabase_secret_key=settings.supabase_secret_key if supabase_client else None,
+        embedder=embedder.make_embedder(settings.google_api_key)
+        if settings.google_api_key and supabase_client
+        else None,
     )
 
 

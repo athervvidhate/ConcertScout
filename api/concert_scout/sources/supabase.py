@@ -7,16 +7,17 @@ here, and the owner is always the verified token's subject.
 """
 
 import datetime as dt
+import json
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from joserfc import jwt
 from joserfc.errors import InvalidKeyIdError, JoseError
 from joserfc.jwk import KeySet
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, SecretStr, field_validator
 
 from concert_scout.models import Concert, Place
 from concert_scout.sources.http import USER_AGENT
@@ -34,6 +35,10 @@ SETTINGS = "/rest/v1/alert_settings"
 SENT = "/rest/v1/alerts_sent"
 COBILLING_RECORD = "/rest/v1/rpc/record_cobilling_bills"
 COBILLING_NEIGHBORS = "/rest/v1/rpc/cobilling_neighbors"
+EMBEDDINGS_UPSERT = "/rest/v1/rpc/upsert_artist_embeddings"
+EMBEDDING_STATE = "/rest/v1/rpc/artist_embedding_state"
+EMBEDDINGS_FOR = "/rest/v1/rpc/artist_embeddings_for"
+SEMANTIC_SCORES = "/rest/v1/rpc/semantic_scores"
 
 
 class SupabaseError(Exception):
@@ -458,3 +463,108 @@ async def cobilling_neighbors(
         headers=_as_server(secret_key),
     )
     return _rows(await _send(client, request), CoBillingEdge)
+
+
+class EmbeddingRow(BaseModel):
+    """One Artist's vector to store. `card_hash` is the SHA-256 of what the vector came from."""
+
+    artist_key: str
+    mbid: str | None = None
+    tier: Literal[1, 2]
+    card_hash: str
+    embedding: list[float]
+
+
+class EmbeddingState(BaseModel):
+    artist_key: str
+    tier: Literal[1, 2]
+    card_hash: str
+
+
+class StoredEmbedding(BaseModel):
+    artist_key: str
+    tier: Literal[1, 2]
+    card_hash: str
+    embedding: list[float]
+
+    @field_validator("embedding", mode="before")
+    @classmethod
+    def from_text(cls, value: object) -> object:
+        """Postgres sends a vector as the text `[x,y,...]`."""
+        return json.loads(value) if isinstance(value, str) else value
+
+
+class SemanticScore(BaseModel):
+    artist_key: str
+    cosine: float
+
+
+async def upsert_embeddings(
+    client: httpx.AsyncClient, secret_key: SecretStr, rows: Sequence[EmbeddingRow]
+) -> int:
+    """Store or replace vectors. Returns how many rows were written."""
+    if not rows:
+        return 0
+    request = client.build_request(
+        "POST",
+        EMBEDDINGS_UPSERT,
+        json={"p_rows": [row.model_dump(mode="json") for row in rows]},
+        headers=_as_server(secret_key),
+    )
+    response = await _send(client, request)
+    try:
+        written = response.json()
+        if not isinstance(written, int) or isinstance(written, bool):
+            raise ValueError("expected integer count")
+        return written
+    except ValueError as exc:
+        raise SupabaseError(f"unreadable response: {type(exc).__name__}") from None
+
+
+async def embedding_states(
+    client: httpx.AsyncClient, secret_key: SecretStr, artists: Sequence[str]
+) -> list[EmbeddingState]:
+    """The tier and card hash already stored for these normalized Artist keys."""
+    if not artists:
+        return []
+    request = client.build_request(
+        "POST",
+        EMBEDDING_STATE,
+        json={"p_artists": list(artists)},
+        headers=_as_server(secret_key),
+    )
+    return _rows(await _send(client, request), EmbeddingState)
+
+
+async def stored_embeddings(
+    client: httpx.AsyncClient, secret_key: SecretStr, artists: Sequence[str]
+) -> list[StoredEmbedding]:
+    """The stored vectors for these normalized Artist keys."""
+    if not artists:
+        return []
+    request = client.build_request(
+        "POST",
+        EMBEDDINGS_FOR,
+        json={"p_artists": list(artists)},
+        headers=_as_server(secret_key),
+    )
+    return _rows(await _send(client, request), StoredEmbedding)
+
+
+async def semantic_scores(
+    client: httpx.AsyncClient,
+    secret_key: SecretStr,
+    query: Sequence[float],
+    artists: Sequence[str],
+    floor: float,
+) -> list[SemanticScore]:
+    """Exact cosine similarity to the query for the Artists among these keys that reach `floor`."""
+    if not artists:
+        return []
+    request = client.build_request(
+        "POST",
+        SEMANTIC_SCORES,
+        json={"p_query": json.dumps(list(query)), "p_artists": list(artists), "p_floor": floor},
+        headers=_as_server(secret_key),
+    )
+    return _rows(await _send(client, request), SemanticScore)

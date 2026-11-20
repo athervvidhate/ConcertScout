@@ -48,6 +48,9 @@ DAILY_SPEND = Decimal(1)
 EVAL_DAILY_SPEND = Decimal(3)
 MONTHLY_SPEND = Decimal(10)
 MICRODOLLARS = 1_000_000
+# Gemini's paid rate for gemini-embedding-001, which reports no usage itself. The free tier costs
+# nothing, so counting this rate can only over-count a Search.
+EMBEDDING_USD_PER_MILLION_TOKENS = Decimal("0.15")
 
 
 class VisitorLimitReached(Exception):
