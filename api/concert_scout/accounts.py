@@ -13,13 +13,13 @@ from typing import Annotated, Literal, Self
 import httpx
 from fastapi import APIRouter, Depends, Header, Path, Request, Response
 from pydantic import BaseModel, Field, StringConstraints, model_validator
-from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from concert_scout import limits, pool, security
+from concert_scout import limits, pool, security, taste_profile
 from concert_scout.config import Settings
 from concert_scout.models import Concert, Place
 from concert_scout.names import normalize
+from concert_scout.pipeline import Services
 from concert_scout.security import Refused
 from concert_scout.sources import geocoder, supabase, venues
 from concert_scout.sources.supabase import Account, FollowedArtist, FollowedVenue, SavedConcert
@@ -99,13 +99,8 @@ def unavailable() -> Refused:
     return Refused(503, "accounts_unavailable", "Accounts are unavailable. Try again soon.")
 
 
-def router(
-    settings: Settings,
-    client: httpx.AsyncClient,
-    redis: Redis,
-    ticketmaster: httpx.AsyncClient,
-    places: httpx.AsyncClient,
-) -> APIRouter:
+def router(settings: Settings, client: httpx.AsyncClient, services: Services) -> APIRouter:
+    redis, ticketmaster, places = services.redis, services.ticketmaster, services.geocoder
     assert settings.supabase_publishable_key and settings.supabase_secret_key
     publishable, secret = settings.supabase_publishable_key, settings.supabase_secret_key
     verifier = supabase.Verifier(client)
@@ -331,4 +326,5 @@ def router(
             raise unavailable() from None
         return Response(status_code=204)
 
+    routes.include_router(taste_profile.account_routes(settings, client, services, current_account))
     return routes
