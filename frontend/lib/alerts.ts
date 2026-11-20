@@ -2,10 +2,16 @@ import { useEffect, useSyncExternalStore } from "react";
 
 import { accountFetch, currentAccount, subscribeAccount, useAccount } from "@/lib/account";
 import { API_URL, refusal } from "@/lib/search";
+import type { FollowedVenue } from "@/lib/venues";
 
 export type FollowedArtist = { artist_key: string; name: string };
 export type AlertPlace = { name: string; radius_miles?: number | null };
-export type Alerts = { enabled: boolean; place: AlertPlace | null; followed: FollowedArtist[] };
+export type Alerts = {
+  enabled: boolean;
+  place: AlertPlace | null;
+  followed: FollowedArtist[];
+  followed_venues?: FollowedVenue[];
+};
 export const RADII = [10, 25, 50, 100] as const;
 
 /**
@@ -92,6 +98,39 @@ export async function followArtist(name: string): Promise<void> {
 export async function unfollowArtist(key: string): Promise<void> {
   await accountFetch(`/followed/${encodeURIComponent(key)}`, { method: "DELETE" });
   if (alerts) set({ ...alerts, followed: alerts.followed.filter((f) => f.artist_key !== key) });
+}
+
+export async function followVenue(venue: {
+  name: string;
+  city?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+}): Promise<void> {
+  const body: Record<string, unknown> = { name: venue.name };
+  if (venue.city) body.city = venue.city;
+  if (venue.lat !== undefined && venue.lat !== null && venue.lon !== undefined && venue.lon !== null) {
+    body.lat = venue.lat;
+    body.lon = venue.lon;
+  }
+  const response = await accountFetch("/followed-venues", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  const saved: FollowedVenue = await response.json();
+  if (alerts) {
+    const current = alerts.followed_venues ?? [];
+    if (!current.some((v) => v.venue_key === saved.venue_key)) {
+      set({ ...alerts, followed_venues: [...current, saved] });
+    }
+  }
+}
+
+export async function unfollowVenue(key: string): Promise<void> {
+  await accountFetch(`/followed-venues/${encodeURIComponent(key)}`, { method: "DELETE" });
+  if (alerts) {
+    const current = alerts.followed_venues ?? [];
+    set({ ...alerts, followed_venues: current.filter((v) => v.venue_key !== key) });
+  }
 }
 
 export async function setAlertPlace(place: string, radius: number): Promise<void> {

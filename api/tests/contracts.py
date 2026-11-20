@@ -20,6 +20,7 @@ from concert_scout.sources import (
     listenbrainz,
     musicbrainz,
     spotify_catalog,
+    venues,
 )
 
 PLACE = Place(name="San Francisco, California", lat=37.77, lon=-122.42)
@@ -133,8 +134,30 @@ async def contract_concert(_: httpx.AsyncClient, __: object, concert_id: str) ->
     raise pool.ConcertNotFound
 
 
+async def contract_venue(
+    _musicbrainz: object,
+    _wikidata: object,
+    _redis: object,
+    name: str,
+    city: str | None = None,
+    _lat: float | None = None,
+    _lon: float | None = None,
+) -> venues.VenueCharacter:
+    """One verified venue and one unverified venue from the contract Concerts."""
+    if venues.venue_key(name, city) == venues.venue_key("Source Hall", "San Francisco"):
+        return venues.VenueCharacter(
+            name=name,
+            city=city,
+            capacity=450,
+            tier="Intimate club",
+            venue_type="Music venue",
+        )
+    return venues.VenueCharacter(name=name, city=city)
+
+
 def install_sources(patch: pytest.MonkeyPatch) -> None:
     patch.setattr(pool, "find_concert", contract_concert)
+    patch.setattr(venues, "lookup", contract_venue)
     patch.setattr(jev, "grade", contract_grades)
     patch.setattr(geocoder, "geocode", AsyncMock(return_value=PLACE))
     patch.setattr(pool, "find_concerts", AsyncMock(return_value=CONCERTS))
