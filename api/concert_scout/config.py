@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     setlistfm_api_key: SecretStr | None = None
     youtube_api_key: SecretStr | None = None
     jbd_api_key: SecretStr | None = None
+    # Gemini embeddings for semantic retrieval. Unset, Search runs without that signal.
+    google_api_key: SecretStr | None = None
     # How far ahead the national JamBase catalog reaches. The Developer plan allows 180.
     jambase_days: int = Field(default=90, ge=1, le=180)
 

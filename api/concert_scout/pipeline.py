@@ -10,6 +10,7 @@ import anyio
 import httpx
 from fastapi.sse import ServerSentEvent
 from pydantic import BaseModel, SecretStr
+from pydantic_ai import Embedder
 from pydantic_ai.models import Model
 from redis.asyncio import Redis
 
@@ -18,6 +19,7 @@ from concert_scout import (
     cache,
     clock,
     cobilling,
+    embeddings,
     interpreter,
     limits,
     matching,
@@ -81,6 +83,20 @@ class Services:
     jambase_days: int = 90
     supabase: httpx.AsyncClient | None = None
     supabase_secret_key: SecretStr | None = None
+    embedder: Embedder | None = None
+
+    def embedding_sources(self) -> embeddings.Sources | None:
+        """Where vectors are made and kept, or None while semantic retrieval is off."""
+        if not (self.embedder and self.supabase and self.supabase_secret_key):
+            return None
+        return embeddings.Sources(
+            self.embedder,
+            self.supabase,
+            self.supabase_secret_key,
+            self.listenbrainz,
+            self.lastfm,
+            self.redis,
+        )
 
 
 async def find_artist_profile(name: str, services: Services) -> ArtistProfile:
@@ -319,6 +335,26 @@ async def _steps(
                 services.supabase, services.supabase_secret_key, reading.artists
             )
 
+    async def find_query_vector() -> embeddings.Vector | None:
+        if not (sources := services.embedding_sources()):
+            return None
+        with telemetry.step("embed_query"):
+            return await embeddings.query_vector(sources.embedder, services.redis, reading)
+
+    async def find_semantic(
+        query_lookup: asyncio.Task[embeddings.Vector | None], concerts: Sequence[Concert]
+    ) -> dict[str, float]:
+        query = await query_lookup
+        if not (query and services.supabase and services.supabase_secret_key):
+            return {}
+        with telemetry.step("semantic"):
+            return await embeddings.pool_scores(
+                services.supabase,
+                services.supabase_secret_key,
+                query,
+                [a.name for concert in concerts for a in concert.artists],
+            )
+
     ingest_tasks: list[asyncio.Task[int]] = []
 
     def record_refreshed(concerts: list[Concert]) -> None:
@@ -364,6 +400,7 @@ async def _steps(
             place_lookup = start(find_place())
             taste_lookup = start(find_taste())
             cobilling_lookup = start(find_cobilling())
+            query_lookup = start(find_query_vector())
             if reading.place:
                 message = f"Finding {reading.region or reading.place}"
                 yield _event("status", Status(step="resolve", message=message))
@@ -395,6 +432,8 @@ async def _steps(
                 taste = replace(taste, cobilling=cobilled)
             concerts = await concert_lookup
             yield _event("pool", PoolTotal(total=len(concerts)))
+            if semantic := await find_semantic(query_lookup, concerts):
+                taste = replace(taste, semantic=semantic)
 
             artist_tags: dict[str, list[str]] = {}
             if taste:

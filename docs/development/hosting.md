@@ -43,6 +43,7 @@ Set secrets through the hosting dashboard or private CLI input. Never put values
 | Frontend | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | The same URL and publishable key; set before building |
 | API | `CRON_SECRET` | Random string of at least 32 characters. Vercel's daily crons send it to `/warm`, `/refresh-examples`, `/sync` and `/alerts`; unset, those routes do not exist |
 | API | `JBD_API_KEY` | Optional JamBase Developer key. Only the daily `/sync` cron uses it; unset, Searches stay Ticketmaster-only |
+| API | `GOOGLE_API_KEY` | Optional Gemini API key (AI Studio, not Vertex) for semantic retrieval with `gemini-embedding-001`. It needs `SUPABASE_URL` and `SUPABASE_SECRET_KEY` too. Searches embed their Taste words, `/sync` embeds new Artists, and `scripts/embed_artists.py` backfills the Catalog. Unset, Search runs without that signal |
 | API | `JAMBASE_DAYS` | Optional catalog window in days, default 90, at most 180 |
 
 The public entrypoint refuses to start with unencrypted or unauthenticated Redis, non-HTTPS or wildcard origins, published Turnstile test secrets, a missing trusted IP header, or a configured Spotify client using HTTP. Local `make dev` still uses the normal factory and local settings. Test environments can use Cloudflare's published test keys; public deployments must not.

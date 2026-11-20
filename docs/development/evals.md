@@ -54,6 +54,10 @@ With the default `--live ranker`, every run sees the same shortlist, so any chan
 
 Deezer answers and grades are cached in `evals/snapshots/silver-cache.json` and `grade-cache.json`, so a second run only pays for the ranker. Deezer permits only private, non-commercial use, so its answers stay in that private folder and never reach the app. Every paid call counts toward the shared daily and monthly spend caps, and the scorecard stops before a Search once a cap is reached.
 
+## Semantic retrieval
+
+A Snapshot replays with no Supabase and no Google key, so `evals.run` and `evals.scorecard` show matching without the semantic signal. [The hybrid retrieval spec](../specs/09-hybrid-retrieval.md#4-acceptance--evals) says where the measurement of that signal stands.
+
 ## Compare two runs
 
 ```sh

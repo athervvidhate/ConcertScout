@@ -16,7 +16,8 @@ from pydantic import BaseModel, SecretStr
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from concert_scout import cache, catalog, cobilling, warm
+from concert_scout import cache, catalog, cobilling, embeddings, warm
+from concert_scout.models import Artist
 from concert_scout.names import normalize
 from concert_scout.pipeline import Services
 from concert_scout.sources import geocoder, jambase, musicbrainz
@@ -29,6 +30,10 @@ LOCK = "jambase:sync-lock"
 RUN_SECONDS = 240
 # MusicBrainz always gets this much of a run, even while the first download is underway.
 IDENTIFY_SECONDS = 60
+# New Artists get vectors in the time left after MusicBrainz, a few hundred a run. The CLI
+# backfill (scripts/embed_artists.py) does the Catalog's first pass.
+EMBED_SECONDS = 30
+EMBED_PER_RUN = 300
 # Stay inside the Developer plan's 1,000 included calls, so overage can never bill.
 MONTHLY_LIMIT = 900
 MIN_REMAINING = 25
@@ -211,11 +216,9 @@ async def _save(redis: Redis, state: SyncState) -> None:
     await redis.set(STATE, state.model_dump_json())
 
 
-async def _priority_names(services: Services, today: dt.date) -> list[str]:
-    """Unsettled Artists playing soon in busy cities or the cells with the most Concerts.
-
-    The two lists usually agree but not always, so both count.
-    """
+async def _priority_listings(services: Services, today: dt.date) -> list[jambase.Listing]:
+    """Listings in the next month in busy cities or the cells with the most Concerts, soonest
+    first. The two lists usually agree but not always, so both count."""
     cells: set[str] = set()
     for name in warm.PLACES:
         try:
@@ -228,6 +231,12 @@ async def _priority_names(services: Services, today: dt.date) -> list[str]:
     cells.update(await catalog.busiest_cells(services.redis, today, last, BUSIEST_CELLS))
     listings = await catalog.listings_in(services.redis, cells, today, last)
     listings.sort(key=lambda x: x.concert.date or dt.date.max)
+    return listings
+
+
+async def _priority_names(services: Services, today: dt.date) -> list[str]:
+    """Unsettled Artists playing soon in busy cities or the cells with the most Concerts."""
+    listings = await _priority_listings(services, today)
     names = list({normalize(a.name): a.name for x in listings for a in x.concert.artists}.values())
     known = await catalog.identities(services.redis, names, today)
     return [n for n in names if normalize(n) not in known]
@@ -262,6 +271,28 @@ async def _identify(services: Services, today: dt.date, deadline: float) -> Step
     return step
 
 
+async def _embed(
+    sources: embeddings.Sources, services: Services, today: dt.date, deadline: float
+) -> Step:
+    """Vectors for Artists playing soon who have none yet. A dead provider only ends the step."""
+    step = Step(name="embeddings")
+    began = time.perf_counter()
+    listings = await _priority_listings(services, today)
+    soonest = {normalize(a.name): a for x in listings for a in x.concert.artists}
+    known = await catalog.identities(services.redis, [a.name for a in soonest.values()], today)
+    artists: list[Artist] = [
+        a.model_copy(update={"mbid": known[k].mbid}) if k in known else a
+        for k, a in soonest.items()
+    ]
+    report = await embeddings.embed_artists(
+        artists, sources, only_new=True, limit=EMBED_PER_RUN, deadline=deadline
+    )
+    step.stored = report.card + report.graph
+    step.error = "stopped early" if report.failed else None
+    step.seconds = round(time.perf_counter() - began, 3)
+    return step
+
+
 async def run(services: Services, now: dt.datetime) -> list[Step]:
     """One locked run: catalog first, then MusicBrainz with the time left."""
     deadline = time.monotonic() + RUN_SECONDS
@@ -283,7 +314,12 @@ async def run(services: Services, now: dt.datetime) -> list[Step]:
             steps.append(
                 Step(name="prune", removed=await catalog.prune(services.redis, now.date()))
             )
-        steps.append(await _identify(services, now.date(), deadline))
+        sources = services.embedding_sources()
+        steps.append(
+            await _identify(services, now.date(), deadline - (EMBED_SECONDS if sources else 0))
+        )
+        if sources:
+            steps.append(await _embed(sources, services, now.date(), deadline))
     except RedisError as exc:
         steps.append(Step(name="sync", error=type(exc).__name__))
     finally:
