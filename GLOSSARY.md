@@ -62,6 +62,10 @@ _Avoid_: Profile, user, login
 Spotify's player for a Ticket's headliner, opened from Listen on the Ticket so a person can hear them before deciding.
 _Avoid_: Sample, snippet, embed (in copy)
 
+**Live clip**:
+An official YouTube performance of a Ticket's headliner, opened from Watch Live on the Ticket at the moment its chapters or most liked comment point to.
+_Avoid_: Video, embed (in copy), replay
+
 **Followed Artist**:
 An Artist a person with an Account chose to hear about.
 _Avoid_: Subscription, favorite, tracked artist

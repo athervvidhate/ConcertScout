@@ -217,7 +217,7 @@ def rank_artists(items: Sequence[Mapping[str, Any]], limit: int = MAX_ARTISTS) -
     return [best_name[key][1] for key in ordered[:limit]]
 
 
-def _error_reasons(response: httpx.Response) -> set[str]:
+def error_reasons(response: httpx.Response) -> set[str]:
     try:
         raw: Any = response.json()
     except ValueError:
@@ -241,7 +241,7 @@ def _error_reasons(response: httpx.Response) -> set[str]:
 
 
 def _raise_for_api_error(response: httpx.Response) -> None:
-    reasons = _error_reasons(response)
+    reasons = error_reasons(response)
     if response.status_code == 404 or "playlistNotFound" in reasons:
         raise PlaylistNotFound
     if response.status_code == 429 or reasons & QUOTA_REASONS:
@@ -251,12 +251,14 @@ def _raise_for_api_error(response: httpx.Response) -> None:
     raise YouTubeError(f"status {response.status_code}")
 
 
-async def fetch_playlist_items(client: httpx.AsyncClient, playlist_id: str) -> list[dict[str, Any]]:
-    """Fetch up to 4 pages (200 items) via `playlistItems.list` only — never `search.list`."""
+async def fetch_playlist_items(
+    client: httpx.AsyncClient, playlist_id: str, max_pages: int = MAX_PAGES
+) -> list[dict[str, Any]]:
+    """Fetch pages of 50 via `playlistItems.list` only, never `search.list`. Four by default."""
     collected: list[dict[str, Any]] = []
     page_token: str | None = None
 
-    for _ in range(MAX_PAGES):
+    for _ in range(max_pages):
         params: dict[str, str] = {
             "part": "snippet",
             "playlistId": playlist_id,
