@@ -12,11 +12,11 @@ import secrets
 import time
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from concert_scout import cache, catalog, warm
+from concert_scout import cache, catalog, cobilling, warm
 from concert_scout.names import normalize
 from concert_scout.pipeline import Services
 from concert_scout.sources import geocoder, jambase, musicbrainz
@@ -90,7 +90,13 @@ class _Calls:
 
 
 async def _walk(
-    calls: _Calls, redis: Redis, step: Step, params: dict[str, str | int], today: dt.date
+    calls: _Calls,
+    redis: Redis,
+    step: Step,
+    params: dict[str, str | int],
+    today: dt.date,
+    supabase_client: httpx.AsyncClient | None = None,
+    supabase_secret_key: SecretStr | None = None,
 ) -> None:
     """Every page of one query, or an error before any page beyond the first is spent."""
     began = time.perf_counter()
@@ -100,6 +106,12 @@ async def _walk(
         step.requests += 1
         step.stored += await catalog.store(redis, result.listings, result.removed, today)
         step.removed += len(result.removed)
+        await cobilling.ingest_concerts(
+            supabase_client,
+            supabase_secret_key,
+            [listing.concert for listing in result.listings],
+            today,
+        )
         if page >= result.pages:
             break
         if page == 1 and not calls.affords(result.pages - 1):
@@ -141,6 +153,8 @@ async def _catalog(
                     "eventDateTo": str(horizon + dt.timedelta(days=1)),
                 },
                 today,
+                services.supabase,
+                services.supabase_secret_key,
             )
             if horizon > state.horizon:
                 ahead = Step(name="newly in window")
@@ -155,6 +169,8 @@ async def _catalog(
                         "eventDateTo": str(horizon + dt.timedelta(days=1)),
                     },
                     today,
+                    services.supabase,
+                    services.supabase_secret_key,
                 )
             state.checkpoint, state.horizon = now - OVERLAP, horizon
             await _save(redis, state)
@@ -180,6 +196,8 @@ async def _catalog(
                     "eventDateTo": str((state.horizon or horizon) + dt.timedelta(days=1)),
                 },
                 today,
+                services.supabase,
+                services.supabase_secret_key,
             )
         except jambase.JamBaseError as exc:
             seed.error = str(exc)

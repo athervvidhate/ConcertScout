@@ -29,6 +29,7 @@ from concert_scout import (
     security,
     share,
     spotify,
+    suggest,
     sync,
     warm,
 )
@@ -162,6 +163,11 @@ def make_services(
     lastfm_client = None
     if settings.lastfm_key:
         lastfm_client = lastfm.make_client(settings.lastfm_key.get_secret_value(), transport)
+    supabase_client = (
+        supabase.make_client(settings.supabase_url, transport)
+        if settings.supabase_url and settings.supabase_secret_key
+        else None
+    )
     return Services(
         ticketmaster=ticketmaster.make_client(settings.tm_key.get_secret_value(), transport),
         geocoder=geocoder.make_client(settings.geoapify_key.get_secret_value(), transport),
@@ -177,6 +183,8 @@ def make_services(
         if settings.jbd_api_key
         else None,
         jambase_days=settings.jambase_days,
+        supabase=supabase_client,
+        supabase_secret_key=settings.supabase_secret_key if supabase_client else None,
     )
 
 
@@ -263,11 +271,7 @@ def create_app(
 ) -> FastAPI:
     settings = settings or Settings()  # pyright: ignore[reportCallIssue]
     services = make_services(settings, transport, redis, model)
-    accounts_client = (
-        supabase.make_client(settings.supabase_url, transport)
-        if settings.supabase_url and settings.accounts_enabled
-        else None
-    )
+    accounts_client = services.supabase if settings.accounts_enabled else None
     mail = (
         resend.make_client(settings.resend_api_key.get_secret_value(), transport)
         if settings.resend_api_key
@@ -300,8 +304,8 @@ def create_app(
             await services.spotify_catalog.aclose()
         await services.turnstile.aclose()
         await services.redis.aclose()
-        if accounts_client:
-            await accounts_client.aclose()
+        if services.supabase:
+            await services.supabase.aclose()
         if mail:
             await mail.aclose()
         if setlistfm_client:
@@ -373,6 +377,10 @@ def create_app(
             return _failure(422, SearchError(code="invalid_share", message=message))
         if request.url.path in ("/artist", "/artist/setlist"):
             return _failure(422, SearchError(code="invalid_artist", message="Choose an Artist."))
+        if request.url.path.startswith("/artists/"):
+            return _failure(
+                422, SearchError(code="invalid_artist", message="Enter an Artist name.")
+            )
         if request.url.path.startswith(accounts.PREFIX):
             message = "That is not a Concert you can save."
             return _failure(422, SearchError(code="invalid_save", message=message))
@@ -492,6 +500,36 @@ def create_app(
         except setlistfm.SetlistfmError as exc:
             logger.warning("Setlist lookup failed: %s", exc)
             return setlistfm.SetlistSummary(artist=name)
+
+    @app.get("/artists/suggest", response_model=suggest.ArtistSuggestions)
+    async def artists_suggest(
+        request: Request,
+        q: Annotated[str, Query(min_length=1, max_length=100)],
+        limit: Annotated[int, Query(ge=1, le=suggest.MAX_SUGGEST_LIMIT)] = (
+            suggest.DEFAULT_SUGGEST_LIMIT
+        ),
+    ) -> suggest.ArtistSuggestions:
+        if not q.strip():
+            raise Refused(422, "invalid_artist", "Enter an Artist name.")
+        await limit_visitor(request, "suggest", suggest.SUGGEST_PER_HOUR)
+        return suggest.ArtistSuggestions(
+            artists=await suggest.suggest_artists(q, services, limit=limit)
+        )
+
+    @app.get("/artists/related", response_model=suggest.ArtistSuggestions)
+    async def artists_related(
+        request: Request,
+        names: Annotated[list[str], Query(min_length=1, max_length=suggest.MAX_INPUT_NAMES)],
+        limit: Annotated[int, Query(ge=1, le=suggest.MAX_RELATED_LIMIT)] = (
+            suggest.DEFAULT_RELATED_LIMIT
+        ),
+    ) -> suggest.ArtistSuggestions:
+        if not suggest.parse_names(names):
+            raise Refused(422, "invalid_artist", "Choose at least one Artist.")
+        await limit_visitor(request, "related", suggest.RELATED_PER_HOUR)
+        return suggest.ArtistSuggestions(
+            artists=await suggest.related_artists(names, services, limit=limit)
+        )
 
     # A POST, so the playlist URL stays out of access logs.
     @app.post("/taste/youtube-playlist")

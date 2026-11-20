@@ -1,7 +1,13 @@
 import { zipSync, strToU8 } from "fflate";
 import { describe, expect, it } from "vitest";
 
-import { artistsFromHistory, artistsFromList, TasteFileError } from "@/lib/taste-files";
+import {
+  artistsFromHistory,
+  artistsFromList,
+  artistsFromPlaylistFiles,
+  parsePlaylistExport,
+  TasteFileError,
+} from "@/lib/taste-files";
 
 const play = (artist: string | null, ms: number) => ({
   ms_played: ms,
@@ -10,6 +16,9 @@ const play = (artist: string | null, ms: number) => ({
 
 const jsonFile = (name: string, body: unknown) =>
   new File([JSON.stringify(body)], name, { type: "application/json" });
+
+const textFile = (name: string, body: string, type = "text/csv") =>
+  new File([body], name, { type });
 
 describe("artistsFromHistory", () => {
   it("sums listening time across files and orders Artists by it", async () => {
@@ -95,5 +104,117 @@ describe("artistsFromList", () => {
 
   it("gives a clear error for an empty list", () => {
     expect(() => artistsFromList(" \n , \n")).toThrow(TasteFileError);
+  });
+});
+
+describe("Exportify and TuneMyMusic presets", () => {
+  it("parses an Exportify CSV with semicolon-delimited Artist Name(s), BOM, and ranks by frequency", () => {
+    const exportifyCsv = [
+      "\uFEFFTrack URI,Track Name,Artist URI(s),Artist Name(s),Album Name,Added At",
+      "spotify:track:1,White Gloves,spotify:artist:1,Khruangbin,The Universe Smiles Upon You,2026-01-01",
+      'spotify:track:2,Texas Sun,"spotify:artist:1; spotify:artist:2","Khruangbin; Leon Bridges",Texas Sun,2026-01-02',
+      'spotify:track:3,Latch,"spotify:artist:3; spotify:artist:4","Disclosure; Sam Smith",Settle,2026-01-03',
+      'spotify:track:4,Midnight,"spotify:artist:1; spotify:artist:5","khruangbin; Earth, Wind & Fire",Live,2026-01-04',
+      'spotify:track:5,Omen,"spotify:artist:3; spotify:artist:4","Disclosure; Sam Smith",Caracal,2026-01-05',
+    ].join("\n");
+
+    const parsed = parsePlaylistExport(exportifyCsv);
+    expect(parsed.format).toBe("exportify");
+    expect(parsed.trackCount).toBe(5);
+    expect(parsed.artists).toEqual([
+      "Khruangbin",
+      "Disclosure",
+      "Sam Smith",
+      "Leon Bridges",
+      "Earth, Wind & Fire",
+    ]);
+  });
+
+  it("parses newer Exportify comma-delimited Artist Name(s) while preserving single-artist commas via Artist URI(s)", () => {
+    const exportifyCsv = [
+      "Track URI,Track Name,Artist URI(s),Artist Name(s),Album Name",
+      'spotify:track:1,September,spotify:artist:ewf,"Earth, Wind & Fire",Best Of',
+      'spotify:track:2,See You Again,spotify:artist:tyler,"Tyler, The Creator",Flower Boy',
+      'spotify:track:3,Marea,"spotify:artist:fred, spotify:artist:tbm","Fred again.., The Blessed Madonna",Actual Life',
+      'spotify:track:4,Delilah,spotify:artist:fred,Fred again..,Actual Life 3',
+    ].join("\n");
+
+    const parsed = parsePlaylistExport(exportifyCsv);
+    expect(parsed.format).toBe("exportify");
+    expect(parsed.artists).toEqual([
+      "Fred again..",
+      "Earth, Wind & Fire",
+      "Tyler, The Creator",
+      "The Blessed Madonna",
+    ]);
+  });
+
+  it("parses a real TuneMyMusic CSV fixture, ranks by frequency, and discards track metadata", () => {
+    const tmmCsv = [
+      "\uFEFFTrack name,Artist name,Album,Playlist name,Type,ISRC,Spotify - id",
+      "Let It Happen,Tame Impala,Currents,Liked Songs,Track,AUUM71500297,2X485T9Z5Ly0xyaghN73ed",
+      "Borderline,Tame Impala,The Slow Rush,Liked Songs,Track,AUUM71900999,5hM5arv9KDbCHS0k9uqwjr",
+      "White Gloves,Khruangbin,The Universe Smiles Upon You,Liked Songs,Track,GB123456,1abc",
+      'September,"Earth, Wind & Fire",The Best Of,Liked Songs,Track,US123456,2def',
+      'Marea,"Fred again..; The Blessed Madonna",Actual Life,Liked Songs,Track,UK123456,3ghi',
+      "Breathe Deeper,tame impala,The Slow Rush,Liked Songs,Track,AUUM72000111,4jkl",
+    ].join("\n");
+
+    const parsed = parsePlaylistExport(tmmCsv);
+    expect(parsed.format).toBe("tunemymusic-csv");
+    expect(parsed.trackCount).toBe(6);
+    expect(parsed.artists).toEqual([
+      "Tame Impala",
+      "Khruangbin",
+      "Earth, Wind & Fire",
+      "Fred again..",
+      "The Blessed Madonna",
+    ]);
+    expect(JSON.stringify(parsed)).not.toMatch(/AUUM71500297|Currents|2X485T9Z5Ly0xyaghN73ed/);
+  });
+
+  it("parses a TuneMyMusic TXT export (Artist - Track lines) and discards track titles", () => {
+    const tmmTxt = [
+      "Bonobo - Kerala",
+      "Khruangbin - White Gloves",
+      "Bonobo – Cirrus",
+      "Fred again.. — Delilah (pull me out of this)",
+      "bonobo - Linked",
+      "Khruangbin; Leon Bridges - Texas Sun",
+    ].join("\n");
+
+    const parsed = parsePlaylistExport(tmmTxt);
+    expect(parsed.format).toBe("tunemymusic-txt");
+    expect(parsed.trackCount).toBe(6);
+    expect(parsed.artists).toEqual(["Bonobo", "Khruangbin", "Fred again..", "Leon Bridges"]);
+    expect(JSON.stringify(parsed)).not.toMatch(/Kerala|White Gloves|Cirrus|Delilah|Texas Sun/);
+  });
+
+  it("combines multiple Exportify/TuneMyMusic files client-side and caps at top 50 Artists", async () => {
+    const rows = Array.from({ length: 60 }, (_, idx) => {
+      const name = `Artist ${idx}`;
+      return `spotify:track:${idx},Song ${idx},spotify:artist:${idx},${name},Album`;
+    });
+    const fileA = textFile(
+      "liked_songs.csv",
+      ["Track URI,Track Name,Artist URI(s),Artist Name(s),Album Name", ...rows].join("\n"),
+    );
+    const fileB = textFile(
+      "favorites.txt",
+      ["Artist 59 - Song A", "Artist 59 - Song B", "Artist 42 - Song C"].join("\n"),
+      "text/plain",
+    );
+
+    const parsed = await artistsFromPlaylistFiles([fileA, fileB]);
+    expect(parsed.format).toBe("exportify");
+    expect(parsed.artists).toHaveLength(50);
+    expect(parsed.artists[0]).toBe("Artist 59");
+    expect(parsed.artists[1]).toBe("Artist 42");
+  });
+
+  it("rejects Spotify history zip/json dropped into the CSV preset uploader with guidance", async () => {
+    await expect(
+      artistsFromPlaylistFiles([jsonFile("Streaming_History_Audio_2025.json", [])]),
+    ).rejects.toThrow(/Spotify history file/);
   });
 });

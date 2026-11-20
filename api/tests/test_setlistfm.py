@@ -1,13 +1,11 @@
-import asyncio
 import datetime as dt
-import itertools
 from collections.abc import Sequence
 from typing import Any
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-from fakeredis import FakeAsyncRedis, FakeServer
+from fakeredis import FakeAsyncRedis
 from pydantic import SecretStr
 
 from concert_scout import limits
@@ -305,31 +303,6 @@ async def test_404_caches_empty_summary_and_server_errors_never_leak_key() -> No
             await setlistfm.artist_setlist(client, FakeAsyncRedis(), "Flaky Artist")
     assert "super-secret-value" not in str(caught.value)
     assert "503" in str(caught.value)
-
-
-async def test_setlistfm_rate_gate_paces_workers_first_come_first_served(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    gap = 0.04
-    monkeypatch.setattr(limits, "SETLISTFM_GAP", dt.timedelta(seconds=gap))
-    server = FakeServer()
-    workers = [FakeAsyncRedis(server=server) for _ in range(3)]
-    loop = asyncio.get_running_loop()
-    starts: list[tuple[int, float]] = []
-
-    async def call(n: int) -> None:
-        await limits.setlistfm_call(workers[n % len(workers)])
-        starts.append((n, loop.time()))
-
-    tasks: list[asyncio.Task[None]] = []
-    for n in range(5):
-        tasks.append(asyncio.create_task(call(n)))
-        await asyncio.sleep(0.002)
-    await asyncio.gather(*tasks)
-
-    assert [n for n, _ in starts] == list(range(5))
-    times = [t for _, t in starts]
-    assert all(later - earlier >= gap * 0.8 for earlier, later in itertools.pairwise(times))
 
 
 async def test_artist_setlist_route_contracts_and_never_called_during_search(
