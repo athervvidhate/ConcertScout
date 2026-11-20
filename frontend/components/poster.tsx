@@ -5,6 +5,7 @@ import { LayoutGrid, List, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ConcertPhoto } from "@/components/concert-source";
 import { ListenStage } from "@/components/listen";
+import { WatchLiveStage } from "@/components/watch-live";
 import {
   useCallback,
   useEffect,
@@ -101,16 +102,18 @@ export function Poster({
   const decisions = useDecisions();
   const hint = useArtistHint();
   const current = recommendations[selected];
-  // One player at a time, named by where it plays: "dialog:<id>" or "solo:<id>".
-  const [listeningTo, setListeningTo] = useState<string | null>(null);
+  // One player at a time, named by what plays and where: "listen:dialog:<id>" or "watch:solo:<id>".
+  const [playing, setPlaying] = useState<string | null>(null);
   const closed = useCallback(() => {
     setOpen(false);
-    setListeningTo((playing) => (playing?.startsWith("dialog:") ? null : playing));
+    setPlaying((now) => (now?.includes(":dialog:") ? null : now));
   }, []);
-  function listenProps(where: string) {
+  function playerProps(where: string) {
     return {
-      listening: listeningTo === where,
-      onListen: (on: boolean) => setListeningTo(on ? where : null),
+      listening: playing === `listen:${where}`,
+      onListen: (on: boolean) => setPlaying(on ? `listen:${where}` : null),
+      watching: playing === `watch:${where}`,
+      onWatch: (on: boolean) => setPlaying(on ? `watch:${where}` : null),
     };
   }
   const ticketMotion = useTicketMotion(
@@ -393,7 +396,13 @@ export function Poster({
                               {listen && (
                                 <ListenStage
                                   name={listen}
-                                  listening={listeningTo === `solo:${concert.id}`}
+                                  listening={playing === `listen:solo:${concert.id}`}
+                                />
+                              )}
+                              {listen && (
+                                <WatchLiveStage
+                                  name={listen}
+                                  watching={playing === `watch:solo:${concert.id}`}
                                 />
                               )}
                               {bookmark(r)}
@@ -405,7 +414,7 @@ export function Poster({
                                 artistHint={hint}
                                 onArtistOpen={dismissArtistHint}
                                 hidePhoto
-                                {...listenProps(`solo:${concert.id}`)}
+                                {...playerProps(`solo:${concert.id}`)}
                               />
                               <div className="solo-actions">
                                 <SaveButton
@@ -479,13 +488,19 @@ export function Poster({
                           Concert details and why it fits your Search.
                         </Dialog.Description>
                         {(current.concert.image ||
-                          listeningTo === `dialog:${current.concert.id}`) && (
+                          playing?.endsWith(`:dialog:${current.concert.id}`)) && (
                           <div className="dialog-media">
                             {photo(current, true)}
                             {listenTo(current) && (
                               <ListenStage
                                 name={listenTo(current) ?? ""}
-                                listening={listeningTo === `dialog:${current.concert.id}`}
+                                listening={playing === `listen:dialog:${current.concert.id}`}
+                              />
+                            )}
+                            {listenTo(current) && (
+                              <WatchLiveStage
+                                name={listenTo(current) ?? ""}
+                                watching={playing === `watch:dialog:${current.concert.id}`}
                               />
                             )}
                           </div>
@@ -498,7 +513,7 @@ export function Poster({
                             artistHint={hint}
                             onArtistOpen={dismissArtistHint}
                             hidePhoto
-                            {...listenProps(`dialog:${current.concert.id}`)}
+                            {...playerProps(`dialog:${current.concert.id}`)}
                           />
                           <div className="dialog-actions">
                             <SaveButton

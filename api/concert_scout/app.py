@@ -26,6 +26,7 @@ from concert_scout import (
     home,
     interpreter,
     limits,
+    live_index,
     security,
     share,
     spotify,
@@ -367,7 +368,7 @@ def create_app(
         if request.url.path.startswith("/share"):
             message = "That is not a Search you can share."
             return _failure(422, SearchError(code="invalid_share", message=message))
-        if request.url.path == "/artist":
+        if request.url.path in {"/artist", "/artist/live-clip"}:
             return _failure(422, SearchError(code="invalid_artist", message="Choose an Artist."))
         if request.url.path.startswith("/artists/"):
             return _failure(
@@ -453,6 +454,14 @@ def create_app(
         async def sync_catalog() -> list[sync.Step]:
             return await sync.run(services, dt.datetime.now(dt.UTC))
 
+        # Once a week: the live sessions that Watch Live opens from (1 YouTube unit per 50 videos).
+        if youtube_client:
+            sessions = youtube_client
+
+            @scheduled.get("/sync-live-clips")
+            async def sync_live_clips() -> list[live_index.Indexed]:
+                return await live_index.sync(sessions, services.redis)
+
         if accounts_client and mail and settings.supabase_secret_key:
             secret_key = settings.supabase_secret_key
 
@@ -473,6 +482,26 @@ def create_app(
     ) -> ArtistProfiles:
         await limit_visitor(request, "artist", limits.ARTIST_PER_HOUR)
         return ArtistProfiles(profiles=await find_artist_profiles(name, services))
+
+    @app.get("/artist/live-clip", response_model=live_index.LiveClipResult)
+    async def artist_live_clip(
+        request: Request, name: Annotated[str, Query(min_length=1, max_length=200)]
+    ) -> live_index.LiveClipResult:
+        await limit_visitor(request, "live-clip", limits.LIVE_CLIP_PER_HOUR)
+        unavailable = Refused(
+            503, "live_clips_unavailable", "Live clips are not answering. Try again soon."
+        )
+        if youtube_client is None:
+            raise unavailable
+        try:
+            clip = await live_index.find_clip(youtube_client, services.lastfm, services.redis, name)
+        except (youtube.QuotaExceeded, limits.DailyLimitReached):
+            message = "Live clips have reached their limit for today. Try again tomorrow."
+            raise Refused(503, "live_clips_limit", message) from None
+        except youtube.YouTubeError as exc:
+            logger.warning("Live clip lookup failed: %s", exc)
+            raise unavailable from None
+        return live_index.LiveClipResult(clip=clip)
 
     @app.get("/artists/suggest", response_model=suggest.ArtistSuggestions)
     async def artists_suggest(

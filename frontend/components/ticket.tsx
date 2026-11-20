@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArtistPanel } from "@/components/artist-panel";
 import { ConcertPhoto, SourceLink } from "@/components/concert-source";
 import { ListenButton, ListenStage } from "@/components/listen";
+import { WatchLiveButton, WatchLiveStage } from "@/components/watch-live";
 import { Paged } from "@/components/paged";
 import {
   byVenue,
@@ -130,10 +131,12 @@ type TicketProps = {
   // Shown once, on a visitor's first Ticket, because the name doesn't look like a button.
   artistHint?: boolean;
   onArtistOpen?: () => void;
-  /** Set where the photograph lives outside the Ticket, which then also holds Listen's stage. */
+  /** Set where the photograph lives outside the Ticket, which then also holds the players' stages. */
   hidePhoto?: boolean;
   listening?: boolean;
   onListen?: (listening: boolean) => void;
+  watching?: boolean;
+  onWatch?: (watching: boolean) => void;
   // More actions beside Tickets, for a Ticket whose host offers none of its own.
   actions?: ReactNode;
 };
@@ -144,14 +147,19 @@ export function Ticket({
   artistHint,
   onArtistOpen,
   hidePhoto,
-  listening: shared,
+  listening: sharedListening,
   onListen,
+  watching: sharedWatching,
+  onWatch,
   actions,
 }: TicketProps) {
   const { concert, reason, also = [] } = recommendation;
-  const [own, setOwn] = useState(false);
-  const listening = onListen ? !!shared : own;
-  const listen = onListen ?? setOwn;
+  // One player at a time, so a Ticket that holds its own state holds one name for it.
+  const [own, setOwn] = useState<"listen" | "watch" | null>(null);
+  const listening = onListen ? !!sharedListening : own === "listen";
+  const listen = onListen ?? ((on: boolean) => setOwn(on ? "listen" : null));
+  const watching = onWatch ? !!sharedWatching : own === "watch";
+  const watch = onWatch ?? ((on: boolean) => setOwn(on ? "watch" : null));
   const [view, setView] = useState<View>("details");
   const reduced = useReducedMotion();
   // A swapped pane takes the exact size the details had, and pages anything that does not fit.
@@ -193,6 +201,7 @@ export function Ticket({
             draggable={false}
           />
           {heard && <ListenStage name={heard} listening={listening} />}
+          {heard && <WatchLiveStage name={heard} watching={watching} />}
         </div>
       )}
       <div className="ticket-main" ref={main}>
@@ -244,6 +253,7 @@ export function Ticket({
               {(heard || lineup > 0 || also.length > 0) && (
                 <div className="ticket-pills">
                   {heard && <ListenButton name={heard} listening={listening} onListen={listen} />}
+                  {heard && <WatchLiveButton name={heard} watching={watching} onWatch={watch} />}
                   {lineup > 0 && (
                     <button
                       ref={focusAfterSwap("lineup")}

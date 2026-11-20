@@ -26,7 +26,7 @@ YouTube Data API v3 does not expose `intensityScoreNormalized` heatmap curves. S
 
 ### Step A — Zero-Quota Curated Live-Session Index
 Because `search.list` costs 100 quota units (max 100/day free), we **do not** rely on `search.list` for every Artist:
-- A weekly cron (`GET /sync-live-clips`, protected by `CRON_SECRET`) syncs the official public playlists of premier high-production live channels via `playlistItems.list` (**1 unit per 50 videos**):
+- A weekly cron (`GET /sync-live-clips`, protected by `CRON_SECRET`) syncs the official public uploads playlist of each premier high-production live channel via `playlistItems.list` (**1 unit per 50 videos**, the newest 1,500 uploads of each, so 210 units a week at most). A channel's uploads playlist is its channel ID with `UC` changed to `UU`, which keeps the sync free of playlist IDs that can move. A title pattern per channel keeps the live sessions and drops its other uploads:
   - NPR Tiny Desk Concerts
   - KEXP Live Performances
   - Boiler Room Sets
@@ -34,7 +34,8 @@ Because `search.list` costs 100 quota units (max 100/day free), we **do not** re
   - COLORS
   - Audiotree Live
   - BBC Radio 1 Live Lounge
-- Parse Artist name from each video's structured title pattern (e.g., `"Khruangbin: Tiny Desk Concert"`, `"Fred again.. | Boiler Room: London"`) and index `artist_key -> {video_id, channel, title, published_at}` in Supabase / Redis.
+- Index entries expire after 14 days under `live:index:{artist_key}`, kept in the order of the list above, which is the order a Ticket's clip is chosen from. Where an Artist has a whole-set video and single songs in one channel, the whole set is kept.
+- Parse Artist name from each video's structured title pattern (e.g., `"Khruangbin: Tiny Desk Concert"`, `"Fred again.. | Boiler Room: London"`) and index `artist_key -> [{video_id, title, session}]` in Redis.
 - Fallback: When an Artist is not in the curated index and a visitor explicitly clicks **Watch Live**, run one bounded `search.list` query (`"{artist} live performance"`, `videoEmbeddable=true`, `videoCategoryId=10`, strict daily cap of 60 calls/day in Redis) and cache the result for **30 days** (including negative misses for 14 days).
 
 ### Step B — Official Peak-Moment Start Time (`?start=<seconds>`)

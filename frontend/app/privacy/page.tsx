@@ -19,6 +19,8 @@ export default function PrivacyPage() {
         <h2>Artist details</h2>
         <p>Opening an Artist sends their name to Last.fm and to Spotify’s public catalog to show their details and page. This uses the app’s own credentials, not your accounts.</p>
         <p>Nothing loads from Spotify until you press Listen. Then the Preview is Spotify’s own player, shown in a frame. Your browser contacts Spotify, which sees your IP address and sets cookies and similar technologies on your device, and may allow its own partners to do the same. Their use is governed by <a href="https://www.spotify.com/legal/privacy-policy/" target="_blank" rel="noopener noreferrer">Spotify’s privacy policy</a> and <a href="https://www.spotify.com/legal/cookies-policy/" target="_blank" rel="noopener noreferrer">cookie policy</a>, which explain how to manage them. Spotify does not receive your Concert Scout Searches or Taste, and no connected Spotify account is involved. Your browser’s cookie settings can block these cookies; the Preview may then not play.</p>
+        <h2>Watch Live</h2>
+        <p>Pressing Watch Live sends the Artist’s name to the API, which finds an official live performance on YouTube with the app’s own key, not your account, and answers with its video and the moment to start at. Nothing loads from YouTube, and no YouTube cookie is set, until you press Watch Live. Then the clip is YouTube’s own player, in its privacy-enhanced mode at youtube-nocookie.com, shown in a frame. Your browser contacts Google, which sees your IP address and may set cookies once you play the video. Their use is governed by <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google’s privacy policy</a>. Google does not receive your Concert Scout Searches or Taste. Your browser’s cookie settings can block these cookies; the clip may then not play.</p>
         <h2>Data sources</h2>
         <p>
           Concert and Artist data comes from{" "}
@@ -28,8 +30,9 @@ export default function PrivacyPage() {
           <a href="https://listenbrainz.org" target="_blank" rel="noopener noreferrer">ListenBrainz</a>,{" "}
           <a href="https://www.last.fm" target="_blank" rel="noopener noreferrer">Last.fm</a>,{" "}
           <a href="https://www.geoapify.com" target="_blank" rel="noopener noreferrer">Geoapify</a>,{" "}
-          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> and{" "}
-          <a href="https://open.spotify.com" target="_blank" rel="noopener noreferrer">Spotify</a>.
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>,{" "}
+          <a href="https://open.spotify.com" target="_blank" rel="noopener noreferrer">Spotify</a> and{" "}
+          <a href="https://www.youtube.com" target="_blank" rel="noopener noreferrer">YouTube</a>.
         </p>
         <h2>Images</h2>
         <p>Ticket photos load directly from Ticketmaster, so Ticketmaster sees your IP address when they appear. JamBase photos pass through this site’s image cache; your browser does not request them directly from JamBase.</p>

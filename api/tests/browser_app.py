@@ -23,7 +23,7 @@ from concert_scout import suggest
 from concert_scout.app import create_app
 from concert_scout.models import SeedArtist, SimilarArtist
 from concert_scout.names import normalize
-from concert_scout.sources import listenbrainz, musicbrainz, resend, youtube
+from concert_scout.sources import listenbrainz, live_clips, musicbrainz, resend, youtube
 from concert_scout.sources.spotify import Client, Credentials, SpotifyArtist, not_allowed
 from tests import supabase_stack
 from tests.contracts import contract_model, forbidden_http, install_sources, settings_with
@@ -110,6 +110,28 @@ async def youtube_items(_: httpx.AsyncClient, playlist_id: str) -> list[dict[str
     if playlist_id == "PLcontractEmpty123":
         return []
     raise youtube.PlaylistNotFound
+
+
+CONTRACT_VIDEO = "contractVid"
+
+
+async def contract_live_search(_: httpx.AsyncClient, name: str) -> list[live_clips.LiveVideo]:
+    """Contract Artist has an official live session on YouTube. Nobody else does."""
+    if name != "Contract Artist":
+        return []
+    title = "Contract Artist: Live at Source Hall"
+    return [live_clips.LiveVideo(video_id=CONTRACT_VIDEO, title=title, session="Contract Sessions")]
+
+
+async def contract_live_details(
+    _: httpx.AsyncClient, video_ids: list[str]
+) -> dict[str, live_clips.Details]:
+    details = live_clips.Details(description="", duration=900, embeddable=True)
+    return {video_id: details for video_id in video_ids if video_id == CONTRACT_VIDEO}
+
+
+async def contract_live_comments(_: httpx.AsyncClient, __: str) -> list[live_clips.Comment]:
+    return [live_clips.Comment(text="4:12 the whole room sings", likes=120)]
 
 
 CONTRACT_SUGGEST_POOL = [
@@ -203,6 +225,9 @@ patch.setattr(Client, "artists", AsyncMock(side_effect=artists))
 patch.setattr(Client, "check", AsyncMock(side_effect=check))
 patch.setattr(resend, "send", AsyncMock())
 patch.setattr(youtube, "fetch_playlist_items", AsyncMock(side_effect=youtube_items))
+patch.setattr(live_clips, "search_videos", AsyncMock(side_effect=contract_live_search))
+patch.setattr(live_clips, "video_details", AsyncMock(side_effect=contract_live_details))
+patch.setattr(live_clips, "top_comments", AsyncMock(side_effect=contract_live_comments))
 patch.setattr(suggest, "musicbrainz_suggest", AsyncMock(side_effect=contract_suggest))
 patch.setattr(musicbrainz, "resolve", AsyncMock(side_effect=contract_resolve))
 patch.setattr(listenbrainz, "similar_artists", AsyncMock(side_effect=contract_similar))
