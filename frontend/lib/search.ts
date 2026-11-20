@@ -13,7 +13,7 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? localApi();
 
 export type Price = { min: number; max: number; currency: string };
 
-export type Artist = { name: string };
+export type Artist = { name: string; mbid?: string };
 
 export type Coordinates = { lat: number; lon: number };
 
