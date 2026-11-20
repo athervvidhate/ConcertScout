@@ -7,6 +7,7 @@ import {
   setAlertPlace,
   setAlertsEnabled,
   unfollowArtist,
+  unfollowVenue,
   useAlerts,
 } from "@/lib/alerts";
 import { SearchRefused } from "@/lib/search";
@@ -49,8 +50,8 @@ export function AlertSettings() {
     <section aria-labelledby="alerts-heading">
       <h2 id="alerts-heading">Alerts</h2>
       <p>
-        Follow an Artist from their name on any Ticket. Once a day, Concert Scout emails you about
-        their new Concerts near your Alert place. You get at most one email a day.
+        Follow an Artist from their name or a venue on any Ticket. Once a day, Concert Scout emails
+        you about their new Concerts near your Alert place. You get at most one email a day.
       </p>
 
       <form className="alert-place" onSubmit={savePlace}>
@@ -93,7 +94,7 @@ export function AlertSettings() {
           disabled={busy || !alerts.place}
           onChange={(event) => void act(() => setAlertsEnabled(event.target.checked))}
         />
-        Email me about new Concerts by Artists I follow
+        Email me about new Concerts from Artists and venues I follow
       </label>
 
       <h3>Followed Artists</h3>
@@ -110,6 +111,26 @@ export function AlertSettings() {
                 onClick={() => void act(() => unfollowArtist(artist.artist_key))}
               >
                 Unfollow<span className="sr-only"> {artist.name}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h3>Followed Venues</h3>
+      {(alerts.followed_venues ?? []).length === 0 ? (
+        <p>You follow no venues yet.</p>
+      ) : (
+        <ul className="followed-artists followed-venues">
+          {(alerts.followed_venues ?? []).map((venue) => (
+            <li key={venue.venue_key}>
+              <span>{[venue.name, venue.city].filter(Boolean).join(", ")}</span>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void act(() => unfollowVenue(venue.venue_key))}
+              >
+                Unfollow<span className="sr-only"> {venue.name}</span>
               </button>
             </li>
           ))}

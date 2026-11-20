@@ -42,3 +42,12 @@ async def test_a_failed_second_hop_keeps_the_first_and_does_not_switch_sources(
         found = await similarity.find_neighbours(client, client, FakeAsyncRedis(), [SEED])
     assert [(n.name, n.hops) for n in found] == [("Near", 1)]
     backup.assert_not_awaited()
+
+
+async def test_one_hop_stops_after_the_first_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
+    lookup = AsyncMock(return_value=[NEAR])
+    monkeypatch.setattr(listenbrainz, "similar_artists", lookup)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(forbidden_http)) as client:
+        found = await similarity.find_neighbours(client, None, FakeAsyncRedis(), [SEED], hops=1)
+    assert [(n.name, n.hops) for n in found] == [("Near", 1)]
+    lookup.assert_awaited_once()

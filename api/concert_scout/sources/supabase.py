@@ -31,8 +31,10 @@ REFETCH_GAP = 30.0
 CLOCK_LEEWAY = 10
 TABLE = "/rest/v1/saved_concerts"
 FOLLOWED = "/rest/v1/followed_artists"
+FOLLOWED_VENUES = "/rest/v1/followed_venues"
 SETTINGS = "/rest/v1/alert_settings"
 SENT = "/rest/v1/alerts_sent"
+TASTE = "/rest/v1/taste_profiles"
 COBILLING_RECORD = "/rest/v1/rpc/record_cobilling_bills"
 COBILLING_NEIGHBORS = "/rest/v1/rpc/cobilling_neighbors"
 EMBEDDINGS_UPSERT = "/rest/v1/rpc/upsert_artist_embeddings"
@@ -65,6 +67,36 @@ class SavedConcert(BaseModel):
 class FollowedArtist(BaseModel):
     artist_key: str
     name: str
+
+
+# Where a synced Taste came from. Spotify's own account data is never one of them (ADR 0003).
+type TasteSource = Literal[
+    "seed",
+    "csv",
+    "exportify",
+    "tunemymusic",
+    "youtube",
+    "lastfm",
+    "listenbrainz",
+    "history",
+    "list",
+]
+
+
+class TasteProfile(BaseModel):
+    """An Account's Taste: Artist names, favourites first, and when it was last saved."""
+
+    source: TasteSource
+    artists: list[str]
+    updated_at: dt.datetime
+
+
+class FollowedVenue(BaseModel):
+    venue_key: str
+    name: str
+    city: str | None = None
+    lat: float | None = None
+    lon: float | None = None
 
 
 class AlertSettings(BaseModel):
@@ -276,6 +308,44 @@ async def unfollow(
     await _send(client, request)
 
 
+async def list_followed_venues(
+    client: httpx.AsyncClient, publishable_key: str, account: Account
+) -> list[FollowedVenue]:
+    request = client.build_request(
+        "GET",
+        FOLLOWED_VENUES,
+        params={"select": "venue_key,name,city,lat,lon", "order": "followed_at.asc"},
+        headers=_as_person(account, publishable_key),
+    )
+    return _rows(await _send(client, request), FollowedVenue)
+
+
+async def follow_venue(
+    client: httpx.AsyncClient, secret_key: SecretStr, account: Account, venue: FollowedVenue
+) -> None:
+    """Following a venue again keeps the first follow and its spelling."""
+    request = client.build_request(
+        "POST",
+        FOLLOWED_VENUES,
+        params={"on_conflict": "user_id,venue_key"},
+        json=[{"user_id": account.id} | venue.model_dump()],
+        headers=_as_server(secret_key) | {"Prefer": "resolution=ignore-duplicates,return=minimal"},
+    )
+    await _send(client, request)
+
+
+async def unfollow_venue(
+    client: httpx.AsyncClient, publishable_key: str, account: Account, venue_key: str
+) -> None:
+    request = client.build_request(
+        "DELETE",
+        FOLLOWED_VENUES,
+        params={"venue_key": f"eq.{venue_key}"},
+        headers=_as_person(account, publishable_key),
+    )
+    await _send(client, request)
+
+
 async def alert_settings(
     client: httpx.AsyncClient, publishable_key: str, account: Account
 ) -> AlertSettings:
@@ -323,6 +393,57 @@ async def set_alerts_enabled(
     await _send(client, request)
 
 
+async def get_taste(
+    client: httpx.AsyncClient, publishable_key: str, account: Account
+) -> TasteProfile | None:
+    request = client.build_request(
+        "GET",
+        TASTE,
+        params={"select": "source,artists,updated_at"},
+        headers=_as_person(account, publishable_key),
+    )
+    rows = _rows(await _send(client, request), TasteProfile)
+    return rows[0] if rows else None
+
+
+async def put_taste(
+    client: httpx.AsyncClient,
+    secret_key: SecretStr,
+    account: Account,
+    source: TasteSource,
+    artists: list[str],
+) -> TasteProfile:
+    """Replaces the Account's Taste. Its `updated_at` is the moment of this write."""
+    row = {
+        "user_id": account.id,
+        "source": source,
+        "artists": artists,
+        "updated_at": dt.datetime.now(dt.UTC).isoformat(),
+    }
+    request = client.build_request(
+        "POST",
+        TASTE,
+        params={"on_conflict": "user_id"},
+        json=[row],
+        headers=_as_server(secret_key)
+        | {"Prefer": "resolution=merge-duplicates,return=representation"},
+    )
+    saved = _rows(await _send(client, request), TasteProfile)
+    if not saved:
+        raise SupabaseError("unreadable response: no row")
+    return saved[0]
+
+
+async def delete_taste(client: httpx.AsyncClient, publishable_key: str, account: Account) -> None:
+    request = client.build_request(
+        "DELETE",
+        TASTE,
+        params={"user_id": f"eq.{account.id}"},
+        headers=_as_person(account, publishable_key),
+    )
+    await _send(client, request)
+
+
 async def accounts_with_alerts(
     client: httpx.AsyncClient, secret_key: SecretStr
 ) -> list[AlertAccount]:
@@ -349,6 +470,23 @@ async def followed_by(
     followed: dict[str, list[FollowedArtist]] = {}
     for row in _rows(await _send(client, request), _FollowedRow):
         followed.setdefault(row.user_id, []).append(FollowedArtist(**row.model_dump()))
+    return followed
+
+
+async def followed_venues_by(
+    client: httpx.AsyncClient, secret_key: SecretStr, user_ids: list[str]
+) -> dict[str, list[FollowedVenue]]:
+    if not user_ids:
+        return {}
+    request = client.build_request(
+        "GET",
+        FOLLOWED_VENUES,
+        params={"select": "user_id,venue_key,name,city,lat,lon", "user_id": _among(user_ids)},
+        headers=_as_server(secret_key),
+    )
+    followed: dict[str, list[FollowedVenue]] = {}
+    for row in _rows(await _send(client, request), _FollowedVenueRow):
+        followed.setdefault(row.user_id, []).append(FollowedVenue(**row.model_dump()))
     return followed
 
 
@@ -396,6 +534,10 @@ async def email_of(client: httpx.AsyncClient, secret_key: SecretStr, user_id: st
 
 
 class _FollowedRow(FollowedArtist):
+    user_id: str
+
+
+class _FollowedVenueRow(FollowedVenue):
     user_id: str
 
 

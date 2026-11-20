@@ -111,6 +111,11 @@ function snapshot(): ImportedTaste | null {
   return cached.taste;
 }
 
+/** The Taste on this device right now, for code that runs outside a render. */
+export function readTaste(): ImportedTaste | null {
+  return snapshot();
+}
+
 export function keepTaste(taste: ImportedTaste): void {
   const stamped: ImportedTaste = taste.importedAt
     ? taste

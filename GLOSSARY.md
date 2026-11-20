@@ -10,7 +10,15 @@ _Avoid_: Query, chat, conversation, session
 
 **Taste**:
 What a person likes in music for the purpose of a Search, such as named artists or a plain description.
-_Avoid_: Preferences, profile, playlist info
+_Avoid_: Preferences, profile (except Taste Profile), playlist info
+
+**Taste Profile**:
+The Taste an Account keeps on every device: Artist names, favourites first, and where they came from. It never holds data from a Spotify account.
+_Avoid_: Synced Taste, saved profile
+
+**For You shelf**:
+The home shelf of Concerts in the next 60 days that suit a person's Taste, matched by code from Lineup names, the closest similar Artists and Artists who share bills with them. It never calls a model.
+_Avoid_: Recommendations (those are a Search's), feed
 
 **Concert**:
 A real-world live music event, as reported by its source. A festival is a Concert with a lineup.
@@ -61,6 +69,10 @@ _Avoid_: Profile, user, login
 **Preview**:
 Spotify's player for a Ticket's headliner, opened from Listen on the Ticket so a person can hear them before deciding.
 _Avoid_: Sample, snippet, embed (in copy)
+
+**Live clip**:
+An official YouTube performance of a Ticket's headliner, opened from Watch Live on the Ticket at the moment its chapters or most liked comment point to.
+_Avoid_: Video, embed (in copy), replay
 
 **Followed Artist**:
 An Artist a person with an Account chose to hear about.

@@ -21,6 +21,8 @@ TICKETMASTER_GAP = dt.timedelta(milliseconds=334)
 DAILY_CALLS = 5000
 # MusicBrainz blocks clients that average over 1 request a second.
 MUSICBRAINZ_GAP = dt.timedelta(seconds=1)
+# Each YouTube search costs 100 of the key's 10,000 daily units, so a day's few stay well under it.
+YOUTUBE_SEARCHES_PER_DAY = 60
 # Setlist.fm allows 2 requests a second on free keys.
 SETLISTFM_GAP = dt.timedelta(milliseconds=550)
 
@@ -38,6 +40,7 @@ return start - now
 SEARCHES_PER_HOUR = 10
 TASTE_PER_HOUR = 30
 ARTIST_PER_HOUR = 120
+LIVE_CLIP_PER_HOUR = 60
 # Each save or import looks its Concerts up on Ticketmaster.
 SAVES_PER_HOUR = 120
 # Each share writes one small record that lives for 90 days.
@@ -68,7 +71,7 @@ class SpendCapReached(Exception):
 
 
 class DailyLimitReached(Exception):
-    """Today's Ticketmaster calls are spent."""
+    """Today's calls to a source with a daily limit are spent."""
 
     def __init__(self, retry_after: int) -> None:
         super().__init__(f"retry after {retry_after}s")
@@ -78,10 +81,15 @@ class DailyLimitReached(Exception):
 async def ticketmaster_call(redis: Redis) -> None:
     """Count one call against today's limit, then wait for this caller's turn to make it."""
     try:
-        await _count_today(redis)
+        await _count_today(redis, "ticketmaster", DAILY_CALLS)
     except RedisError as exc:
         logger.warning("Limiter failed: %s", type(exc).__name__)
     await _take_turn(redis, "ticketmaster:next", TICKETMASTER_GAP)
+
+
+async def youtube_search_call(redis: Redis) -> None:
+    """Count one YouTube search against today's limit. Redis failures are the caller's to handle."""
+    await _count_today(redis, "youtube:search", YOUTUBE_SEARCHES_PER_DAY)
 
 
 async def musicbrainz_call(redis: Redis) -> None:
@@ -184,12 +192,12 @@ async def record_spend(redis: Redis, cost: Decimal) -> None:
         logger.warning("Spend not recorded: %s", type(exc).__name__)
 
 
-async def _count_today(redis: Redis) -> None:
+async def _count_today(redis: Redis, source: str, limit: int) -> None:
     now = dt.datetime.now(dt.UTC)
-    key = f"ticketmaster:calls:{now.date()}"
+    key = f"{source}:calls:{now.date()}"
     calls = await redis.incr(key)
     if calls == 1:
         await redis.expire(key, dt.timedelta(days=2))
-    if calls > DAILY_CALLS:
+    if calls > limit:
         tomorrow = dt.datetime.combine(now.date() + dt.timedelta(days=1), dt.time(), dt.UTC)
         raise DailyLimitReached(int((tomorrow - now).total_seconds()) + 1)

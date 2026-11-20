@@ -26,11 +26,13 @@ from concert_scout import (
     home,
     interpreter,
     limits,
+    live_index,
     security,
     share,
     spotify,
     suggest,
     sync,
+    taste_profile,
     warm,
 )
 from concert_scout.config import Settings
@@ -63,6 +65,7 @@ from concert_scout.sources import (
     spotify_catalog,
     supabase,
     ticketmaster,
+    venues,
     youtube,
 )
 from concert_scout.sources.spotify import SpotifyError
@@ -281,6 +284,7 @@ def create_app(
         if settings.resend_api_key
         else None
     )
+    wikidata = venues.make_wikidata_client(transport)
     setlistfm_client = (
         setlistfm.make_client(settings.setlistfm_api_key.get_secret_value(), transport)
         if settings.setlistfm_api_key
@@ -300,6 +304,7 @@ def create_app(
             await services.jambase.aclose()
         await services.geocoder.aclose()
         await services.musicbrainz.aclose()
+        await wikidata.aclose()
         await services.listenbrainz.aclose()
         await services.jev.aclose()
         if services.lastfm:
@@ -379,12 +384,17 @@ def create_app(
         if request.url.path.startswith("/share"):
             message = "That is not a Search you can share."
             return _failure(422, SearchError(code="invalid_share", message=message))
-        if request.url.path in ("/artist", "/artist/setlist"):
+        if request.url.path in {"/artist", "/artist/live-clip", "/artist/setlist"}:
             return _failure(422, SearchError(code="invalid_artist", message="Choose an Artist."))
+        if request.url.path == "/venue":
+            return _failure(422, SearchError(code="invalid_venue", message="Choose a venue."))
         if request.url.path.startswith("/artists/"):
             return _failure(
                 422, SearchError(code="invalid_artist", message="Enter an Artist name.")
             )
+        if request.url.path in taste_profile.PATHS:
+            message = "Check your Taste and place, then try again."
+            return _failure(422, SearchError(code="invalid_taste", message=message))
         if request.url.path.startswith(accounts.PREFIX):
             message = "That is not a Concert you can save."
             return _failure(422, SearchError(code="invalid_save", message=message))
@@ -419,12 +429,9 @@ def create_app(
         )
     )
     app.include_router(feedback.router(settings, services.redis, transport))
+    app.include_router(taste_profile.guest_router(settings, services))
     if accounts_client:
-        app.include_router(
-            accounts.router(
-                settings, accounts_client, services.redis, services.ticketmaster, services.geocoder
-            )
-        )
+        app.include_router(accounts.router(settings, accounts_client, services))
         assert settings.supabase_secret_key
         app.include_router(alerts.router(accounts_client, settings.supabase_secret_key))
 
@@ -465,6 +472,14 @@ def create_app(
         async def sync_catalog() -> list[sync.Step]:
             return await sync.run(services, dt.datetime.now(dt.UTC))
 
+        # Once a week: the live sessions that Watch Live opens from (1 YouTube unit per 50 videos).
+        if youtube_client:
+            sessions = youtube_client
+
+            @scheduled.get("/sync-live-clips")
+            async def sync_live_clips() -> list[live_index.Indexed]:
+                return await live_index.sync(sessions, services.redis)
+
         if accounts_client and mail and settings.supabase_secret_key:
             secret_key = settings.supabase_secret_key
 
@@ -486,6 +501,21 @@ def create_app(
         await limit_visitor(request, "artist", limits.ARTIST_PER_HOUR)
         return ArtistProfiles(profiles=await find_artist_profiles(name, services))
 
+    @app.get("/venue", response_model=venues.VenueCharacter, response_model_exclude_none=True)
+    async def venue(
+        request: Request,
+        name: Annotated[str, Query(min_length=1, max_length=200)],
+        city: Annotated[str | None, Query(min_length=1, max_length=120)] = None,
+        lat: Annotated[float | None, Query(ge=-90, le=90)] = None,
+        lon: Annotated[float | None, Query(ge=-180, le=180)] = None,
+    ) -> venues.VenueCharacter:
+        if (lat is None) != (lon is None):
+            raise Refused(422, "invalid_venue", "Send both latitude and longitude, or neither.")
+        await limit_visitor(request, "venue", venues.VENUE_PER_HOUR)
+        return await venues.lookup(
+            services.musicbrainz, wikidata, services.redis, name, city, lat, lon
+        )
+
     @app.get(
         "/artist/setlist",
         response_model=setlistfm.SetlistSummary,
@@ -504,6 +534,32 @@ def create_app(
         except setlistfm.SetlistfmError as exc:
             logger.warning("Setlist lookup failed: %s", exc)
             return setlistfm.SetlistSummary(artist=name)
+
+    @app.get("/artist/live-clip", response_model=live_index.LiveClipResult)
+    async def artist_live_clip(
+        request: Request, name: Annotated[str, Query(min_length=1, max_length=200)]
+    ) -> live_index.LiveClipResult:
+        await limit_visitor(request, "live-clip", limits.LIVE_CLIP_PER_HOUR)
+        unavailable = Refused(
+            503, "live_clips_unavailable", "Live clips are not answering. Try again soon."
+        )
+        if youtube_client is None:
+            raise unavailable
+        try:
+            clip = await live_index.find_clip(
+                youtube_client,
+                services.redis,
+                name,
+                lastfm_client=services.lastfm,
+                setlistfm_client=setlistfm_client,
+            )
+        except (youtube.QuotaExceeded, limits.DailyLimitReached):
+            message = "Live clips have reached their limit for today. Try again tomorrow."
+            raise Refused(503, "live_clips_limit", message) from None
+        except youtube.YouTubeError as exc:
+            logger.warning("Live clip lookup failed: %s", exc)
+            raise unavailable from None
+        return live_index.LiveClipResult(clip=clip)
 
     @app.get("/artists/suggest", response_model=suggest.ArtistSuggestions)
     async def artists_suggest(
