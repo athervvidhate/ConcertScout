@@ -29,6 +29,7 @@ from concert_scout import (
     security,
     share,
     spotify,
+    suggest,
     sync,
     warm,
 )
@@ -368,6 +369,10 @@ def create_app(
             return _failure(422, SearchError(code="invalid_share", message=message))
         if request.url.path == "/artist":
             return _failure(422, SearchError(code="invalid_artist", message="Choose an Artist."))
+        if request.url.path.startswith("/artists/"):
+            return _failure(
+                422, SearchError(code="invalid_artist", message="Enter an Artist name.")
+            )
         if request.url.path.startswith(accounts.PREFIX):
             message = "That is not a Concert you can save."
             return _failure(422, SearchError(code="invalid_save", message=message))
@@ -468,6 +473,36 @@ def create_app(
     ) -> ArtistProfiles:
         await limit_visitor(request, "artist", limits.ARTIST_PER_HOUR)
         return ArtistProfiles(profiles=await find_artist_profiles(name, services))
+
+    @app.get("/artists/suggest", response_model=suggest.ArtistSuggestions)
+    async def artists_suggest(
+        request: Request,
+        q: Annotated[str, Query(min_length=1, max_length=100)],
+        limit: Annotated[int, Query(ge=1, le=suggest.MAX_SUGGEST_LIMIT)] = (
+            suggest.DEFAULT_SUGGEST_LIMIT
+        ),
+    ) -> suggest.ArtistSuggestions:
+        if not q.strip():
+            raise Refused(422, "invalid_artist", "Enter an Artist name.")
+        await limit_visitor(request, "suggest", suggest.SUGGEST_PER_HOUR)
+        return suggest.ArtistSuggestions(
+            artists=await suggest.suggest_artists(q, services, limit=limit)
+        )
+
+    @app.get("/artists/related", response_model=suggest.ArtistSuggestions)
+    async def artists_related(
+        request: Request,
+        names: Annotated[list[str], Query(min_length=1, max_length=suggest.MAX_INPUT_NAMES)],
+        limit: Annotated[int, Query(ge=1, le=suggest.MAX_RELATED_LIMIT)] = (
+            suggest.DEFAULT_RELATED_LIMIT
+        ),
+    ) -> suggest.ArtistSuggestions:
+        if not suggest.parse_names(names):
+            raise Refused(422, "invalid_artist", "Choose at least one Artist.")
+        await limit_visitor(request, "related", suggest.RELATED_PER_HOUR)
+        return suggest.ArtistSuggestions(
+            artists=await suggest.related_artists(names, services, limit=limit)
+        )
 
     # A POST, so the playlist URL stays out of access logs.
     @app.post("/taste/youtube-playlist")

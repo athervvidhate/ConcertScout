@@ -8,6 +8,7 @@ type Props = {
   locationLabel: string;
   onLocation: () => void;
   onTaste: () => void;
+  onPickArtists?: () => void;
 };
 
 export function HomeGuide({
@@ -15,6 +16,7 @@ export function HomeGuide({
   locationLabel,
   onLocation,
   onTaste,
+  onPickArtists,
 }: Props) {
   return (
     <div className="home-guide">
@@ -24,12 +26,13 @@ export function HomeGuide({
           <div>
             <h2 id="home-yours">Make it yours</h2>
             <p>
-              Bring the Artists you already play. Connect Spotify or import your
-              Taste, and share your location to find Concerts near you.
+              Bring the Artists you already play. Connect Spotify, pick 3–5 Artists,
+              or import a playlist CSV, and share your location to find Concerts near you.
             </p>
           </div>
           <div className="yours-actions">
             <Button onClick={onTaste}>Add your Taste</Button>
+            {onPickArtists && <Button onClick={onPickArtists}>Pick Artists</Button>}
             <Button onClick={onLocation}>{locationLabel}</Button>
           </div>
         </section>
