@@ -154,7 +154,7 @@ async def _catalog(
                 {
                     "geoCountryIso2": catalog.COUNTRY,
                     "dateModifiedFrom": _stamp(state.checkpoint),
-                    "eventDateFrom": str(today - dt.timedelta(days=1)),
+                    "eventDateFrom": str(today),
                     "eventDateTo": str(horizon + dt.timedelta(days=1)),
                 },
                 today,
@@ -197,7 +197,7 @@ async def _catalog(
                 {
                     "geoCountryIso2": catalog.COUNTRY,
                     "geoStateIso": region,
-                    "eventDateFrom": str(today - dt.timedelta(days=1)),
+                    "eventDateFrom": str(today),
                     "eventDateTo": str((state.horizon or horizon) + dt.timedelta(days=1)),
                 },
                 today,
