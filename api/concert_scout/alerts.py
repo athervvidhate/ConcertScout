@@ -27,8 +27,8 @@ from concert_scout.models import Concert, Place, Price
 from concert_scout.names import normalize
 from concert_scout.pipeline import Services
 from concert_scout.security import Refused
-from concert_scout.sources import resend, supabase
-from concert_scout.sources.supabase import AlertAccount, FollowedArtist
+from concert_scout.sources import resend, supabase, venues
+from concert_scout.sources.supabase import AlertAccount, FollowedArtist, FollowedVenue
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +61,33 @@ def valid_token(key: SecretStr, user_id: str, token: str) -> bool:
     return hmac.compare_digest(unsubscribe_token(key, user_id), token)
 
 
-def matching(concerts: Sequence[Concert], followed: Sequence[FollowedArtist]) -> list[Concert]:
-    """Concerts whose source Lineup names a Followed Artist, soonest first."""
-    keys = {artist.artist_key for artist in followed}
-    found = [c for c in concerts if any(normalize(a.name) in keys for a in c.artists)]
+def _matches_venue(concert: Concert, venue_keys: set[str]) -> bool:
+    if not concert.venue or not venue_keys:
+        return False
+    return (
+        venues.venue_key(concert.venue, concert.city) in venue_keys
+        or normalize(concert.venue) in venue_keys
+    )
+
+
+def matching(
+    concerts: Sequence[Concert],
+    followed: Sequence[FollowedArtist],
+    followed_venues: Sequence[FollowedVenue] = (),
+) -> list[Concert]:
+    """Concerts matching a Followed Artist or Followed Venue, deduplicated and soonest first."""
+    artist_keys = {artist.artist_key for artist in followed}
+    venue_keys = {venue.venue_key for venue in followed_venues}
+    seen: set[str] = set()
+    found: list[Concert] = []
+    for concert in concerts:
+        if concert.id in seen:
+            continue
+        by_artist = any(normalize(a.name) in artist_keys for a in concert.artists)
+        by_venue = _matches_venue(concert, venue_keys)
+        if by_artist or by_venue:
+            seen.add(concert.id)
+            found.append(concert)
     return sorted(found, key=lambda c: (c.date or dt.date.max, c.time or dt.time.min))
 
 
@@ -126,7 +149,7 @@ class Card:
 
 def card(concert: Concert, now: dt.datetime) -> Card:
     return Card(
-        lineup=", ".join(a.name for a in concert.artists),
+        lineup=", ".join(a.name for a in concert.artists) or concert.name,
         tickets=concert.url,
         when=when(concert),
         where=", ".join(f for f in (concert.venue, concert.city, concert.region) if f) or None,
@@ -136,12 +159,18 @@ def card(concert: Concert, now: dt.datetime) -> Card:
     )
 
 
-def subject(concerts: Sequence[Concert]) -> str:
+def subject(
+    concerts: Sequence[Concert], *, has_artists: bool = True, has_venues: bool = False
+) -> str:
     if len(concerts) == 1:
         concert = concerts[0]
         where = f" in {concert.city}" if concert.city else ""
-        who = concert.name if concert.festival else concert.artists[0].name
+        who = concert.name if concert.festival or not concert.artists else concert.artists[0].name
         return f"{who} has a new Concert{where}"
+    if has_artists and has_venues:
+        return f"{len(concerts)} new Concerts from Artists and venues you follow"
+    if has_venues and not has_artists:
+        return f"{len(concerts)} new Concerts at venues you follow"
     return f"{len(concerts)} new Concerts from Artists you follow"
 
 
@@ -149,7 +178,10 @@ def body(
     cards: Sequence[Card], more: int, place: Place, site_url: str, unsubscribe_url: str
 ) -> str:
     """The plain-text part, for mail clients that show no HTML."""
-    lines = [f"New Concerts near {place.name} from Artists you follow on Concert Scout.", ""]
+    lines = [
+        f"New Concerts near {place.name} from Artists and venues you follow on Concert Scout.",
+        "",
+    ]
     for shown in cards:
         lines.append(shown.lineup)
         prices = " · ".join(f for f in (shown.price, shown.on_sale) if f) or None
@@ -159,7 +191,7 @@ def body(
         lines.extend([f"And {more} more. The next Alert will include them.", ""])
     lines.extend(
         [
-            f"Manage your Followed Artists and Alert place: {site_url}/account",
+            f"Manage your Followed Artists, Followed Venues and Alert place: {site_url}/account",
             f"Stop these emails: {unsubscribe_url}",
         ]
     )
@@ -194,12 +226,15 @@ def email(
     site_url: str,
     unsubscribe_url: str,
     now: dt.datetime,
+    *,
+    has_artists: bool = True,
+    has_venues: bool = False,
 ) -> Email:
     """One Alert: at most MAX_CONCERTS_PER_EMAIL Concerts, the rest counted for the next one."""
     shown = concerts[:MAX_CONCERTS_PER_EMAIL]
     cards = [card(c, now) for c in shown]
     more = len(concerts) - len(shown)
-    title = subject(shown)
+    title = subject(shown, has_artists=has_artists, has_venues=has_venues)
     return Email(
         subject=title,
         text=body(cards, more, place, site_url, unsubscribe_url),
@@ -240,12 +275,16 @@ async def run(
         accounts = await supabase.accounts_with_alerts(accounts_client, secret_key)
         ids = [a.user_id for a in accounts]
         followed = await supabase.followed_by(accounts_client, secret_key, ids)
+        followed_venues = await supabase.followed_venues_by(accounts_client, secret_key, ids)
         sent = await supabase.sent_to(accounts_client, secret_key, ids)
         outcome.accounts = len(accounts)
-        for group in _groups([a for a in accounts if followed.get(a.user_id)]).values():
+        eligible = [
+            a for a in accounts if followed.get(a.user_id) or followed_venues.get(a.user_id)
+        ]
+        for group in _groups(eligible).values():
             if time.monotonic() > deadline or outcome.sent >= DAILY_EMAILS:
                 break
-            names = list({f.name: None for a in group for f in followed[a.user_id]})
+            names = list({f.name: None for a in group for f in followed.get(a.user_id, [])})
             try:
                 concerts = await pool.find_concerts(
                     services.ticketmaster,
@@ -265,9 +304,26 @@ async def run(
                 if outcome.sent >= DAILY_EMAILS:
                     break
                 told = sent.get(account.user_id, set())
-                new = [c for c in matching(concerts, followed[account.user_id]) if c.id not in told]
+                artists = followed.get(account.user_id, [])
+                account_venues = followed_venues.get(account.user_id, [])
+                new = [c for c in matching(concerts, artists, account_venues) if c.id not in told]
+                artist_keys = {a.artist_key for a in artists}
+                venue_keys = {v.venue_key for v in account_venues}
+                has_artists = any(
+                    any(normalize(a.name) in artist_keys for a in c.artists) for c in new
+                )
+                has_venues = any(_matches_venue(c, venue_keys) for c in new)
                 if new and await _send(
-                    accounts_client, secret_key, mail, account, new, site_url, api_url, now
+                    accounts_client,
+                    secret_key,
+                    mail,
+                    account,
+                    new,
+                    site_url,
+                    api_url,
+                    now,
+                    has_artists=has_artists,
+                    has_venues=has_venues,
                 ):
                     outcome.sent += 1
     except supabase.SupabaseError as exc:
@@ -287,6 +343,9 @@ async def _send(
     site_url: str,
     api_url: str,
     now: dt.datetime,
+    *,
+    has_artists: bool = True,
+    has_venues: bool = False,
 ) -> bool:
     shown = concerts[:MAX_CONCERTS_PER_EMAIL]
     try:
@@ -297,7 +356,15 @@ async def _send(
             {"account": account.user_id, "token": unsubscribe_token(secret_key, account.user_id)}
         )
         one_click = f"{api_url}/alerts/unsubscribe?{query}"
-        alert = email(concerts, account.place, site_url, f"{site_url}/unsubscribe?{query}", now)
+        alert = email(
+            concerts,
+            account.place,
+            site_url,
+            f"{site_url}/unsubscribe?{query}",
+            now,
+            has_artists=has_artists,
+            has_venues=has_venues,
+        )
         await resend.send(
             mail,
             address,
