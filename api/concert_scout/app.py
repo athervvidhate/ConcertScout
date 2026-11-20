@@ -57,6 +57,7 @@ from concert_scout.sources import (
     listenbrainz,
     musicbrainz,
     resend,
+    setlistfm,
     spotify_catalog,
     supabase,
     ticketmaster,
@@ -219,6 +220,11 @@ def create_app(
         if settings.resend_api_key
         else None
     )
+    setlistfm_client = (
+        setlistfm.make_client(settings.setlistfm_api_key.get_secret_value(), transport)
+        if settings.setlistfm_api_key
+        else None
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -240,6 +246,8 @@ def create_app(
             await accounts_client.aclose()
         if mail:
             await mail.aclose()
+        if setlistfm_client:
+            await setlistfm_client.aclose()
 
     app = FastAPI(title="Concert Scout", lifespan=lifespan)
     app.add_middleware(OneCallerPerRequest)
@@ -303,7 +311,7 @@ def create_app(
         if request.url.path.startswith("/share"):
             message = "That is not a Search you can share."
             return _failure(422, SearchError(code="invalid_share", message=message))
-        if request.url.path == "/artist":
+        if request.url.path in ("/artist", "/artist/setlist"):
             return _failure(422, SearchError(code="invalid_artist", message="Choose an Artist."))
         if request.url.path.startswith(accounts.PREFIX):
             message = "That is not a Concert you can save."
@@ -402,6 +410,25 @@ def create_app(
     ) -> ArtistProfiles:
         await limit_visitor(request, "artist", limits.ARTIST_PER_HOUR)
         return ArtistProfiles(profiles=await find_artist_profiles(name, services))
+
+    @app.get(
+        "/artist/setlist",
+        response_model=setlistfm.SetlistSummary,
+        response_model_exclude_none=True,
+    )
+    async def artist_setlist(
+        request: Request,
+        name: Annotated[str, Query(min_length=1, max_length=200)],
+        mbid: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
+    ) -> setlistfm.SetlistSummary:
+        await limit_visitor(request, "setlist", limits.ARTIST_PER_HOUR)
+        if not setlistfm_client:
+            return setlistfm.SetlistSummary(artist=name)
+        try:
+            return await setlistfm.artist_setlist(setlistfm_client, services.redis, name, mbid=mbid)
+        except setlistfm.SetlistfmError as exc:
+            logger.warning("Setlist lookup failed: %s", exc)
+            return setlistfm.SetlistSummary(artist=name)
 
     # A POST, so the username stays out of access logs.
     @app.post("/taste/{source}")
