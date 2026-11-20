@@ -17,6 +17,11 @@ Terms follow [GLOSSARY.md](../../GLOSSARY.md). Choices with lasting trade-offs l
 | [05-platform](05-platform.md) | Local running, security, limits and hosting |
 | [06-evals](06-evals.md) | How we judge recommendation quality |
 | [07-tickets](07-tickets.md) | The build order, as GitHub Issues |
+| [08-universal-taste-hub](08-universal-taste-hub.md) | Zero-dollar Taste connections beyond Spotify |
+| [09-hybrid-retrieval](09-hybrid-retrieval.md) | Live Co-Billing Graph and grounded `pgvector` retrieval |
+| [10-poster-sculpting](10-poster-sculpting.md) | Instant Poster dials and Rocchio taste steering |
+| [11-live-show-intelligence](11-live-show-intelligence.md) | Setlist DNA, official peak-moment live clips, and venue character |
+| [12-next-wave-roadmap](12-next-wave-roadmap.md) | Multi-agent waves, file ownership, and deferred backlog |
 
 ## Decisions
 
