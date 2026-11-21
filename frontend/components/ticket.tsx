@@ -26,6 +26,7 @@ import {
   formatPrice,
   presaleLine,
 } from "@/lib/format";
+import { gradeLabel } from "@/lib/grade";
 import { headlinerOf, listenTo, nameOf } from "@/lib/lineup";
 import type { Concert, Recommendation } from "@/lib/search";
 import { artistMbid } from "@/lib/setlist";
@@ -208,6 +209,7 @@ export function Ticket({
     formatConcertTime(concert),
   ].filter(Boolean);
   const presale = presaleLine(concert);
+  const gradeText = gradeLabel(recommendation.grade);
 
   return (
     <article className="ticket" data-color={rank % 5}>
@@ -264,8 +266,14 @@ export function Ticket({
               {matched.length > 0 && (
                 <MatchLine matched={matched} onOpen={onArtistOpen} onMore={() => swap("lineup")} />
               )}
-              {reason && (
-                <p>
+              {(gradeText || reason) && (
+                <p className="ticket-reason">
+                  {gradeText && (
+                    <span className="ticket-grade" data-grade={recommendation.grade}>
+                      {gradeText}
+                    </span>
+                  )}
+                  {gradeText && (matched[0] || reason) && " "}
                   {/* A festival's reason describes its best-suited Artist, so it says who. */}
                   {matched[0] && <strong>{matched[0]}: </strong>}
                   {reason}

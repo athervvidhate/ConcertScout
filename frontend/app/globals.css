@@ -133,6 +133,8 @@ html[data-search-kept] :is(.headline,.home-intro,.home-guide){display:none}
 .concert-card:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,color-mix(in srgb,var(--shade) 0%,transparent) 35%,color-mix(in srgb,var(--shade) 82%,transparent))}
 .card-date{position:absolute;left:14px;top:14px;z-index:2;pointer-events:none;display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:999px;background:var(--surface);color:var(--ink);font-size:12.5px;font-weight:650;font-variant-numeric:tabular-nums}
 .card-body{position:absolute;left:20px;right:20px;bottom:18px;z-index:2}
+.card-grade{display:inline-flex;align-items:center;margin:0 0 6px;padding:2px 9px;border-radius:999px;background:rgb(255 255 255/.18);color:#fff;font-size:12px;font-weight:650;line-height:1.35;letter-spacing:.01em}
+.card-grade[data-grade=seed]{background:var(--accent);color:var(--on-accent)}
 .card-name{margin:0;font:400 clamp(26px,2.5vw,36px)/.98 var(--font-poster),sans-serif;text-transform:uppercase;overflow-wrap:anywhere}
 .concert-card.hero .card-name{font-size:clamp(38px,4.2vw,62px)}
 .card-meta{margin:8px 0 0;font-size:14px;opacity:.9}
@@ -456,6 +458,8 @@ button:disabled { opacity:.6; cursor:default; }
 .ticket .date { display:block; color:var(--accent-ink); font-size:15px; font-weight:650; font-variant-numeric:tabular-nums; }
 .ticket h2 { font:400 clamp(36px,4vw,54px)/1.05 var(--font-poster),sans-serif; text-transform:uppercase; margin:12px 0 16px; padding-right:12px; }
 .ticket p { font-size:16px; line-height:1.5; margin:0 0 16px; }
+.ticket-grade { display:inline-block; margin-right:8px; padding:1px 9px; border-radius:999px; border:1px solid var(--line); background:var(--soft); color:var(--ink); font-size:12.5px; font-weight:650; line-height:1.45; vertical-align:1px; }
+.ticket-grade[data-grade=seed] { border-color:color-mix(in srgb,var(--accent) 35%,var(--line)); color:var(--accent-ink); }
 .ticket .venue { font-weight:600; }
 .ticket .presale { font-size:14px; font-weight:600; }
 .ticket-stub { display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin:20px 0 0; }
@@ -565,6 +569,8 @@ button:disabled { opacity:.6; cursor:default; }
 .concerts-list .card-photo { position:relative; grid-column:3; grid-row:1; width:100%; aspect-ratio:16/10; border-radius:12px; overflow:hidden; }
 .concerts-list .card-why { display:block; }
 .concerts-list .card-meta,.concerts-list .card-bill { color:var(--ink-2); }
+.concerts-list .card-grade { border:1px solid var(--line); background:var(--soft); color:var(--ink); text-shadow:none; }
+.concerts-list .card-grade[data-grade=seed] { border-color:color-mix(in srgb,var(--accent) 35%,var(--line)); background:var(--soft); color:var(--accent-ink); }
 .concerts-grid .solo { background:var(--surface); color:var(--ink); aspect-ratio:auto!important; }
 .concerts-grid .solo::after { display:none; }
 @media(max-width:800px) { .concerts-list .concert-card { grid-template-columns:80px minmax(0,1fr) 160px; gap:16px; } }

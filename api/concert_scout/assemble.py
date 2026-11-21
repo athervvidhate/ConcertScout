@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 
 from concert_scout.matching import NARROW_GENRE_WEIGHT, Candidate, Match
-from concert_scout.models import Concert, Recommendation
+from concert_scout.models import Concert, Grade, Recommendation
 from concert_scout.names import normalize
 
 logger = logging.getLogger(__name__)
@@ -91,6 +91,12 @@ def from_levels(levels: Mapping[str, int], shortlist: Sequence[Candidate]) -> li
         lift = 1 if len(concerts[id_].lineup_match) >= LINEUP_MATCH_LIFT else 0
         return min(levels[id_] + lift, 3)
 
+    def grade_for(id_: str) -> Grade:
+        candidate = concerts[id_]
+        if candidate.match and candidate.match.signal == "seed":
+            return "seed"
+        return "strong" if level(id_) >= 3 else "fair"
+
     def order(id_: str) -> tuple[int, int, float, int]:
         match = concerts[id_].match
         named = len(concerts[id_].lineup_match)
@@ -101,6 +107,7 @@ def from_levels(levels: Mapping[str, int], shortlist: Sequence[Candidate]) -> li
             concert=concerts[id_].concert,
             reason=_reason(concerts[id_]),
             score=levels[id_],
+            grade=grade_for(id_),
             lineup_match=concerts[id_].lineup_match,
         )
         for id_ in sorted(good, key=order)
@@ -109,6 +116,7 @@ def from_levels(levels: Mapping[str, int], shortlist: Sequence[Candidate]) -> li
         Recommendation(
             concert=candidate.concert,
             reason=_neutral_reason(match),
+            grade="seed",
             lineup_match=candidate.lineup_match,
         )
         for candidate in shortlist
