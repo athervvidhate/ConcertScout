@@ -40,9 +40,11 @@ Because `search.list` costs 100 quota units (max 100/day free), we **do not** re
 
 ### Step B — Official Peak-Moment Start Time (`?start=<seconds>`)
 For the chosen `video_id`, determine the best start timestamp using two 1-unit official calls (cached 30 days):
-1. **Chapter / Description Tracklist Match** (`videos.list`, `part=snippet,contentDetails`): Parse standard `MM:SS` / `H:MM:SS` chapter lines in `snippet.description`. If a track name matches one of the Artist's top Last.fm tracks or Setlist.fm staples, jump straight to that timestamp.
-2. **Crowd-Sourced Top Comment Timestamp** (`commentThreads.list`, `order=relevance`, `maxResults=15`): Scan the highest-liked comments for a clear `MM:SS` / `H:MM:SS` timestamp within `[15s, duration - 30s]` (filtering out spam/bot comments). The most-liked timestamp comment on live concert videos almost always marks the peak drop, solo, or crowd moment—giving a legal, official equivalent to "Most Replayed".
-3. **Clean Fallback**: If the video is a full set (`duration > 10m`) with neither chapters nor timestamped comments, start at `min(180s, 20% of duration)` to skip tuning/intros; if a single-song live clip (`<= 10m`), start at `0`.
+1. **The crowd's moment** (`commentThreads.list`, `order=relevance`, `maxResults=100`, still 1 unit): every `MM:SS` / `H:MM:SS` stamp within `[15s, duration - 30s]` in a comment with at most 3 stamps and no link votes once plus once per like. Stamps within 20 seconds count as one moment, and the moment with the most votes wins if it has at least 10. It opens on its own most voted stamp. On 20 popular live sets it gave a start in 19, where the single most-liked of 15 comments gave one in 11.
+2. **Chapter of a best-known track**: parse `MM:SS` / `H:MM:SS` chapter lines in `snippet.description`, or, with none there, the longest tracklist a commenter wrote out. If a line names one of the Artist's Setlist.fm staples or top Last.fm tracks, jump to it.
+3. **Clean Fallback**: a full set (`duration > 10m`) starts at `min(180s, 20% of duration)` to skip tuning and intros; a single-song live clip (`<= 10m`) starts at `0`.
+
+Matching an Artist keeps the symbols that tell two Artists apart, so `Omar+` never gets a video of `Omar`. A search result must name the Artist in whole words; anyone's upload counts, a fan's included.
 
 ### Ticket UI Integration
 - Inside the fixed-height Ticket media column (preserving [04-interface.md](04-interface.md)), offer a clean switch when available: **Photo** · **Listen** (Spotify Preview) · **Watch Live** (official `youtube-nocookie.com/embed/{video_id}?start={seconds}&rel=0`).

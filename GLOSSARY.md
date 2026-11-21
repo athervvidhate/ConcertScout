@@ -71,7 +71,7 @@ Spotify's player for a Ticket's headliner, opened from Listen on the Ticket so a
 _Avoid_: Sample, snippet, embed (in copy)
 
 **Live clip**:
-An official YouTube performance of a Ticket's headliner, opened from Watch Live on the Ticket at the moment its chapters or most liked comment point to.
+A YouTube performance of a Ticket's headliner, opened from Watch Live on the Ticket at the moment its viewers' comments agree on, or at a best-known track.
 _Avoid_: Video, embed (in copy), replay
 
 **Followed Artist**:
