@@ -248,7 +248,7 @@ class Youtube:
             return httpx.Response(200, json={"items": threads})
         if path == "/search":
             items = [
-                {"id": {"videoId": i}, "snippet": {"title": t, "channelTitle": c, "channelId": c}}
+                {"id": {"videoId": i}, "snippet": {"title": t, "channelTitle": c}}
                 for i, t, c in self.search
             ]
             return httpx.Response(200, json={"items": items})
@@ -537,44 +537,27 @@ async def test_an_artist_the_index_lacks_costs_one_search_and_a_miss_is_kept_14_
     assert await redis.get("live:clip:nobody known") == b'{"clip":null}'
 
 
-async def test_a_search_result_must_be_the_artists_own_channel_or_a_curated_session() -> None:
-    kexp = live_index.SERIES[1].channel_id
+async def test_a_search_result_must_carry_the_artists_name_and_embeds_by_its_channel() -> None:
     api = Youtube(
-        videos={"theirs": video("PT4M"), "session": video("PT4M")},
+        videos={"theirs": video("PT4M")},
         search=[
             ("other", "Someone Else - Live at the Fillmore", "Venue TV"),
-            ("fan", "Khruangbin - Live at the Greek (full show)", "Razvan Robu"),
-            ("theirs", "Khruangbin: Live at Funkhaus Berlin", "KhruangbinVEVO"),
-            ("session", "Khruangbin - Maria También (Live on KEXP)", kexp),
+            ("theirs", "Khruangbin: Live at Funkhaus Berlin", "Funkhaus"),
         ],
     )
     redis = FakeAsyncRedis()
     async with api.client() as client:
         clip = await live_index.find_clip(client, redis, "Khruangbin")
     assert clip == live_clips.LiveClip(
-        video_id="theirs",
-        title="Khruangbin: Live at Funkhaus Berlin",
-        session="KhruangbinVEVO",
-        start=0,
+        video_id="theirs", title="Khruangbin: Live at Funkhaus Berlin", session="Funkhaus", start=0
     )
-    assert api.params("/videos")["id"] == "theirs,session"
-
-
-async def test_a_fan_upload_is_never_a_live_clip() -> None:
-    api = Youtube(
-        videos={"fan": video("PT4M")},
-        search=[("fan", "The Strokes - The Adults Are Talking (Live SNL)", "Razvan Robu")],
-    )
-    redis = FakeAsyncRedis()
-    async with api.client() as client:
-        assert await live_index.find_clip(client, redis, "The Strokes") is None
-    assert api.paths() == ["/search"]
+    assert api.paths() == ["/search", "/videos", "/commentThreads"]
 
 
 async def test_an_indexed_artist_whose_videos_cannot_play_falls_back_to_a_search() -> None:
     api = Youtube(
         videos={"locked": video(embeddable=False), "found": video("PT4M")},
-        search=[("found", "Khruangbin Live", "Khruangbin")],
+        search=[("found", "Khruangbin Live", "A Channel")],
     )
     redis = FakeAsyncRedis()
     await indexed(

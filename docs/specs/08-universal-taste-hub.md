@@ -28,11 +28,12 @@ Any visitor can paste a public or unlisted YouTube or YouTube Music playlist URL
 - Add explicit format detection and tested presets for **Exportify** (`Artist Name(s)` semicolon/comma-separated, ranking by track count) and **TuneMyMusic** CSV/TXT exports.
 - In the Taste panel, present a clear two-step helper beside Connect Spotify: *"Not on the invite list? Export a playlist with Exportify or TuneMyMusic and drop the CSV here."*
 - **Provenance rule**: Keep Exportify/TuneMyMusic imports labeled clearly as a file import (with import date and "Update import"), never as a live Spotify connection.
+- A saved Taste keeps "Other ways to add your Taste" open to every source. Saving from another source replaces the saved list, and the panel says so first.
 
 ### 30-second visual Taste Seed picker
 - For visitors with no music account to export, provide a fast interactive picker inside the Taste panel and home guide:
   1. Type and tap 3–5 Artists (with autocomplete backed by MusicBrainz / Catalog Artist names via `GET /artists/suggest?q=`).
-  2. After each pick, show 4–6 clickable follow-up chips (*"Also like..."*) drawn from ListenBrainz similarity and the Co-Billing Graph (`GET /artists/related?names=...`) so a visitor can assemble 10–15 Artists in seconds.
+  2. After each pick, show 4–6 clickable follow-up chips (*"Also like..."*) drawn from ListenBrainz similarity and the Co-Billing Graph (`GET /artists/related?names=...`) so a visitor can assemble 10–15 Artists in seconds. The picker sends its newest picks first; the API takes each pick's related Artists in turns, newest first, from the five newest picks that have any.
   3. Confirming saves the ordered list as their Taste.
 
 ## 3. Optional YouTube OAuth (`youtube.readonly`)

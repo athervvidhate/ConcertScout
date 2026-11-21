@@ -23,10 +23,7 @@ SHOW_LEFT = 30
 SET_LENGTH = 600
 SKIPPED_INTRO = 180
 INTRO_SHARE = 0.2
-# A search costs 100 units whatever it returns, so it asks for enough to survive the channel check.
-SEARCH_RESULTS = 15
-# What an Artist's own channel adds to their name, as in "TheStrokesVEVO" or "Khruangbin Official".
-CHANNEL_SUFFIX = re.compile(r"(?:official|vevo|music|tv)+$")
+SEARCH_RESULTS = 5
 TOP_COMMENTS = 15
 # A comment this liked is the crowd's, where a few likes may be one friend's.
 MIN_COMMENT_LIKES = 3
@@ -209,22 +206,9 @@ async def top_comments(client: httpx.AsyncClient, video_id: str) -> list[Comment
     return comments
 
 
-def _compact(name: str) -> str:
-    return CHANNEL_SUFFIX.sub("", normalize(name).replace(" ", "").removeprefix("the"))
-
-
-def is_official(name: str, channel_title: str, channel_id: str, sessions: frozenset[str]) -> bool:
-    """A curated session channel, or the Artist's own channel. A fan's upload of a TV spot is
-    neither, and YouTube often blocks those from playing anywhere but YouTube."""
-    return channel_id in sessions or _compact(channel_title) == _compact(name)
-
-
-async def search_videos(
-    client: httpx.AsyncClient, name: str, sessions: frozenset[str]
-) -> list[LiveVideo]:
-    """Official embeddable music videos for "{name} live performance". One `search.list` call,
-    100 units, so the caller counts it. A result must carry the Artist's name, or it is somebody
-    else's, and come from the Artist's channel or a session channel in `sessions`."""
+async def search_videos(client: httpx.AsyncClient, name: str) -> list[LiveVideo]:
+    """Embeddable music videos for "{name} live performance". One `search.list` call, 100 units,
+    so the caller counts it. A result must carry the Artist's name, or it is somebody else's."""
     params = {
         "part": "snippet",
         "q": f"{name} live performance",
@@ -237,14 +221,14 @@ async def search_videos(
     found: list[LiveVideo] = []
     for item in await _get(client, "/search", params):
         try:
-            snippet = item["snippet"]
-            title: str = snippet["title"]
-            channel: str = snippet["channelTitle"]
-            if wanted in normalize(title) and is_official(
-                name, channel, snippet.get("channelId", ""), sessions
-            ):
+            title: str = item["snippet"]["title"]
+            if wanted in normalize(title):
                 found.append(
-                    LiveVideo(video_id=item["id"]["videoId"], title=title, session=channel)
+                    LiveVideo(
+                        video_id=item["id"]["videoId"],
+                        title=title,
+                        session=item["snippet"]["channelTitle"],
+                    )
                 )
         except (KeyError, TypeError, ValidationError):
             continue

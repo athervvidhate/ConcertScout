@@ -268,5 +268,28 @@ test("a festival's whole Lineup pages without scrolling, its matches first", asy
   await expect(
     sheet.getByRole("button", { name: "Save", exact: true }),
   ).toBeInViewport();
+
+  // Opening an Artist from the Lineup keeps the page it was opened from.
+  const firstShown = () =>
+    frame.evaluate((e) => {
+      const box = e.getBoundingClientRect();
+      return [...e.querySelectorAll("li")].findIndex((li) => {
+        const r = li.getBoundingClientRect();
+        return r.left >= box.left - 1 && r.right <= box.right + 1;
+      });
+    });
+  // The page slides over, so wait for it to settle before choosing a row of page 2.
+  await expect
+    .poll(() => frame.evaluate((e) => e.querySelector(".paged-track")!.getAnimations().length))
+    .toBe(0);
+  expect(await firstShown()).toBeGreaterThan(0);
+  const artist = rows.nth(await firstShown()).getByRole("button");
+  const name = (await artist.textContent())!;
+  await artist.click();
+  const panel = page.getByRole("dialog", { name });
+  await expect(panel).toBeVisible();
+  await expect(pager).toHaveText(/^2 of /);
+  await panel.getByRole("button", { name: "Close" }).click();
+  await expect(pager).toHaveText(/^2 of /);
   await page.screenshot({ path: info.outputPath("lineup.png") });
 });

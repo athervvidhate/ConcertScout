@@ -105,6 +105,11 @@ async def youtube_items(_: httpx.AsyncClient, playlist_id: str) -> list[dict[str
                 }
             },
         ]
+    if playlist_id == "PLcontractLong123":
+        return [
+            {"snippet": {"title": "Song", "videoOwnerChannelTitle": f"Artist {n} - Topic"}}
+            for n in range(1, 51)
+        ]
     if playlist_id == "PLcontractPrivate123":
         raise youtube.PlaylistPrivate
     if playlist_id == "PLcontractEmpty123":
@@ -115,9 +120,7 @@ async def youtube_items(_: httpx.AsyncClient, playlist_id: str) -> list[dict[str
 CONTRACT_VIDEO = "contractVid"
 
 
-async def contract_live_search(
-    _: httpx.AsyncClient, name: str, _sessions: frozenset[str]
-) -> list[live_clips.LiveVideo]:
+async def contract_live_search(_: httpx.AsyncClient, name: str) -> list[live_clips.LiveVideo]:
     """Contract Artist has an official live session on YouTube. Nobody else does."""
     if name != "Contract Artist":
         return []

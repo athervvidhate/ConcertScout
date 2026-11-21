@@ -344,7 +344,8 @@ function TastePanelBody({
             />
           </div>
         </div>
-      ) : (
+      ) : null}
+      {!updating && (
         <Collapsible.Root
           className="taste-other"
           open={otherOpen}
@@ -356,9 +357,16 @@ function TastePanelBody({
           </Collapsible.Trigger>
           <Collapsible.Panel className="taste-other-panel">
             <p>
-              A Search that doesn&apos;t name an Artist or style uses this list.
+              {taste
+                ? `Saving from here replaces your ${countOf(taste.artists)}.`
+                : "A Search that doesn't name an Artist or style uses this list."}
             </p>
-            <ImportForm source={source} onSourceChange={setSource} />
+            <ImportForm
+              source={source}
+              onSourceChange={setSource}
+              initialArtists={taste?.source === "seed" ? taste.artists : undefined}
+              onSaved={() => setOtherOpen(false)}
+            />
           </Collapsible.Panel>
         </Collapsible.Root>
       )}
