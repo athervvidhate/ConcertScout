@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     search_enabled: bool = True
     searches_per_hour: int = limits.SEARCHES_PER_HOUR
+    sculpts_per_hour: int = limits.SCULPTS_PER_HOUR
     # Cloudflare's published always-pass test secret. A public deployment must replace it.
     turnstile_secret: SecretStr = SecretStr("1x0000000000000000000000000000000AA")
     client_ip_header: str | None = None

@@ -13,6 +13,7 @@ from pydantic import BaseModel, SecretStr
 from pydantic_ai import Embedder
 from pydantic_ai.models import Model
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 from concert_scout import (
     assemble,
@@ -25,6 +26,8 @@ from concert_scout import (
     matching,
     pool,
     ranker,
+    sculpt,
+    share,
     similarity,
     telemetry,
 )
@@ -230,15 +233,15 @@ async def _recommend(
     shortlist: Sequence[matching.Candidate],
     artist_tags: Mapping[str, Sequence[str]],
     services: Services,
-) -> list[Recommendation]:
+) -> tuple[list[Recommendation], dict[str, int]]:
     rows = ranker.rows(shortlist, artist_tags)
     try:
         levels = await _graded(reading, rows, services)
     except RankerError as exc:
         logger.warning("Ranker failed: %s", exc)
-        return assemble.from_matches(shortlist)
+        return assemble.from_matches(shortlist), {}
     if not levels:
-        return assemble.from_matches(shortlist)
+        return assemble.from_matches(shortlist), {}
     poster = assemble.from_levels(levels, shortlist)
     candidates = {candidate.concert.id: candidate for candidate in shortlist}
     shown = [ranker.row(candidates[r.concert.id], artist_tags) for r in poster]
@@ -249,12 +252,13 @@ async def _recommend(
     except RankerError as exc:
         # The grades still stand. Each Concert keeps the neutral reason its match gave it.
         logger.warning("Reasons failed: %s", exc)
-        return poster
+        return poster, levels
     reasons = dict(zip(named, written, strict=True))
-    return [
+    explained = [
         r.model_copy(update={"reason": reasons[n]}) if reasons.get(n) else r
         for n, r in enumerate(poster)
     ]
+    return explained, levels
 
 
 async def _find_elsewhere(
@@ -296,6 +300,7 @@ async def _steps(
     near: Place | None,
     services: Services,
     now: dt.datetime,
+    search_id: str | None = None,
 ) -> AsyncIterator[ServerSentEvent]:
     if isinstance(asked, str):
         yield _event("status", Status(step="interpret", message="Reading your Search"))
@@ -342,9 +347,8 @@ async def _steps(
             return await embeddings.query_vector(sources.embedder, services.redis, reading)
 
     async def find_semantic(
-        query_lookup: asyncio.Task[embeddings.Vector | None], concerts: Sequence[Concert]
+        query: embeddings.Vector | None, concerts: Sequence[Concert]
     ) -> dict[str, float]:
-        query = await query_lookup
         if not (query and services.supabase and services.supabase_secret_key):
             return {}
         with telemetry.step("semantic"):
@@ -432,7 +436,8 @@ async def _steps(
                 taste = replace(taste, cobilling=cobilled)
             concerts = await concert_lookup
             yield _event("pool", PoolTotal(total=len(concerts)))
-            if semantic := await find_semantic(query_lookup, concerts):
+            query_embedding = await query_lookup
+            if semantic := await find_semantic(query_embedding, concerts):
                 taste = replace(taste, semantic=semantic)
 
             artist_tags: dict[str, list[str]] = {}
@@ -457,13 +462,37 @@ async def _steps(
         names = matching.candidate_names(shortlist)
         yield _event("candidates", Candidates(names=names, total=len(shortlist)))
 
+        grades: dict[str, int] = {}
         if not taste:
             # Place-only Searches keep notable Ticketmaster listings, soonest first.
             recommendations = assemble.from_notable(shortlist)
         else:
             yield _event("status", Status(step="rank", message="Choosing the closest Concerts"))
             with telemetry.step("rank"):
-                recommendations = await _recommend(reading, shortlist, artist_tags, services)
+                recommendations, grades = await _recommend(
+                    reading, shortlist, artist_tags, services
+                )
+
+        if concerts:
+            sid = search_id or share.new_search_id()
+            listeners, venue_tiers = await sculpt.load_cached_metadata(services.redis, concerts)
+            pool_session = sculpt.PoolSession(
+                reading=reading,
+                pool=concerts[: sculpt.MAX_POOL_SIZE],
+                artist_tags=artist_tags,
+                query_embedding=query_embedding,
+                taste=sculpt.StoredTaste.from_taste(taste),
+                grades=grades,
+                reasons={r.concert.id: r.reason for r in recommendations if r.reason},
+                artist_listeners=listeners,
+                venue_tiers=venue_tiers,
+                has_taste=bool(taste),
+            )
+            try:
+                await sculpt.save_session(services.redis, sid, pool_session)
+            except RedisError as exc:
+                logger.warning("Pool session not kept for sculpting: %s", type(exc).__name__)
+
         yield _event("poster", Poster(recommendations=recommendations))
         if place and taste and not recommendations:
             elsewhere = await _find_elsewhere(reading, place, services, now)
@@ -485,11 +514,15 @@ async def run_search(
     near: Place | None,
     time_zone: str,
     services: Services,
+    *,
+    search_id: str | None = None,
 ) -> AsyncIterator[ServerSentEvent]:
     with telemetry.search() as usage:
         try:
             now = clock.now_in(time_zone)
-            async for event in stream_search(asked, imported, near, services, now):
+            async for event in stream_search(
+                asked, imported, near, services, now, search_id=search_id
+            ):
                 yield event
         finally:
             # A visitor who leaves early has still cost money, so a cancel must not skip this.
@@ -505,10 +538,12 @@ async def stream_search(
     near: Place | None,
     services: Services,
     now: dt.datetime,
+    *,
+    search_id: str | None = None,
 ) -> AsyncIterator[ServerSentEvent]:
     """`asked` is the Search's words, or a Reading the person corrected."""
     try:
-        async for event in _steps(asked, imported, near, services, now):
+        async for event in _steps(asked, imported, near, services, now, search_id=search_id):
             yield event
     except InterpreterError as exc:
         logger.warning("Interpreter failed: %s", exc)
