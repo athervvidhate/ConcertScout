@@ -19,7 +19,7 @@ from joserfc.errors import InvalidKeyIdError, JoseError
 from joserfc.jwk import KeySet
 from pydantic import BaseModel, SecretStr, field_validator
 
-from concert_scout.models import Concert, Place
+from concert_scout.models import Concert, Place, Reading
 from concert_scout.sources.http import USER_AGENT
 
 AUDIENCE = "authenticated"
@@ -35,6 +35,8 @@ FOLLOWED_VENUES = "/rest/v1/followed_venues"
 SETTINGS = "/rest/v1/alert_settings"
 SENT = "/rest/v1/alerts_sent"
 SALE_REMINDERS_SENT = "/rest/v1/sale_reminders_sent"
+SAVED_SEARCHES = "/rest/v1/saved_searches"
+SAVED_SEARCH_SENT = "/rest/v1/saved_search_sent"
 TASTE = "/rest/v1/taste_profiles"
 COBILLING_RECORD = "/rest/v1/rpc/record_cobilling_bills"
 COBILLING_NEIGHBORS = "/rest/v1/rpc/cobilling_neighbors"
@@ -104,6 +106,7 @@ class AlertSettings(BaseModel):
     place: Place | None = None
     enabled: bool = False
     sale_reminders_enabled: bool = False
+    saved_searches_paused: bool = False
     timezone: str | None = None
 
 
@@ -114,7 +117,24 @@ class AlertAccount(BaseModel):
     place: Place | None = None
     enabled: bool = True
     sale_reminders_enabled: bool = False
+    saved_searches_paused: bool = False
     timezone: str | None = None
+
+
+class SavedSearch(BaseModel):
+    """A Search an Account kept to rerun weekly (Issue #89)."""
+
+    id: str
+    query_text: str
+    reading: Reading
+    last_run_at: dt.datetime | None = None
+    created_at: dt.datetime
+
+
+class DueSavedSearch(SavedSearch):
+    """A Saved Search ready for its weekly rerun, with its owning Account ID."""
+
+    user_id: str
 
 
 def make_client(url: str, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
@@ -358,7 +378,7 @@ async def alert_settings(
     request = client.build_request(
         "GET",
         SETTINGS,
-        params={"select": "place,enabled,sale_reminders_enabled,timezone"},
+        params={"select": "place,enabled,sale_reminders_enabled,saved_searches_paused,timezone"},
         headers=_as_person(account, publishable_key),
     )
     rows = _rows(await _send(client, request), AlertSettings)
@@ -428,17 +448,21 @@ async def set_sale_reminders(
 async def disable_all_alerts(
     client: httpx.AsyncClient, secret_key: SecretStr, user_id: str
 ) -> None:
-    """Turns off all Alert emails for an Account, used by one-click unsubscribe."""
+    """Turns off all Alert emails (including Saved Search reruns) for an Account."""
+    row = {
+        "user_id": user_id,
+        "enabled": False,
+        "sale_reminders_enabled": False,
+        "saved_searches_paused": True,
+        "updated_at": dt.datetime.now(dt.UTC).isoformat(),
+    }
     request = client.build_request(
-        "PATCH",
+        "POST",
         SETTINGS,
-        params={"user_id": f"eq.{user_id}"},
-        json={
-            "enabled": False,
-            "sale_reminders_enabled": False,
-            "updated_at": dt.datetime.now(dt.UTC).isoformat(),
-        },
-        headers=_as_server(secret_key) | {"Prefer": "return=minimal"},
+        params={"on_conflict": "user_id"},
+        json=[row],
+        headers=_as_server(secret_key)
+        | {"Prefer": "resolution=merge-duplicates,return=minimal,missing=default"},
     )
     await _send(client, request)
 
@@ -663,6 +687,163 @@ class _SaleReminderSentRow(BaseModel):
     user_id: str
     concert_id: str
     sale_key: str
+
+
+class _UserIdRow(BaseModel):
+    user_id: str
+
+
+class _SavedSearchSentRow(BaseModel):
+    saved_search_id: str
+    concert_id: str
+
+
+async def list_saved_searches(
+    client: httpx.AsyncClient, publishable_key: str, account: Account
+) -> list[SavedSearch]:
+    request = client.build_request(
+        "GET",
+        SAVED_SEARCHES,
+        params={
+            "select": "id,query_text,reading,last_run_at,created_at",
+            "order": "created_at.asc",
+        },
+        headers=_as_person(account, publishable_key),
+    )
+    return _rows(await _send(client, request), SavedSearch)
+
+
+async def create_saved_search(
+    client: httpx.AsyncClient,
+    secret_key: SecretStr,
+    account: Account,
+    query_text: str,
+    reading: Reading,
+) -> SavedSearch:
+    row = {
+        "user_id": account.id,
+        "query_text": query_text,
+        "reading": reading.model_dump(mode="json", exclude_none=True),
+    }
+    request = client.build_request(
+        "POST",
+        SAVED_SEARCHES,
+        json=[row],
+        headers=_as_server(secret_key) | {"Prefer": "return=representation"},
+    )
+    created = _rows(await _send(client, request), SavedSearch)
+    if not created:
+        raise SupabaseError("unreadable response: no row")
+    return created[0]
+
+
+async def delete_saved_search(
+    client: httpx.AsyncClient, publishable_key: str, account: Account, saved_search_id: str
+) -> None:
+    request = client.build_request(
+        "DELETE",
+        SAVED_SEARCHES,
+        params={"id": f"eq.{saved_search_id}"},
+        headers=_as_person(account, publishable_key),
+    )
+    await _send(client, request)
+
+
+async def due_saved_searches(
+    client: httpx.AsyncClient, secret_key: SecretStr, cutoff: dt.datetime
+) -> list[DueSavedSearch]:
+    """Saved Searches that have never run or last ran at or before `cutoff`."""
+    stamp = cutoff.astimezone(dt.UTC).isoformat() if cutoff.tzinfo else cutoff.isoformat()
+    request = client.build_request(
+        "GET",
+        SAVED_SEARCHES,
+        params={
+            "select": "id,user_id,query_text,reading,last_run_at,created_at",
+            "or": f"(last_run_at.is.null,last_run_at.lte.{stamp})",
+            "order": "last_run_at.asc.nullsfirst,created_at.asc",
+        },
+        headers=_as_server(secret_key),
+    )
+    return _rows(await _send(client, request), DueSavedSearch)
+
+
+async def paused_saved_search_users(
+    client: httpx.AsyncClient, secret_key: SecretStr, user_ids: list[str]
+) -> set[str]:
+    """Account IDs that paused Saved Search Alerts via unsubscribe."""
+    if not user_ids:
+        return set()
+    request = client.build_request(
+        "GET",
+        SETTINGS,
+        params={
+            "select": "user_id",
+            "saved_searches_paused": "is.true",
+            "user_id": _among(user_ids),
+        },
+        headers=_as_server(secret_key),
+    )
+    return {row.user_id for row in _rows(await _send(client, request), _UserIdRow)}
+
+
+async def saved_search_sent_for(
+    client: httpx.AsyncClient, secret_key: SecretStr, saved_search_ids: list[str]
+) -> dict[str, set[str]]:
+    if not saved_search_ids:
+        return {}
+    request = client.build_request(
+        "GET",
+        SAVED_SEARCH_SENT,
+        params={
+            "select": "saved_search_id,concert_id",
+            "saved_search_id": _among(saved_search_ids),
+        },
+        headers=_as_server(secret_key),
+    )
+    sent: dict[str, set[str]] = {}
+    for row in _rows(await _send(client, request), _SavedSearchSentRow):
+        sent.setdefault(row.saved_search_id, set()).add(row.concert_id)
+    return sent
+
+
+async def record_saved_search_sent(
+    client: httpx.AsyncClient,
+    secret_key: SecretStr,
+    user_id: str,
+    pairs: Sequence[tuple[str, str]],
+) -> None:
+    if not pairs:
+        return
+    request = client.build_request(
+        "POST",
+        SAVED_SEARCH_SENT,
+        params={"on_conflict": "saved_search_id,concert_id"},
+        json=[
+            {"user_id": user_id, "saved_search_id": search_id, "concert_id": concert_id}
+            for search_id, concert_id in pairs
+        ],
+        headers=_as_server(secret_key) | {"Prefer": "resolution=ignore-duplicates,return=minimal"},
+    )
+    await _send(client, request)
+
+
+async def mark_saved_search_ran(
+    client: httpx.AsyncClient,
+    secret_key: SecretStr,
+    saved_search_ids: Sequence[str],
+    ran_at: dt.datetime,
+) -> None:
+    if not saved_search_ids:
+        return
+    stamp = ran_at.astimezone(dt.UTC).isoformat() if ran_at.tzinfo else ran_at.isoformat()
+    request = client.build_request(
+        "PATCH",
+        SAVED_SEARCHES,
+        params={"id": _among(list(saved_search_ids))},
+        json={"last_run_at": stamp},
+        headers=_as_server(secret_key) | {"Prefer": "return=minimal"},
+    )
+    await _send(client, request)
 
 
 class CoBillingBill(BaseModel):

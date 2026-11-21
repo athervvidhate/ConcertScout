@@ -62,6 +62,10 @@ _Avoid_: Stub, card
 A Concert a person chose to keep from a Poster.
 _Avoid_: Favorite, stub, wishlist item
 
+**Saved Search**:
+A Search a person chose to keep. Concert Scout reruns it weekly and sends new Recommendations as an Alert.
+_Avoid_: recipe, watch, saved query
+
 **Account**:
 An optional Concert Scout sign-in, with Google or an email and password, that keeps a person's Saved Concerts on every device. Spotify is a separate connection, not an account.
 _Avoid_: Profile, user, login
