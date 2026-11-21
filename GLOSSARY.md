@@ -98,3 +98,7 @@ _Avoid_: Bio, description, embedding text
 
 **Shared Poster**: a Poster kept at its own link, which anyone can open without running a Search.
 _Avoid_: permalink, snapshot (an eval term)
+
+**Sculpt**:
+Adjust a Poster's filters or Taste balance using the Search's cached Concert pool, without re-fetching venues or running the interpreter.
+_Avoid_: chat, re-prompt

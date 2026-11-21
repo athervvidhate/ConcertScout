@@ -790,3 +790,40 @@ button:disabled { opacity:.6; cursor:default; }
 .setlist-section .setlist-overview,.setlist-section .setlist-last,.setlist-section .setlist-credit { margin:0; }
 .setlist-section .setlist-staples { padding-left:0; list-style:none; }
 @media(max-width:640px) { .ticket-dialog .ticket-pill { padding:0 12px; font-size:14px; gap:5px; } }
+
+/* ---------- Poster Sculpting ---------- */
+.poster-dials { margin:0 0 18px; padding:12px 14px; border-radius:var(--r-md); background:var(--surface); border:1px solid var(--line); }
+.poster-dials[aria-busy=true] { opacity:.72; transition:opacity .18s var(--ease); }
+.dials-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; }
+.dial-group { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; max-width:100%; }
+.dial-label { font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-3); }
+.dial-segment { display:inline-flex; padding:3px; border-radius:999px; background:var(--sunk); gap:2px; max-width:100%; }
+.dial-btn { min-height:36px; padding:0 12px; border:0; border-radius:999px; background:transparent; color:var(--ink-2); font-size:13px; font-weight:600; white-space:nowrap; transition:background .18s var(--ease),color .18s var(--ease); }
+.dial-btn:hover { color:var(--ink); }
+.dial-btn[aria-pressed=true] { background:var(--ink); color:var(--surface); }
+.dial-toggles { display:flex; flex-wrap:wrap; gap:8px; margin-left:auto; }
+.dial-chip { min-height:38px; padding:0 13px; border:1px solid var(--line-2); border-radius:999px; background:var(--surface); color:var(--ink-2); font-size:13px; font-weight:600; white-space:nowrap; transition:background .18s var(--ease),color .18s var(--ease),border-color .18s var(--ease); }
+.dial-chip:hover { background:var(--soft); color:var(--ink); }
+.dial-chip[aria-pressed=true] { background:var(--band); border-color:var(--band); color:var(--band-ink); }
+.dial-note { margin:10px 0 0; font-size:13px; color:var(--ink-2); }
+.steer-chip { cursor:pointer; padding-right:10px; transition:background .18s var(--ease),border-color .18s var(--ease); }
+.steer-chip[data-steer=boost] { border-color:var(--label); }
+.steer-chip[data-steer=boost] .chip-icon { color:var(--label); }
+.steer-chip[data-steer=exclude] { border-color:var(--accent); }
+.steer-chip[data-steer=exclude] .chip-icon { color:var(--accent); }
+.steer-chip:hover { background:var(--soft); }
+.steer-x { opacity:.7; margin-left:2px; }
+.steer-reset { gap:6px; }
+.ticket-pill.steer-pill svg { fill:none; }
+.sculpt-error { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin:0 0 18px; padding:12px 16px; border-radius:var(--r-md); background:var(--surface); border:1px solid var(--accent); color:var(--ink); font-size:14px; }
+.sculpt-error p { margin:0; }
+.sculpt-error button { min-height:44px; padding:0 16px; border:0; border-radius:999px; background:var(--accent); color:var(--on-accent); font-weight:650; }
+.sculpt-empty { margin-top:12px; }
+@media(max-width:640px) {
+  .poster-dials { padding:12px; }
+  .dial-group { width:100%; justify-content:space-between; }
+  .dial-segment { flex:1 1 auto; justify-content:space-between; }
+  .dial-btn { flex:1 1 0; min-height:44px; padding:0 8px; font-size:12.5px; }
+  .dial-toggles { width:100%; margin-left:0; }
+  .dial-chip { min-height:44px; flex:1 1 auto; }
+}

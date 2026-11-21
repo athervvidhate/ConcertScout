@@ -27,6 +27,7 @@ from concert_scout import (
     interpreter,
     limits,
     live_index,
+    sculpt,
     security,
     share,
     spotify,
@@ -373,6 +374,31 @@ def create_app(
             services.turnstile, settings.turnstile_secret, search.token, ip
         )
 
+    async def guard_sculpt(body: sculpt.SculptRequest, request: Request) -> None:
+        """Same-origin, spend caps and visitor limit; no fresh Turnstile for an active session."""
+        del body
+        origin = request.headers.get("origin")
+        if origin and origin not in settings.cors_origins:
+            raise Refused(403, "origin_refused", "This site cannot sculpt Posters.")
+        if not settings.search_enabled:
+            raise Refused(503, "search_off", "Search is off for now.")
+        ip = security.client_ip(request, settings.client_ip_header)
+        try:
+            await limits.check_spend(services.redis)
+            await limits.visitor_call(services.redis, "sculpt", ip, settings.sculpts_per_hour)
+        except limits.SpendCapReached as exc:
+            message = "Concert Scout has used its Search budget for now."
+            raise Refused(503, "budget_reached", message, exc.retry_after) from None
+        except limits.VisitorLimitReached as exc:
+            minutes = exc.retry_after // 60 + 1
+            wait = "1 minute" if minutes == 1 else f"{minutes} minutes"
+            message = f"You have used this hour's Poster adjustments. Try again in {wait}."
+            raise Refused(429, "visitor_limit", message, exc.retry_after) from None
+        except RedisError as exc:
+            logger.warning("Sculpt limits failed: %s", type(exc).__name__)
+            message = "Poster adjustments are unavailable. Try again in a minute."
+            raise Refused(503, "limits_unavailable", message) from None
+
     @app.exception_handler(Refused)
     async def refused(_: Request, exc: Refused) -> JSONResponse:
         return _failure(exc.status, exc.error)
@@ -381,6 +407,9 @@ def create_app(
     async def invalid_request(request: Request, _: RequestValidationError) -> JSONResponse:
         if request.url.path == "/search":
             return _failure(422, SearchError(code="invalid_search", message=ASK_FOR_A_SEARCH))
+        if request.url.path.startswith("/search/") and request.url.path.endswith("/sculpt"):
+            message = "Check your Poster filters and try again."
+            return _failure(422, SearchError(code="invalid_sculpt", message=message))
         if request.url.path.startswith("/share"):
             message = "That is not a Search you can share."
             return _failure(422, SearchError(code="invalid_share", message=message))
@@ -631,12 +660,31 @@ def create_app(
             message = "That Poster is not here. Its link may be wrong or older than 90 days."
             raise Refused(404, "share_not_found", message) from None
 
+    @app.post(
+        "/search/{search_id}/sculpt",
+        response_model=sculpt.SculptResponse,
+        response_model_exclude_none=True,
+        dependencies=[Depends(guard_sculpt)],
+    )
+    async def sculpt_search(
+        search_id: Annotated[str, Path(pattern=share.SEARCH_ID)],
+        body: sculpt.SculptRequest,
+    ) -> sculpt.SculptResponse:
+        try:
+            return await sculpt.sculpt_poster(search_id, body, services)
+        except sculpt.SessionExpired:
+            message = "This Poster session has expired. Run the Search again to sculpt it."
+            raise Refused(404, "session_expired", message) from None
+
     @app.post("/search", response_class=EventSourceResponse, dependencies=[Depends(guard_search)])
     async def search(search: SearchRequest) -> AsyncIterator[ServerSentEvent]:
         here = search.near
         near = Place(name="Near you", lat=here.lat, lon=here.lon) if here else None
         reading: Reading | None = None
-        async for event in run_search(search.asked, search.taste, near, search.time_zone, services):
+        search_id = share.new_search_id()
+        async for event in run_search(
+            search.asked, search.taste, near, search.time_zone, services, search_id=search_id
+        ):
             yield event
             if event.event == "reading":
                 reading = Reading.model_validate(event.data)
@@ -649,7 +697,7 @@ def create_app(
                         recommendations=poster.recommendations,
                     )
                     try:
-                        search_id = await share.keep(services.redis, made)
+                        await share.keep(services.redis, made, search_id=search_id)
                     except RedisError as exc:
                         # Without storage the Poster still shows. It just cannot be shared.
                         logger.warning("Search not kept for sharing: %s", type(exc).__name__)

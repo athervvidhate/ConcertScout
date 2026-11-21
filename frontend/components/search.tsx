@@ -16,6 +16,7 @@ import { Board, Listings } from "@/components/board";
 import { HomeGuide } from "@/components/home-guide";
 import { Listing } from "@/components/listing";
 import { Poster } from "@/components/poster";
+import { SteeringPills } from "@/components/poster-dials";
 import { SearchFeedback } from "@/components/search-feedback";
 import { SiteHeader } from "@/components/site-header";
 import { SearchExamples } from "@/components/search-examples";
@@ -29,6 +30,7 @@ import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/place";
 import { dateIn, viewerZone } from "@/lib/format";
 import { anywhere, overNextMonths } from "@/lib/reading";
 import { canSaveReading } from "@/lib/saved-searches";
+import { removeSteeringArtist } from "@/lib/sculpt";
 import { API_URL, type Asked, type Reading } from "@/lib/search";
 import { createSharedPoster, sharedUrl } from "@/lib/share";
 import { sharedTitle } from "@/lib/shared-heading";
@@ -85,9 +87,16 @@ export function Search() {
     error,
     retryable,
     resumed,
+    sculpt,
+    sculpting,
+    sculptMeta,
+    sculptError,
+    sculptVersion,
     search,
     clear,
     showExample,
+    applySculpt,
+    resetSculpt,
   } = useSearch();
   // A reloaded Search puts its words back in the box once.
   const [restoredText, setRestoredText] = useState(false);
@@ -406,6 +415,16 @@ export function Search() {
                 Change
               </Button>
             )}
+            {searchId && phase === "finished" && (
+              <SteeringPills
+                sculpt={sculpt}
+                busy={sculpting}
+                onRemove={(kind, artist) =>
+                  void applySculpt(removeSteeringArtist(sculpt, kind, artist))
+                }
+                onReset={resetSculpt}
+              />
+            )}
           </div>
         )}
         {reading && editing && (
@@ -475,6 +494,16 @@ export function Search() {
                 (canSearch && reading && reading.artists.length > 0)
                   ? searchAnywhere
                   : undefined
+              }
+              sculpt={searchId ? sculpt : undefined}
+              sculpting={sculpting}
+              sculptMeta={sculptMeta}
+              sculptError={sculptError}
+              sculptVersion={sculptVersion}
+              onSculpt={searchId ? (next) => void applySculpt(next) : undefined}
+              onResetSculpt={searchId ? resetSculpt : undefined}
+              onRerunSearch={
+                canSearch ? () => run(asked ?? { text: searched }) : undefined
               }
             />
           </motion.div>
