@@ -33,7 +33,7 @@ function withLocalTaste(page: Page, artists: string[]) {
     [
       TASTE_KEY,
       JSON.stringify({
-        source: "list",
+        sources: ["list"],
         artists,
         importedAt: new Date().toISOString(),
       }),

@@ -13,7 +13,7 @@ What a person likes in music for the purpose of a Search, such as named artists 
 _Avoid_: Preferences, profile (except Taste Profile), playlist info
 
 **Taste Profile**:
-The Taste an Account keeps on every device: Artist names, favourites first, and where they came from. It never holds data from a Spotify account.
+The Taste an Account keeps on every device: Artist names, favourites first, and every source they came from. It never holds data from a Spotify account.
 _Avoid_: Synced Taste, saved profile
 
 **For You shelf**:
@@ -75,7 +75,7 @@ Spotify's player for a Ticket's headliner, opened from Listen on the Ticket so a
 _Avoid_: Sample, snippet, embed (in copy)
 
 **Live clip**:
-An official YouTube performance of a Ticket's headliner, opened from Watch Live on the Ticket at the moment its chapters or most liked comment point to.
+A YouTube performance of a Ticket's headliner, opened from Watch Live on the Ticket at the moment its viewers' comments agree on, or at a best-known track.
 _Avoid_: Video, embed (in copy), replay
 
 **Followed Artist**:

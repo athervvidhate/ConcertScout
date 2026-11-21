@@ -17,12 +17,13 @@ PRESENTS = re.compile(r"^(?P<name>.+?)\s+presents?\b", re.IGNORECASE)
 POSSESSIVE = re.compile(r"^(?P<name>.+?)['’]s\s+(?P<rest>.+)$", re.IGNORECASE)
 
 
-def normalize(name: str) -> str:
-    """The form two spellings of one Artist's name share, for joins and cache keys."""
+def normalize(name: str, keep: str = "") -> str:
+    """The form two spellings of one Artist's name share, for joins and cache keys. Symbols in
+    `keep` stay, for a caller that must tell "Omar+" from "Omar"."""
     decomposed = unicodedata.normalize("NFKD", name)
     unaccented = "".join(c for c in decomposed if not unicodedata.combining(c))
     words = unaccented.casefold().replace("&", " and ")
-    bare = " ".join(re.sub(r"[^\w\s]", "", words).split())
+    bare = " ".join(re.sub(rf"[^\w\s{re.escape(keep)}]", "", words).split())
     # A name that is all punctuation, such as "!!!", keeps it rather than becoming empty.
     return bare.removeprefix("the ") or " ".join(words.split())
 

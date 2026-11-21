@@ -500,20 +500,25 @@ export function Poster({
                                     : undefined
                                 }
                                 {...playerProps(`solo:${concert.id}`)}
+                                actions={
+                                  <>
+                                    <SaveButton
+                                      saved={decisions[concert.id] === "saved"}
+                                      pending={pending.has(concert.id)}
+                                      onToggle={() => void toggleSave(r)}
+                                    />
+                                    {shareLink && (
+                                      <ShareButton
+                                        iconOnly
+                                        title={`${name} on Concert Scout`}
+                                        link={() => shareLink(concert.id)}
+                                      />
+                                    )}
+                                  </>
+                                }
                               />
                               <div className="solo-actions">
-                                <SaveButton
-                                  saved={decisions[concert.id] === "saved"}
-                                  pending={pending.has(concert.id)}
-                                  onToggle={() => void toggleSave(r)}
-                                />
                                 <AddToCalendar concert={concert} name={name} />
-                                {shareLink && (
-                                  <ShareButton
-                                    title={`${name} on Concert Scout`}
-                                    link={() => shareLink(concert.id)}
-                                  />
-                                )}
                                 <Dialog.Trigger
                                   className="quiet"
                                   aria-label={`Open Ticket for ${name}`}

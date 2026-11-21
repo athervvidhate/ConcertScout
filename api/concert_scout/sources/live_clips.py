@@ -2,11 +2,13 @@
 
 Everything here is a documented endpoint: `videos.list`, `commentThreads.list` and `search.list`,
 which cost 1, 1 and 100 units. YouTube's "Most Replayed" heatmap is not in the API and is never
-scraped. A start time comes from a chapter, a liked comment or the video's length, never a model.
+scraped. A start time comes from the stamps the crowd's comments agree on, a chapter of a
+best-known track or the video's length, never a model.
 """
 
 import datetime as dt
 import re
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
@@ -24,11 +26,16 @@ SET_LENGTH = 600
 SKIPPED_INTRO = 180
 INTRO_SHARE = 0.2
 SEARCH_RESULTS = 5
-TOP_COMMENTS = 15
-# A comment this liked is the crowd's, where a few likes may be one friend's.
-MIN_COMMENT_LIKES = 3
-# More stamps than this make a tracklist, which has no single moment.
+# A page of comments costs 1 unit whatever its size, so it takes the largest.
+TOP_COMMENTS = 100
+# A stamp counts once plus once per like on its comment. Below this many votes it may be one fan's.
+MIN_VOTES = 10
+# Stamps this close are one moment, as "40:23" and "40:30" for one drop.
+MOMENT_SECONDS = 20
+# More stamps than this make a tracklist, which has no single moment but may name a hit.
 MAX_COMMENT_STAMPS = 3
+# "+" makes another Artist of the same letters, as "Omar+" beside "Omar".
+NAME_SYMBOLS = "+"
 MUSIC_CATEGORY = "10"
 # Comments can be off, and a video can be gone since it was indexed.
 UNREADABLE_COMMENTS = frozenset({"commentsDisabled", "videoNotFound", "forbidden"})
@@ -40,6 +47,19 @@ AFTER_STAMP = " \t])-–—:|•."
 LINK = re.compile(r"https?://|www\.|\.(?:com|net|org|ly|me)\b", re.IGNORECASE)
 PARENTHESIS = re.compile(r"\s*[\(\[][^\)\]]*[\)\]]")
 DURATION = TypeAdapter(dt.timedelta)
+
+
+def artist_key(name: str) -> str:
+    """The form an Artist's name takes in Watch Live, which keeps the symbols that tell Artists
+    apart. Both the index and a lookup use it."""
+    return normalize(name, NAME_SYMBOLS)
+
+
+def names_artist(title: str, name: str) -> bool:
+    """Whether a video title names the Artist in whole words, so "Omar" is not found in
+    "Omari" or "Omar+"."""
+    wanted = artist_key(name)
+    return bool(wanted) and f" {wanted} " in f" {artist_key(title)} "
 
 
 class LiveVideo(BaseModel):
@@ -112,21 +132,35 @@ def chapter_start(found: Sequence[Chapter], tracks: Sequence[str], duration: int
     return None
 
 
-def comment_start(comments: Sequence[Comment], duration: int) -> int | None:
-    """The first valid stamp of the most liked comment that has one, in the part worth watching."""
-    best: tuple[int, int] | None = None
+def crowd_start(comments: Sequence[Comment], duration: int) -> int | None:
+    """The moment the crowd's comments agree on: every stamp in the part worth watching votes
+    once plus once per like, stamps within `MOMENT_SECONDS` add up, and the moment with the most
+    votes wins if it has `MIN_VOTES`. It starts at its own most voted stamp."""
+    votes: dict[int, int] = defaultdict(int)
     for comment in comments:
-        if comment.likes < MIN_COMMENT_LIKES or LINK.search(comment.text):
+        if LINK.search(comment.text):
             continue
         stamps = [seconds_of(match) for match in STAMP.finditer(comment.text)]
         if len(stamps) > MAX_COMMENT_STAMPS:
             continue
-        for start in stamps:
-            if start is not None and EARLIEST_START <= start <= duration - SHOW_LEFT:
-                if best is None or comment.likes > best[0]:
-                    best = (comment.likes, start)
-                break
-    return best[1] if best else None
+        for start in {s for s in stamps if s is not None}:
+            if EARLIEST_START <= start <= duration - SHOW_LEFT:
+                votes[start] += 1 + comment.likes
+
+    def moment(start: int) -> int:
+        return sum(n for other, n in votes.items() if abs(other - start) <= MOMENT_SECONDS)
+
+    if not votes:
+        return None
+    best = max(votes, key=lambda start: (moment(start), votes[start], -start))
+    return best if moment(best) >= MIN_VOTES else None
+
+
+def comment_chapters(comments: Sequence[Comment]) -> list[Chapter]:
+    """The longest tracklist a commenter wrote out, as chapters."""
+    lists = [chapters(comment.text) for comment in comments if not LINK.search(comment.text)]
+    tracklists = [found for found in lists if len(found) > MAX_COMMENT_STAMPS]
+    return max(tracklists, key=len) if tracklists else []
 
 
 def intro_start(duration: int) -> int:
@@ -208,7 +242,8 @@ async def top_comments(client: httpx.AsyncClient, video_id: str) -> list[Comment
 
 async def search_videos(client: httpx.AsyncClient, name: str) -> list[LiveVideo]:
     """Embeddable music videos for "{name} live performance". One `search.list` call, 100 units,
-    so the caller counts it. A result must carry the Artist's name, or it is somebody else's."""
+    so the caller counts it. A result must name the Artist, or it is somebody else's. Anyone's
+    upload counts, a fan's included."""
     params = {
         "part": "snippet",
         "q": f"{name} live performance",
@@ -217,12 +252,11 @@ async def search_videos(client: httpx.AsyncClient, name: str) -> list[LiveVideo]
         "videoCategoryId": MUSIC_CATEGORY,
         "maxResults": str(SEARCH_RESULTS),
     }
-    wanted = normalize(name)
     found: list[LiveVideo] = []
     for item in await _get(client, "/search", params):
         try:
             title: str = item["snippet"]["title"]
-            if wanted in normalize(title):
+            if names_artist(title, name):
                 found.append(
                     LiveVideo(
                         video_id=item["id"]["videoId"],

@@ -83,10 +83,10 @@ test("Setlist DNA loads lazily on Ticket without resizing or scrolling, and retu
   ).toBeVisible();
   await expect(sheet.locator(".setlist-staples li")).toHaveCount(8);
 
-  // Page through if needed to reach the Setlist.fm attribution link without scrolling.
-  const next = sheet.getByRole("button", { name: "Next page" });
-  while ((await next.count()) && (await next.isEnabled())) await next.click();
+  // Only the setlist itself scrolls, to reach the Setlist.fm attribution link.
   const credit = sheet.getByRole("link", { name: "Setlist.fm" });
+  await expect(sheet.locator(".setlist-scroll")).toHaveCSS("overflow-y", "auto");
+  await credit.scrollIntoViewIfNeeded();
   await expect(credit).toHaveAttribute("href", SETLIST_SUMMARY.source_url);
   await expect(credit).toBeInViewport();
 

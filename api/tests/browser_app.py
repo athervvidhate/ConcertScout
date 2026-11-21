@@ -105,6 +105,11 @@ async def youtube_items(_: httpx.AsyncClient, playlist_id: str) -> list[dict[str
                 }
             },
         ]
+    if playlist_id == "PLcontractLong123":
+        return [
+            {"snippet": {"title": "Song", "videoOwnerChannelTitle": f"Artist {n} - Topic"}}
+            for n in range(1, 51)
+        ]
     if playlist_id == "PLcontractPrivate123":
         raise youtube.PlaylistPrivate
     if playlist_id == "PLcontractEmpty123":

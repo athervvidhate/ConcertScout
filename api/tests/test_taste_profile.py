@@ -133,10 +133,10 @@ def test_distinct_keeps_the_first_spelling_and_the_order() -> None:
 # --- The Spotify boundary ------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("source", ["spotify", "spotify_oauth", ""])
-def test_no_spotify_source_can_be_synced(source: str) -> None:
+@pytest.mark.parametrize("sources", [["spotify"], ["seed", "spotify_oauth"], [""], []])
+def test_no_spotify_source_can_be_synced(sources: list[str]) -> None:
     with pytest.raises(ValidationError):
-        taste_profile.TasteBody.model_validate({"source": source, "artists": ["Contract Artist"]})
+        taste_profile.TasteBody.model_validate({"sources": sources, "artists": ["Contract Artist"]})
 
 
 # --- The guest shelf, with no model --------------------------------------------------------
@@ -311,11 +311,13 @@ def bearer(person: stack.Person) -> dict[str, str]:
 
 
 async def put_taste(
-    api: httpx.AsyncClient, person: stack.Person, *artists: str, source: str = "seed"
+    api: httpx.AsyncClient,
+    person: stack.Person,
+    *artists: str,
+    sources: tuple[str, ...] = ("seed",),
 ) -> httpx.Response:
-    return await api.put(
-        "/account/taste", json={"source": source, "artists": list(artists)}, headers=bearer(person)
-    )
+    body = {"sources": list(sources), "artists": list(artists)}
+    return await api.put("/account/taste", json=body, headers=bearer(person))
 
 
 @supabase
@@ -333,14 +335,16 @@ async def test_a_taste_profile_follows_the_account_to_another_device(
     elsewhere = stack.Person(person.id, person.email, stack.sign_in(person.email))
     read = await api.get("/account/taste", headers=bearer(elsewhere))
     profile = read.json()
-    assert profile["source"] == "seed"
+    assert profile["sources"] == ["seed"]
     # Two spellings of one Artist are one, favourites still first.
     assert profile["artists"] == ["Contract Artist", "Other Artist"]
     assert profile["updated_at"] == saved.json()["updated_at"]
 
-    replaced = await put_taste(api, person, "Only One", source="youtube")
-    assert replaced.json()["artists"] == ["Only One"]
-    assert (await api.get("/account/taste", headers=bearer(person))).json()["source"] == "youtube"
+    # A combined Taste names each source once, newest first.
+    combined = await put_taste(api, person, "Only One", sources=("youtube", "seed", "youtube"))
+    assert combined.json()["artists"] == ["Only One"]
+    read = (await api.get("/account/taste", headers=bearer(person))).json()
+    assert read["sources"] == ["youtube", "seed"]
 
 
 @supabase
@@ -348,12 +352,12 @@ async def test_spotify_data_cannot_be_synced_by_the_api_or_the_database(
     api: httpx.AsyncClient,
 ) -> None:
     person = stack.new_person()
-    refused = await put_taste(api, person, "Contract Artist", source="spotify")
+    refused = await put_taste(api, person, "Contract Artist", sources=("seed", "spotify"))
     assert refused.status_code == 422
     assert refused.json()["code"] == "invalid_taste"
 
     # Even the server's own key cannot write one past the table's check.
-    row = {"user_id": person.id, "source": "spotify", "artists": ["Contract Artist"]}
+    row = {"user_id": person.id, "sources": ["seed", "spotify"], "artists": ["Contract Artist"]}
     with server() as rest:
         assert rest.post("/taste_profiles", json=row).status_code == 400
     assert (await api.get("/account/taste", headers=bearer(person))).json() is None
@@ -376,7 +380,7 @@ async def test_one_account_cannot_read_write_or_clear_another_accounts_taste(
     with stack.rest(other.token) as rest:
         assert rest.get("/taste_profiles", params={"select": "user_id"}).json() == []
     with stack.rest(owner.token) as rest:
-        forged = {"user_id": owner.id, "source": "seed", "artists": ["Forged"]}
+        forged = {"user_id": owner.id, "sources": ["seed"], "artists": ["Forged"]}
         assert rest.post("/taste_profiles", json=forged).status_code in (401, 403)
         edit = {"user_id": f"eq.{owner.id}"}
         patched = rest.patch("/taste_profiles", params=edit, json={"artists": ["Forged"]})

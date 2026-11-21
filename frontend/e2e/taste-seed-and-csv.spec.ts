@@ -48,6 +48,12 @@ test(
     await searchInput.fill("Tame");
     await listbox.getByRole("option", { name: "Tame Impala" }).click();
     await expect(selectedList.getByRole("listitem")).toHaveCount(3);
+    // Styled, not bare text: picks sit side by side and the Add button is a full touch target.
+    const [first, second] = await selectedList.getByRole("listitem").evaluateAll((items) =>
+      items.slice(0, 2).map((item) => item.getBoundingClientRect().top),
+    );
+    expect(first).toBe(second);
+    expect((await dialog.getByRole("button", { name: "Add", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(48);
 
     // Tap related follow-up chips ("Also like...") to reach 10+ Artists rapidly.
     const relatedRegion = dialog.getByRole("region", { name: "Also like" });
@@ -61,7 +67,7 @@ test(
     }
 
     await expect(selectedList.getByRole("listitem")).toHaveCount(10);
-    await expect(dialog.getByText(/10 Artists ready/)).toBeVisible();
+    await expect(dialog.getByText("10 Artists picked. Save, or keep adding.")).toBeVisible();
     await noOverflow(page);
 
     await dialog.getByRole("button", { name: "Save Taste" }).click();
@@ -75,12 +81,13 @@ test(
     await searchButton.click();
     const sent = (await request).postDataJSON();
     expect(sent.taste).toHaveLength(10);
-    expect(sent.taste.slice(0, 3)).toEqual(["Khruangbin", "Bonobo", "Tame Impala"]);
+    // The newest picks lead, so a Search seeds from what was just added.
+    expect(sent.taste.slice(-3)).toEqual(["Tame Impala", "Bonobo", "Khruangbin"]);
   },
 );
 
 test(
-  "Exportify and TuneMyMusic files parse strictly in the browser with clear provenance and Update import",
+  "Exportify and TuneMyMusic files parse strictly in the browser, keep clear provenance and combine",
   { tag: "@phone" },
   async ({ page }) => {
     await page.goto("/");
@@ -99,7 +106,7 @@ test(
     await page.getByRole("menuitem", { name: /^Your Taste/ }).click();
 
     const dialog = page.getByRole("dialog", { name: "Your Taste" });
-    await dialog.getByRole("button", { name: "Drop CSV file" }).click();
+    await dialog.getByRole("button", { name: "Import a playlist" }).click();
 
     const exportifyCsv = [
       "Track URI,Track Name,Artist URI(s),Artist Name(s),Album Name",
@@ -108,13 +115,13 @@ test(
       "spotify:track:SECRET_TRACK_3,Secret Song 3,spotify:artist:3,Stray Novelty Act,Promo",
     ].join("\n");
 
-    await dialog.getByLabel(/Playlist export file/).setInputFiles({
+    await dialog.getByLabel(/Drop a CSV or TXT file/).setInputFiles({
       name: "liked_songs_exportify.csv",
       mimeType: "text/csv",
       buffer: Buffer.from(exportifyCsv),
     });
 
-    await expect(dialog.getByText(/Detected Exportify CSV/)).toBeVisible();
+    await expect(dialog.getByText(/from your Exportify CSV, most played first/)).toBeVisible();
     const importedList = dialog.getByRole("list", { name: "Imported Artists" });
     await expect(importedList.getByRole("listitem")).toHaveCount(3);
     // Remove stray entry before saving.
@@ -124,27 +131,31 @@ test(
 
     await dialog.getByRole("button", { name: "Save Taste" }).click();
     await expect(dialog.getByText("Using 2 Artists from your Exportify CSV file.")).toBeVisible();
-    await expect(dialog.getByText(/Imported .*File import on this device \(not a live Spotify connection\)/)).toBeVisible();
+    await expect(dialog.getByText("Includes a file import, not a live Spotify connection.")).toBeVisible();
     // Raw file stayed completely client-side: zero POSTs to the API.
     expect(outboundPosts).toEqual([]);
 
-    // Update import with a TuneMyMusic TXT export.
-    await dialog.getByRole("button", { name: "Update import" }).click();
+    // A TuneMyMusic TXT export joins the Exportify Artists instead of replacing them.
+    await dialog.getByRole("button", { name: "Other ways to add your Taste" }).click();
+    await expect(dialog.getByText("What you add here joins your 2 Artists.")).toBeVisible();
+    await dialog.getByLabel("Import from").selectOption("csv");
     const tuneMyMusicTxt = [
       "Bonobo - PRIVATE_TMM_TRACK_1",
       "Bonobo - PRIVATE_TMM_TRACK_2",
       "Four Tet - PRIVATE_TMM_TRACK_3",
     ].join("\n");
-    await dialog.getByLabel(/Playlist export file/).setInputFiles({
+    await dialog.getByLabel(/Drop a CSV or TXT file/).setInputFiles({
       name: "spotify_tunemymusic.txt",
       mimeType: "text/plain",
       buffer: Buffer.from(tuneMyMusicTxt),
     });
 
-    await expect(dialog.getByText(/Detected TuneMyMusic TXT/)).toBeVisible();
+    await expect(dialog.getByText(/from your TuneMyMusic TXT/)).toBeVisible();
     await dialog.getByRole("button", { name: "Save Taste" }).click();
-    await expect(dialog.getByText("Using 2 Artists from your TuneMyMusic file.")).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Update import" })).toBeVisible();
+    await expect(
+      dialog.getByText("Using 4 Artists from your TuneMyMusic file and your Exportify CSV file."),
+    ).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Edit list" })).toBeVisible();
     expect(outboundPosts).toEqual([]);
 
     // Confirm only ranked Artist names leave the browser on Search.
@@ -155,7 +166,8 @@ test(
     await expect(searchButton).toBeEnabled();
     await searchButton.click();
     const sent = (await request).postDataJSON();
-    expect(sent.taste).toEqual(["Bonobo", "Four Tet"]);
+    // The newer file and the older take turns.
+    expect(sent.taste).toEqual(["Bonobo", "Khruangbin", "Four Tet", "Leon Bridges"]);
     expect(JSON.stringify(sent)).not.toMatch(/SECRET_TRACK|PRIVATE_TMM_TRACK|spotify:track/);
   },
 );

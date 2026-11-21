@@ -147,7 +147,7 @@ def index_videos(
             continue
         if not (parsed := parse_session(series, listed.title)):
             continue
-        key = normalize(parsed[0])
+        key = live_clips.artist_key(parsed[0])
         if key not in best or (parsed[1] and not best[key][1]):
             video = LiveVideo(video_id=listed.video_id, title=listed.title, session=series.name)
             best[key] = (video, parsed[1])
@@ -225,18 +225,19 @@ async def _track_names(
 async def _start(
     client: httpx.AsyncClient, video_id: str, details: Details, tracks: TrackNames
 ) -> int:
-    """The chapter of a best-known track, else the most liked comment's stamp, else the start a
-    video's length calls for. A video of no length is live, so it starts where it is."""
+    """The moment the crowd's comments agree on, else the chapter of a best-known track from the
+    description or a commenter's tracklist, else the start a video's length calls for. A video of
+    no length is live, so it starts where it is."""
     duration = details.duration
     if not duration:
         return 0
-    if found := live_clips.chapters(details.description):
-        start = live_clips.chapter_start(found, await tracks(), duration)
-        if start is not None:
-            return start
     comments = await live_clips.top_comments(client, video_id)
-    start = live_clips.comment_start(comments, duration)
-    return live_clips.intro_start(duration) if start is None else start
+    if (start := live_clips.crowd_start(comments, duration)) is not None:
+        return start
+    found = live_clips.chapters(details.description) or live_clips.comment_chapters(comments)
+    if found and (start := live_clips.chapter_start(found, await tracks(), duration)) is not None:
+        return start
+    return live_clips.intro_start(duration)
 
 
 async def _clip_of(
@@ -267,7 +268,7 @@ async def find_clip(
     daily limit counts and raises `DailyLimitReached` past. Both answers are cached, a miss for
     less time.
     """
-    key = normalize(name)
+    key = live_clips.artist_key(name)
     if cached := await cache.read(redis, _clip_key(key), LiveClipResult):
         return cached.clip
     tracks: TrackNames = partial(_track_names, lastfm_client, setlistfm_client, redis, name)
