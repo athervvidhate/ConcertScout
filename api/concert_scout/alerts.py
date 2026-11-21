@@ -23,8 +23,8 @@ from pydantic import BaseModel, SecretStr
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from concert_scout import clock, pool
-from concert_scout.models import Concert, Place, Price
+from concert_scout import clock, pool, saved_searches
+from concert_scout.models import Concert, Place, Price, Recommendation
 from concert_scout.names import normalize
 from concert_scout.pipeline import Services
 from concert_scout.security import Refused
@@ -291,6 +291,42 @@ def sale_card(reminder: SaleReminder, timezone: str) -> SaleCard:
     )
 
 
+@dataclass(frozen=True)
+class SavedSearchCard:
+    """One Recommendation from a Saved Search rerun: reason plus source facts."""
+
+    lineup: str
+    reason: str
+    tickets: str
+    when: str | None
+    where: str | None
+    price: str | None
+    on_sale: str | None
+    image: str | None
+
+
+@dataclass(frozen=True)
+class SavedSearchSection:
+    """Unseen Recommendations for one Saved Search."""
+
+    query_text: str
+    cards: list[SavedSearchCard]
+
+
+def saved_search_card(rec: Recommendation, now: dt.datetime) -> SavedSearchCard:
+    concert = rec.concert
+    return SavedSearchCard(
+        lineup=", ".join(a.name for a in concert.artists) or concert.name,
+        reason=rec.reason,
+        tickets=concert.url,
+        when=when(concert),
+        where=", ".join(f for f in (concert.venue, concert.city, concert.region) if f) or None,
+        price=price(concert.price) if concert.price else None,
+        on_sale=on_sale(concert, now),
+        image=concert.image,
+    )
+
+
 def _concert_who(concert: Concert) -> str:
     return concert.name if concert.festival or not concert.artists else concert.artists[0].name
 
@@ -301,11 +337,23 @@ def subject(
     has_artists: bool = True,
     has_venues: bool = False,
     sale_reminders: Sequence[SaleReminder] = (),
+    saved_search_picks: Sequence[saved_searches.SavedSearchPicks] = (),
 ) -> str:
+    saved_recs = [rec for batch in saved_search_picks for rec in batch.recommendations]
+    if not concerts and not sale_reminders and saved_recs:
+        if len(saved_recs) == 1:
+            return f"{_concert_who(saved_recs[0].concert)} — new pick for your Saved Search"
+        return f"{len(saved_recs)} new picks for your Saved Searches"
+
     if not concerts and sale_reminders:
         if len(sale_reminders) == 1:
-            return f"{_concert_who(sale_reminders[0].concert)} goes on sale soon"
-        return f"{len(sale_reminders)} Saved Concerts go on sale soon"
+            base = f"{_concert_who(sale_reminders[0].concert)} goes on sale soon"
+        else:
+            base = f"{len(sale_reminders)} Saved Concerts go on sale soon"
+        if not saved_recs:
+            return base
+        pick_noun = "Saved Search pick" if len(saved_recs) == 1 else "Saved Search picks"
+        return f"{base} + {len(saved_recs)} {pick_noun}"
 
     if len(concerts) == 1:
         concert = concerts[0]
@@ -318,10 +366,14 @@ def subject(
     else:
         base = f"{len(concerts)} new Concerts from Artists you follow"
 
-    if not sale_reminders:
-        return base
-    noun = "Saved Concert" if len(sale_reminders) == 1 else "Saved Concerts"
-    return f"{base} + {len(sale_reminders)} {noun} on sale soon"
+    extras: list[str] = []
+    if sale_reminders:
+        noun = "Saved Concert" if len(sale_reminders) == 1 else "Saved Concerts"
+        extras.append(f"{len(sale_reminders)} {noun} on sale soon")
+    if saved_recs:
+        pick_noun = "Saved Search pick" if len(saved_recs) == 1 else "Saved Search picks"
+        extras.append(f"{len(saved_recs)} {pick_noun}")
+    return f"{base} + {' + '.join(extras)}" if extras else base
 
 
 def body(
@@ -333,6 +385,7 @@ def body(
     *,
     sale_cards: Sequence[SaleCard] = (),
     more_sales: int = 0,
+    saved_search_sections: Sequence[SavedSearchSection] = (),
 ) -> str:
     """The plain-text part, for mail clients that show no HTML."""
     lines: list[str] = []
@@ -364,9 +417,20 @@ def body(
         if more_sales:
             lines.extend([f"And {more_sales} more Saved Concerts going on sale soon.", ""])
 
+    for section in saved_search_sections:
+        lines.extend([f"Saved Search: {section.query_text}", ""])
+        for shown_pick in section.cards:
+            lines.append(shown_pick.lineup)
+            if shown_pick.reason:
+                lines.append(shown_pick.reason)
+            prices = " · ".join(f for f in (shown_pick.price, shown_pick.on_sale) if f) or None
+            lines.extend(f for f in (shown_pick.when, shown_pick.where, prices) if f)
+            lines.extend([f"Tickets: {shown_pick.tickets}", ""])
+
     lines.extend(
         [
-            f"Manage your Followed Artists, Followed Venues and Alert place: {site_url}/account",
+            f"Manage your Followed Artists, venues, Saved Searches and Alert place: "
+            f"{site_url}/account",
             f"Stop these emails: {unsubscribe_url}",
         ]
     )
@@ -383,12 +447,16 @@ def html(
     *,
     sale_cards: Sequence[SaleCard] = (),
     more_sales: int = 0,
+    saved_search_sections: Sequence[SavedSearchSection] = (),
 ) -> str:
     """The designed part. It holds the same facts as `body`."""
     if cards and place is not None:
         preview = f"{', '.join(c.lineup for c in cards[:3])}: new Concerts near {place.name}"
-    else:
+    elif sale_cards:
         preview = f"{', '.join(c.lineup for c in sale_cards[:3])}: Saved Concerts going on sale"
+    else:
+        first_cards = [c for s in saved_search_sections for c in s.cards][:3]
+        preview = f"{', '.join(c.lineup for c in first_cards)}: new picks for your Saved Searches"
     return TEMPLATES.get_template("alert.html").render(
         subject=title,
         preview=preview,
@@ -397,6 +465,7 @@ def html(
         more=more,
         sale_cards=sale_cards,
         more_sales=more_sales,
+        saved_search_sections=saved_search_sections,
         site_url=site_url,
         unsubscribe_url=unsubscribe_url,
     )
@@ -420,6 +489,7 @@ def email(
     has_venues: bool = False,
     sale_reminders: Sequence[SaleReminder] = (),
     timezone: str | None = None,
+    saved_search_picks: Sequence[saved_searches.SavedSearchPicks] = (),
 ) -> Email:
     """One Alert: at most MAX_CONCERTS_PER_EMAIL Concerts per section, the rest counted for next."""
     shown = concerts[:MAX_CONCERTS_PER_EMAIL]
@@ -431,11 +501,21 @@ def email(
     sale_cards = [sale_card(r, zone) for r in shown_sales]
     more_sales = len(sale_reminders) - len(shown_sales)
 
+    saved_search_sections = [
+        SavedSearchSection(
+            query_text=batch.saved_search.query_text,
+            cards=[saved_search_card(rec, now) for rec in batch.recommendations],
+        )
+        for batch in saved_search_picks
+        if batch.recommendations
+    ]
+
     title = subject(
         shown,
         has_artists=has_artists,
         has_venues=has_venues,
         sale_reminders=shown_sales,
+        saved_search_picks=saved_search_picks,
     )
     return Email(
         subject=title,
@@ -447,6 +527,7 @@ def email(
             unsubscribe_url,
             sale_cards=sale_cards,
             more_sales=more_sales,
+            saved_search_sections=saved_search_sections,
         ),
         html=html(
             title,
@@ -457,6 +538,7 @@ def email(
             unsubscribe_url,
             sale_cards=sale_cards,
             more_sales=more_sales,
+            saved_search_sections=saved_search_sections,
         ),
     )
 
@@ -470,10 +552,13 @@ class PendingAlert:
     has_artists: bool = False
     has_venues: bool = False
     sale_reminders: list[SaleReminder] = field(default_factory=list[SaleReminder])
+    saved_search_picks: list[saved_searches.SavedSearchPicks] = field(
+        default_factory=list[saved_searches.SavedSearchPicks]
+    )
 
     @property
     def has_content(self) -> bool:
-        return bool(self.new_concerts or self.sale_reminders)
+        return bool(self.new_concerts or self.sale_reminders or self.saved_search_picks)
 
 
 def _groups(
@@ -596,16 +681,24 @@ async def run(
     outcome = Outcome()
     try:
         accounts = await supabase.accounts_with_alerts(accounts_client, secret_key)
-        outcome.accounts = len(accounts)
         pending = {a.user_id: PendingAlert(account=a) for a in accounts}
         outcome.places = await _collect_followed(
             services, accounts_client, secret_key, accounts, pending, now, deadline
         )
         await _collect_sale_reminders(accounts_client, secret_key, accounts, pending, now)
-        for account in accounts:
+        saved_picks = await saved_searches.collect_due(
+            services, accounts_client, secret_key, now, deadline
+        )
+        for user_id, batches in saved_picks.items():
+            if user_id not in pending:
+                pending[user_id] = PendingAlert(
+                    account=AlertAccount(user_id=user_id, enabled=False)
+                )
+            pending[user_id].saved_search_picks.extend(batches)
+        outcome.accounts = len(pending)
+        for digest in pending.values():
             if time.monotonic() > deadline or outcome.sent >= DAILY_EMAILS:
                 break
-            digest = pending[account.user_id]
             if digest.has_content and await _send(
                 accounts_client,
                 secret_key,
@@ -654,6 +747,7 @@ async def _send(
             has_venues=digest.has_venues,
             sale_reminders=digest.sale_reminders,
             timezone=account.timezone,
+            saved_search_picks=digest.saved_search_picks,
         )
         await resend.send(
             mail,
@@ -680,6 +774,21 @@ async def _send(
                 secret_key,
                 account.user_id,
                 [(r.concert.id, r.sale_key) for r in shown_reminders],
+            )
+        if digest.saved_search_picks:
+            sent_pairs = [
+                (batch.saved_search.id, rec.concert.id)
+                for batch in digest.saved_search_picks
+                for rec in batch.recommendations
+            ]
+            await supabase.record_saved_search_sent(
+                accounts_client, secret_key, account.user_id, sent_pairs
+            )
+            await supabase.mark_saved_search_ran(
+                accounts_client,
+                secret_key,
+                [batch.saved_search.id for batch in digest.saved_search_picks],
+                now,
             )
     except (supabase.SupabaseError, resend.ResendError) as exc:
         logger.warning("Alert for one Account failed: %s", exc)

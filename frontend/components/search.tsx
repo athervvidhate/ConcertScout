@@ -35,6 +35,7 @@ import {
   posterArtistNames,
   type RefinementEntry,
 } from "@/lib/refinement";
+import { canSaveReading } from "@/lib/saved-searches";
 import { removeSteeringArtist } from "@/lib/sculpt";
 import { API_URL, type Asked, type Reading } from "@/lib/search";
 import { createSharedPoster, sharedUrl } from "@/lib/share";
@@ -531,6 +532,16 @@ export function Search() {
                 searchId ? (id) => linkToPoster(searchId, id) : undefined
               }
               shareTitle={sharedTitle({ reading: reading ?? undefined, recommendations })}
+              saveSearchContext={
+                signedIn && reading && canSaveReading(reading)
+                  ? {
+                      queryText:
+                        searched.trim() ||
+                        sharedTitle({ reading, recommendations }),
+                      reading,
+                    }
+                  : undefined
+              }
               status={status}
               step={step}
               onChange={() => {

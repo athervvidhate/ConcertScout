@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Header, Path, Request, Response
 from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 from redis.exceptions import RedisError
 
-from concert_scout import clock, limits, pool, security, taste_profile
+from concert_scout import clock, limits, pool, saved_searches, security, taste_profile
 from concert_scout.config import Settings
 from concert_scout.models import Concert, Place
 from concert_scout.names import normalize
@@ -370,4 +370,5 @@ def router(settings: Settings, client: httpx.AsyncClient, services: Services) ->
         return Response(status_code=204)
 
     routes.include_router(taste_profile.account_routes(settings, client, services, current_account))
+    routes.include_router(saved_searches.account_routes(settings, client, current_account))
     return routes
