@@ -21,6 +21,10 @@ TICKETMASTER_GAP = dt.timedelta(milliseconds=334)
 DAILY_CALLS = 5000
 # MusicBrainz blocks clients that average over 1 request a second.
 MUSICBRAINZ_GAP = dt.timedelta(seconds=1)
+# Each YouTube search costs 100 of the key's 10,000 daily units, so a day's few stay well under it.
+YOUTUBE_SEARCHES_PER_DAY = 60
+# Setlist.fm allows 2 requests a second on free keys.
+SETLISTFM_GAP = dt.timedelta(milliseconds=550)
 
 # Books the caller the gate's next free start, so callers go in the order they asked. Returns the
 # milliseconds to wait. Times are whole milliseconds, which Lua writes back without an exponent.
@@ -34,8 +38,10 @@ return start - now
 
 
 SEARCHES_PER_HOUR = 10
+SCULPTS_PER_HOUR = 40
 TASTE_PER_HOUR = 30
 ARTIST_PER_HOUR = 120
+LIVE_CLIP_PER_HOUR = 60
 # Each save or import looks its Concerts up on Ticketmaster.
 SAVES_PER_HOUR = 120
 # Each share writes one small record that lives for 90 days.
@@ -47,7 +53,13 @@ DAILY_SPEND = Decimal(1)
 # Eval runs are paid tuning work by the owner, so they get more room per day than visitors.
 EVAL_DAILY_SPEND = Decimal(3)
 MONTHLY_SPEND = Decimal(10)
+# Saved Search reruns stop before live visitor Searches so background jobs never exhaust the budget.
+SAVED_SEARCH_DAILY_HEADROOM = Decimal("0.25")
+SAVED_SEARCH_MONTHLY_HEADROOM = Decimal("1.50")
 MICRODOLLARS = 1_000_000
+# Gemini's paid rate for gemini-embedding-001, which reports no usage itself. The free tier costs
+# nothing, so counting this rate can only over-count a Search.
+EMBEDDING_USD_PER_MILLION_TOKENS = Decimal("0.15")
 
 
 class VisitorLimitReached(Exception):
@@ -63,7 +75,7 @@ class SpendCapReached(Exception):
 
 
 class DailyLimitReached(Exception):
-    """Today's Ticketmaster calls are spent."""
+    """Today's calls to a source with a daily limit are spent."""
 
     def __init__(self, retry_after: int) -> None:
         super().__init__(f"retry after {retry_after}s")
@@ -73,15 +85,25 @@ class DailyLimitReached(Exception):
 async def ticketmaster_call(redis: Redis) -> None:
     """Count one call against today's limit, then wait for this caller's turn to make it."""
     try:
-        await _count_today(redis)
+        await _count_today(redis, "ticketmaster", DAILY_CALLS)
     except RedisError as exc:
         logger.warning("Limiter failed: %s", type(exc).__name__)
     await _take_turn(redis, "ticketmaster:next", TICKETMASTER_GAP)
 
 
+async def youtube_search_call(redis: Redis) -> None:
+    """Count one YouTube search against today's limit. Redis failures are the caller's to handle."""
+    await _count_today(redis, "youtube:search", YOUTUBE_SEARCHES_PER_DAY)
+
+
 async def musicbrainz_call(redis: Redis) -> None:
     """Wait for this caller's turn, a full gap after the last MusicBrainz call by any worker."""
     await _take_turn(redis, "musicbrainz:next", MUSICBRAINZ_GAP)
+
+
+async def setlistfm_call(redis: Redis) -> None:
+    """Wait for this caller's turn, a full gap after the last Setlist.fm call by any worker."""
+    await _take_turn(redis, "setlistfm:next", SETLISTFM_GAP)
 
 
 # Each caller holds at most one place in each gate's line at a time. A Search with many calls then
@@ -144,18 +166,31 @@ def _seconds_until(moment: dt.datetime, now: dt.datetime) -> int:
     return int((moment - now).total_seconds()) + 1
 
 
-async def check_spend(redis: Redis, daily: Decimal = DAILY_SPEND) -> None:
+async def check_spend(
+    redis: Redis,
+    daily: Decimal = DAILY_SPEND,
+    monthly: Decimal = MONTHLY_SPEND,
+) -> None:
     """Raises at either cap. Redis failures are the caller's to handle."""
     now = dt.datetime.now(dt.UTC)
     day_key, month_key = _spend_keys(now)
     day, month = await redis.mget([day_key, month_key])
-    if Decimal(int(month or 0)) / MICRODOLLARS >= MONTHLY_SPEND:
+    if Decimal(int(month or 0)) / MICRODOLLARS >= monthly:
         next_month = (now.replace(day=1) + dt.timedelta(days=32)).replace(day=1)
         start = next_month.replace(hour=0, minute=0, second=0, microsecond=0)
         raise SpendCapReached(_seconds_until(start, now))
     if Decimal(int(day or 0)) / MICRODOLLARS >= daily:
         tomorrow = dt.datetime.combine(now.date() + dt.timedelta(days=1), dt.time(), dt.UTC)
         raise SpendCapReached(_seconds_until(tomorrow, now))
+
+
+async def check_saved_search_spend(redis: Redis) -> None:
+    """Stops Saved Search reruns before live visitor caps so visitor Searches keep headroom."""
+    await check_spend(
+        redis,
+        daily=DAILY_SPEND - SAVED_SEARCH_DAILY_HEADROOM,
+        monthly=MONTHLY_SPEND - SAVED_SEARCH_MONTHLY_HEADROOM,
+    )
 
 
 async def record_spend(redis: Redis, cost: Decimal) -> None:
@@ -174,12 +209,12 @@ async def record_spend(redis: Redis, cost: Decimal) -> None:
         logger.warning("Spend not recorded: %s", type(exc).__name__)
 
 
-async def _count_today(redis: Redis) -> None:
+async def _count_today(redis: Redis, source: str, limit: int) -> None:
     now = dt.datetime.now(dt.UTC)
-    key = f"ticketmaster:calls:{now.date()}"
+    key = f"{source}:calls:{now.date()}"
     calls = await redis.incr(key)
     if calls == 1:
         await redis.expire(key, dt.timedelta(days=2))
-    if calls > DAILY_CALLS:
+    if calls > limit:
         tomorrow = dt.datetime.combine(now.date() + dt.timedelta(days=1), dt.time(), dt.UTC)
         raise DailyLimitReached(int((tomorrow - now).total_seconds()) + 1)

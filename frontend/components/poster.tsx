@@ -2,9 +2,16 @@
 
 import { Dialog } from "@base-ui/react/dialog";
 import { LayoutGrid, List, X } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import {
+  AnimatePresence,
+  type HTMLMotionProps,
+  motion,
+  useIsPresent,
+  useReducedMotion,
+} from "motion/react";
 import { ConcertPhoto } from "@/components/concert-source";
 import { ListenStage } from "@/components/listen";
+import { WatchLiveStage } from "@/components/watch-live";
 import {
   useCallback,
   useEffect,
@@ -15,10 +22,12 @@ import {
 } from "react";
 import { AnimatedCount } from "@/components/animated-count";
 import { AddToCalendar } from "@/components/add-to-calendar";
+import { PosterDials } from "@/components/poster-dials";
 import { Ticket } from "@/components/ticket";
 import { listenTo, matchLine, nameOf } from "@/lib/lineup";
 import { WorkingSearch } from "@/components/working-search";
 import { SaveButton } from "@/components/save-button";
+import { SaveSearchButton } from "@/components/saved-searches";
 import { ShareButton } from "@/components/share-button";
 import { dismissArtistHint, useArtistHint } from "@/lib/artist-hint";
 import { Choreography, EXPO_OUT_CURVE } from "@/lib/choreography";
@@ -27,10 +36,19 @@ import {
   revealPoster,
   type NameFrame,
 } from "@/lib/poster-choreography";
+import {
+  isBoosted,
+  isDefaultSculpt,
+  relaxFilter,
+  toggleBoostArtist,
+  toggleExcludeArtist,
+  type SculptMeta,
+  type SculptState,
+} from "@/lib/sculpt";
 import { useTicketMotion } from "@/lib/use-ticket-motion";
 import { formatDate, formatConcertTime } from "@/lib/format";
 import { removeSaved, saveConcert, useDecisions } from "@/lib/saved";
-import type { Candidates, Recommendation } from "@/lib/search";
+import type { Candidates, Reading, Recommendation } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
 
 type View = "grid" | "list";
@@ -54,10 +72,21 @@ type Props = {
   shareLink?: (concertId?: string) => Promise<string>;
   /** The title the share sheet gives a link to this Poster. */
   shareTitle?: string;
+  /** Signed-in Search context for "Save this Search". Omitted for guests and Shared Posters. */
+  saveSearchContext?: { queryText: string; reading: Reading };
   /** Shows the finished Poster at once, as a reloaded Search and a Shared Poster do. */
   instant?: boolean;
   /** The Ticket to open on arrival. */
   openConcert?: string;
+  /** Poster Sculpting dials and Taste steering state, present for live Searches with a session. */
+  sculpt?: SculptState;
+  sculpting?: boolean;
+  sculptMeta?: SculptMeta | null;
+  sculptError?: { code: string; message: string } | null;
+  sculptVersion?: number;
+  onSculpt?: (next: SculptState) => void;
+  onResetSculpt?: () => void;
+  onRerunSearch?: () => void;
 };
 export function Poster({
   candidates,
@@ -71,8 +100,17 @@ export function Poster({
   onChange,
   shareLink,
   shareTitle,
+  saveSearchContext,
   instant = false,
   openConcert,
+  sculpt,
+  sculpting = false,
+  sculptMeta = null,
+  sculptError = null,
+  sculptVersion = 0,
+  onSculpt,
+  onResetSculpt,
+  onRerunSearch,
 }: Props) {
   const reduced = useReducedMotion();
   const [cached] = useState(!searching && hasPoster);
@@ -101,16 +139,18 @@ export function Poster({
   const decisions = useDecisions();
   const hint = useArtistHint();
   const current = recommendations[selected];
-  // One player at a time, named by where it plays: "dialog:<id>" or "solo:<id>".
-  const [listeningTo, setListeningTo] = useState<string | null>(null);
+  // One player at a time, named by what plays and where: "listen:dialog:<id>" or "watch:solo:<id>".
+  const [playing, setPlaying] = useState<string | null>(null);
   const closed = useCallback(() => {
     setOpen(false);
-    setListeningTo((playing) => (playing?.startsWith("dialog:") ? null : playing));
+    setPlaying((now) => (now?.includes(":dialog:") ? null : now));
   }, []);
-  function listenProps(where: string) {
+  function playerProps(where: string) {
     return {
-      listening: listeningTo === where,
-      onListen: (on: boolean) => setListeningTo(on ? where : null),
+      listening: playing === `listen:${where}`,
+      onListen: (on: boolean) => setPlaying(on ? `listen:${where}` : null),
+      watching: playing === `watch:${where}`,
+      onWatch: (on: boolean) => setPlaying(on ? `watch:${where}` : null),
     };
   }
   const ticketMotion = useTicketMotion(
@@ -166,7 +206,18 @@ export function Poster({
       scope,
       changing,
     );
-  }, [results, stage, view, reduced]);
+  }, [results, stage, view, sculptVersion, reduced]);
+
+  function boostArtist(artist: string) {
+    if (!sculpt || !onSculpt) return;
+    onSculpt(toggleBoostArtist(sculpt, artist));
+  }
+
+  function excludeArtist(artist: string, closeDialog = false) {
+    if (!sculpt || !onSculpt) return;
+    if (closeDialog) closed();
+    onSculpt(toggleExcludeArtist(sculpt, artist));
+  }
 
   function chooseView(next: View) {
     setView(next);
@@ -269,6 +320,24 @@ export function Poster({
       )}
       {hasPoster && stage === "poster" && (
         <>
+          {sculpt && onSculpt && (
+            <PosterDials
+              sculpt={sculpt}
+              meta={sculptMeta}
+              busy={sculpting}
+              onChange={onSculpt}
+            />
+          )}
+          {sculptError && (
+            <div role="alert" className="sculpt-error">
+              <p>{sculptError.message}</p>
+              {sculptError.code === "session_expired" && onRerunSearch && (
+                <button type="button" onClick={onRerunSearch}>
+                  Rerun Search
+                </button>
+              )}
+            </div>
+          )}
           {recommendations.length > 0 ? (
             <>
               <motion.header
@@ -294,6 +363,12 @@ export function Poster({
                   )}
                 </div>
                 <div className="poster-tools">
+                {saveSearchContext && (
+                  <SaveSearchButton
+                    queryText={saveSearchContext.queryText}
+                    reading={saveSearchContext.reading}
+                  />
+                )}
                 {shareLink && (
                   <ShareButton
                     title={shareTitle ?? "Concert Scout"}
@@ -356,8 +431,8 @@ export function Poster({
                 }}
               >
                 <AnimatePresence mode="wait" initial={false}>
-                  <motion.div
-                    key={view}
+                  <PosterView
+                    key={`${view}-${sculptVersion}`}
                     ref={setResults}
                     className={`concerts-${view}`}
                     data-view={view}
@@ -393,7 +468,13 @@ export function Poster({
                               {listen && (
                                 <ListenStage
                                   name={listen}
-                                  listening={listeningTo === `solo:${concert.id}`}
+                                  listening={playing === `listen:solo:${concert.id}`}
+                                />
+                              )}
+                              {listen && (
+                                <WatchLiveStage
+                                  name={listen}
+                                  watching={playing === `watch:solo:${concert.id}`}
                                 />
                               )}
                               {bookmark(r)}
@@ -405,21 +486,39 @@ export function Poster({
                                 artistHint={hint}
                                 onArtistOpen={dismissArtistHint}
                                 hidePhoto
-                                {...listenProps(`solo:${concert.id}`)}
+                                boosted={
+                                  Boolean(
+                                    sculpt && listen && isBoosted(sculpt, listen),
+                                  )
+                                }
+                                onBoostArtist={
+                                  sculpt && onSculpt ? boostArtist : undefined
+                                }
+                                onExcludeArtist={
+                                  sculpt && onSculpt
+                                    ? (artist) => excludeArtist(artist, false)
+                                    : undefined
+                                }
+                                {...playerProps(`solo:${concert.id}`)}
+                                actions={
+                                  <>
+                                    <SaveButton
+                                      saved={decisions[concert.id] === "saved"}
+                                      pending={pending.has(concert.id)}
+                                      onToggle={() => void toggleSave(r)}
+                                    />
+                                    {shareLink && (
+                                      <ShareButton
+                                        iconOnly
+                                        title={`${name} on Concert Scout`}
+                                        link={() => shareLink(concert.id)}
+                                      />
+                                    )}
+                                  </>
+                                }
                               />
                               <div className="solo-actions">
-                                <SaveButton
-                                  saved={decisions[concert.id] === "saved"}
-                                  pending={pending.has(concert.id)}
-                                  onToggle={() => void toggleSave(r)}
-                                />
                                 <AddToCalendar concert={concert} name={name} />
-                                {shareLink && (
-                                  <ShareButton
-                                    title={`${name} on Concert Scout`}
-                                    link={() => shareLink(concert.id)}
-                                  />
-                                )}
                                 <Dialog.Trigger
                                   className="quiet"
                                   aria-label={`Open Ticket for ${name}`}
@@ -460,7 +559,7 @@ export function Poster({
                         </article>
                       );
                     })}
-                  </motion.div>
+                  </PosterView>
                 </AnimatePresence>
                 <Dialog.Portal>
                   <Dialog.Backdrop className="ticket-backdrop" />
@@ -479,13 +578,19 @@ export function Poster({
                           Concert details and why it fits your Search.
                         </Dialog.Description>
                         {(current.concert.image ||
-                          listeningTo === `dialog:${current.concert.id}`) && (
+                          playing?.endsWith(`:dialog:${current.concert.id}`)) && (
                           <div className="dialog-media">
                             {photo(current, true)}
                             {listenTo(current) && (
                               <ListenStage
                                 name={listenTo(current) ?? ""}
-                                listening={listeningTo === `dialog:${current.concert.id}`}
+                                listening={playing === `listen:dialog:${current.concert.id}`}
+                              />
+                            )}
+                            {listenTo(current) && (
+                              <WatchLiveStage
+                                name={listenTo(current) ?? ""}
+                                watching={playing === `watch:dialog:${current.concert.id}`}
                               />
                             )}
                           </div>
@@ -498,7 +603,20 @@ export function Poster({
                             artistHint={hint}
                             onArtistOpen={dismissArtistHint}
                             hidePhoto
-                            {...listenProps(`dialog:${current.concert.id}`)}
+                            boosted={Boolean(
+                              sculpt &&
+                                listenTo(current) &&
+                                isBoosted(sculpt, listenTo(current) ?? ""),
+                            )}
+                            onBoostArtist={
+                              sculpt && onSculpt ? boostArtist : undefined
+                            }
+                            onExcludeArtist={
+                              sculpt && onSculpt
+                                ? (artist) => excludeArtist(artist, true)
+                                : undefined
+                            }
+                            {...playerProps(`dialog:${current.concert.id}`)}
                           />
                           <div className="dialog-actions">
                             <SaveButton
@@ -534,6 +652,34 @@ export function Poster({
                 </Dialog.Portal>
               </Dialog.Root>
             </>
+          ) : sculpt && !isDefaultSculpt(sculpt) && onSculpt ? (
+            (() => {
+              const relaxed = relaxFilter(sculpt, sculptMeta?.eliminated_by);
+              return (
+                <div className="empty sculpt-empty" role="status">
+                  <h2>No Concerts match these filters</h2>
+                  <p>{relaxed.reason}</p>
+                  <div className="empty-actions">
+                    <button
+                      type="button"
+                      disabled={sculpting}
+                      onClick={() => onSculpt(relaxed.next)}
+                    >
+                      {relaxed.label}
+                    </button>
+                    {onResetSculpt && (
+                      <button
+                        type="button"
+                        disabled={sculpting}
+                        onClick={onResetSculpt}
+                      >
+                        Reset all filters
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()
           ) : (
             <motion.div
               className="empty"
@@ -607,4 +753,11 @@ export function Poster({
       )}
     </section>
   );
+}
+
+/** One view of the Poster. While it fades out for the other view, it takes no clicks or focus,
+ * so a Ticket never opens from, or returns focus to, a card that is about to go. */
+function PosterView(props: HTMLMotionProps<"div">) {
+  const present = useIsPresent();
+  return <motion.div {...props} inert={!present} />;
 }

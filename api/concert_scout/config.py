@@ -16,7 +16,11 @@ class Settings(BaseSettings):
     # Typesafe's Jev grades the shortlist. Required.
     typesafe_api_key: SecretStr
     lastfm_key: SecretStr | None = None
+    setlistfm_api_key: SecretStr | None = None
+    youtube_api_key: SecretStr | None = None
     jbd_api_key: SecretStr | None = None
+    # Gemini embeddings for semantic retrieval. Unset, Search runs without that signal.
+    google_api_key: SecretStr | None = None
     # How far ahead the national JamBase catalog reaches. The Developer plan allows 180.
     jambase_days: int = Field(default=90, ge=1, le=180)
 
@@ -24,6 +28,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     search_enabled: bool = True
     searches_per_hour: int = limits.SEARCHES_PER_HOUR
+    sculpts_per_hour: int = limits.SCULPTS_PER_HOUR
     # Cloudflare's published always-pass test secret. A public deployment must replace it.
     turnstile_secret: SecretStr = SecretStr("1x0000000000000000000000000000000AA")
     client_ip_header: str | None = None

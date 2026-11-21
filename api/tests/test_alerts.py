@@ -32,6 +32,7 @@ class Stack:
     def __init__(self) -> None:
         self.settings: dict[str, dict[str, Any]] = {}
         self.followed: list[dict[str, str]] = []
+        self.followed_venues: list[dict[str, Any]] = []
         self.sent: list[dict[str, str]] = []
         self.users: dict[str, dict[str, Any]] = {}
         self.emails: list[tuple[dict[str, Any], httpx.Headers]] = []
@@ -73,8 +74,19 @@ class Stack:
                     k: v for k, v in row.items() if k in ("place", "enabled")
                 }
             return httpx.Response(201)
-        if path in ("/rest/v1/followed_artists", "/rest/v1/alerts_sent"):
-            table = self.followed if "followed" in path else self.sent
+        if path == "/rest/v1/saved_searches" and request.method == "GET":
+            return httpx.Response(200, json=[])
+        if path in (
+            "/rest/v1/followed_artists",
+            "/rest/v1/followed_venues",
+            "/rest/v1/alerts_sent",
+        ):
+            if path == "/rest/v1/followed_artists":
+                table: list[dict[str, Any]] = self.followed
+            elif path == "/rest/v1/followed_venues":
+                table = self.followed_venues
+            else:
+                table = self.sent
             if request.method == "POST":
                 table.extend(json.loads(request.content))
                 return httpx.Response(201)

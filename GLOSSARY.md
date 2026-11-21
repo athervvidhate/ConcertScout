@@ -10,7 +10,15 @@ _Avoid_: Query, chat, conversation, session
 
 **Taste**:
 What a person likes in music for the purpose of a Search, such as named artists or a plain description.
-_Avoid_: Preferences, profile, playlist info
+_Avoid_: Preferences, profile (except Taste Profile), playlist info
+
+**Taste Profile**:
+The Taste an Account keeps on every device: Artist names, favourites first, and every source they came from. It never holds data from a Spotify account.
+_Avoid_: Synced Taste, saved profile
+
+**For You shelf**:
+The home shelf of Concerts in the next 60 days that suit a person's Taste, matched by code from Lineup names, the closest similar Artists and Artists who share bills with them. It never calls a model.
+_Avoid_: Recommendations (those are a Search's), feed
 
 **Concert**:
 A real-world live music event, as reported by its source. A festival is a Concert with a lineup.
@@ -54,6 +62,10 @@ _Avoid_: Stub, card
 A Concert a person chose to keep from a Poster.
 _Avoid_: Favorite, stub, wishlist item
 
+**Saved Search**:
+A Search a person chose to keep. Concert Scout reruns it weekly and sends new Recommendations as an Alert.
+_Avoid_: recipe, watch, saved query
+
 **Account**:
 An optional Concert Scout sign-in, with Google or an email and password, that keeps a person's Saved Concerts on every device. Spotify is a separate connection, not an account.
 _Avoid_: Profile, user, login
@@ -61,6 +73,10 @@ _Avoid_: Profile, user, login
 **Preview**:
 Spotify's player for a Ticket's headliner, opened from Listen on the Ticket so a person can hear them before deciding.
 _Avoid_: Sample, snippet, embed (in copy)
+
+**Live clip**:
+A YouTube performance of a Ticket's headliner, opened from Watch Live on the Ticket at the moment its viewers' comments agree on, or at a best-known track.
+_Avoid_: Video, embed (in copy), replay
 
 **Followed Artist**:
 An Artist a person with an Account chose to hear about.
@@ -74,7 +90,19 @@ _Avoid_: Notification, newsletter, digest
 The one place, with a radius, where an Account wants to hear about Concerts.
 _Avoid_: Home, location, area
 
+**Sonic Card**:
+The plain text Concert Scout builds about one Artist from public source facts, to turn into a vector for semantic retrieval. An Artist with too little to describe takes the average of their Co-Billed peers' vectors instead. No model writes it.
+_Avoid_: Bio, description, embedding text
+
 **Artist panel**: the side panel opened from an Artist's name on a Ticket, showing public facts from Last.fm and a link to Spotify. It never calls a model.
 
 **Shared Poster**: a Poster kept at its own link, which anyone can open without running a Search.
 _Avoid_: permalink, snapshot (an eval term)
+
+**Sculpt**:
+Adjust a Poster's filters or Taste balance using the Search's cached Concert pool, without re-fetching venues or running the interpreter.
+_Avoid_: chat, re-prompt
+
+**Refinement**:
+A follow-up a person types to change the Search on screen. It changes the Reading and produces a new Poster.
+_Avoid_: chat, message, turn, prompt

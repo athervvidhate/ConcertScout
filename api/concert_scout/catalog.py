@@ -7,7 +7,7 @@ the few cells around its place, and a past month expires on its own.
 import datetime as dt
 import logging
 import math
-from collections.abc import Iterable, Sequence
+from collections.abc import AsyncIterator, Iterable, Sequence
 from typing import cast
 
 from pydantic import BaseModel, ValidationError
@@ -16,7 +16,7 @@ from redis.exceptions import RedisError
 from redis.typing import EncodableT, FieldT
 
 from concert_scout import clock
-from concert_scout.models import Concert, Place
+from concert_scout.models import Artist, Concert, Place
 from concert_scout.names import normalize
 from concert_scout.sources.jambase import Listing
 
@@ -239,6 +239,23 @@ async def listings_in(
     redis: Redis, cells: Iterable[str], first: dt.date, last: dt.date
 ) -> list[Listing]:
     return await _read(redis, (_month_key(c, m) for c in cells for m in clock.months(first, last)))
+
+
+async def all_artists(redis: Redis, today: dt.date) -> list[Artist]:
+    """Every Artist in the Catalog, once, with the MusicBrainz ID the sync has settled for them."""
+    # redis-py leaves scan_iter's replies untyped.
+    scan = cast(AsyncIterator[bytes], redis.scan_iter(match="jambase:cell:*", count=1000))  # pyright: ignore[reportUnknownMemberType]
+    keys = _texts([key async for key in scan])
+    artists: dict[str, Artist] = {}
+    for listing in await _read(redis, keys):
+        for artist in listing.concert.artists:
+            if key := normalize(artist.name):
+                artists.setdefault(key, artist)
+    known = await identities(redis, [a.name for a in artists.values()], today)
+    return [
+        a.model_copy(update={"mbid": known[k].mbid}) if (k := normalize(a.name)) in known else a
+        for a in artists.values()
+    ]
 
 
 async def prune(redis: Redis, today: dt.date) -> int:

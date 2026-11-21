@@ -228,6 +228,8 @@ async def test_first_run_downloads_every_state_then_runs_only_change_and_window_
     assert all(s.error is None for s in steps)
     downloads = [r for r in requests if "geoStateIso" in r.url.params]
     assert len(downloads) == len(sync.STATES)
+    # JamBase refuses an eventDateFrom before today on the Developer plan.
+    assert downloads[0].url.params["eventDateFrom"] == str(TODAY)
     assert downloads[0].url.params["eventDateTo"] == str(TODAY + dt.timedelta(days=91))
     found = await catalog.concerts_near(redis, LA, None, None, MOMENT)
     assert len(found) == len(records)
@@ -246,6 +248,7 @@ async def test_first_run_downloads_every_state_then_runs_only_change_and_window_
     change = calls[1].url.params
     assert change["dateModifiedFrom"] == "2026-11-07T19:55:00Z"
     assert "geoStateIso" not in change
+    assert change["eventDateFrom"] == str(next_day.date())
     ahead = calls[2].url.params
     assert (ahead["eventDateFrom"], ahead["eventDateTo"]) == ("2027-02-05", "2027-02-07")
     after = {c.id for c in await catalog.concerts_near(redis, LA, None, None, next_day)}

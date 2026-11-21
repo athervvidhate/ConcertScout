@@ -16,15 +16,27 @@ import { Board, Listings } from "@/components/board";
 import { HomeGuide } from "@/components/home-guide";
 import { Listing } from "@/components/listing";
 import { Poster } from "@/components/poster";
+import { SteeringPills } from "@/components/poster-dials";
+import { RefineBar } from "@/components/refine-bar";
 import { SearchFeedback } from "@/components/search-feedback";
 import { SiteHeader } from "@/components/site-header";
 import { SearchExamples } from "@/components/search-examples";
 import { SpotifyShelf } from "@/components/spotify-shelf";
+import { ForYouShelf } from "@/components/for-you-shelf";
+import { useAccount } from "@/lib/account";
+import { useTasteSync } from "@/lib/for-you";
 import { useSpotifyConnection } from "@/lib/spotify";
-import { countOf, TastePanel } from "@/components/taste-panel";
+import { countOf, type ImportOption, TastePanel } from "@/components/taste-panel";
 import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/place";
 import { dateIn, viewerZone } from "@/lib/format";
 import { anywhere, overNextMonths } from "@/lib/reading";
+import {
+  planUndo,
+  posterArtistNames,
+  type RefinementEntry,
+} from "@/lib/refinement";
+import { canSaveReading } from "@/lib/saved-searches";
+import { removeSteeringArtist } from "@/lib/sculpt";
 import { API_URL, type Asked, type Reading } from "@/lib/search";
 import { createSharedPoster, sharedUrl } from "@/lib/share";
 import { sharedTitle } from "@/lib/shared-heading";
@@ -50,10 +62,14 @@ export function Search() {
   const input = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [tasteOpen, setTasteOpen] = useState(false);
+  const [tasteSource, setTasteSource] = useState<ImportOption | undefined>(undefined);
   const [token, setToken] = useState<string | null>(null);
   const [botCheckFailed, setBotCheckFailed] = useState(false);
   const botCheck = useRef<TurnstileInstance>(null);
   const taste = useImportedTaste();
+  const signedIn = useAccount().status === "signed-in";
+  // A signed-in Account's Taste Profile and this device's Taste settle before the shelf asks.
+  const tasteSynced = useTasteSync();
   const spotify = useSpotifyConnection();
   const [place, setPlace] = useState<Place | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -77,9 +93,21 @@ export function Search() {
     error,
     retryable,
     resumed,
+    sculpt,
+    sculpting,
+    sculptMeta,
+    sculptError,
+    sculptVersion,
+    baseReading,
+    refinements,
+    unanswerable,
+    refining,
     search,
     clear,
     showExample,
+    applySculpt,
+    resetSculpt,
+    dismissUnanswerable,
   } = useSearch();
   // A reloaded Search puts its words back in the box once.
   const [restoredText, setRestoredText] = useState(false);
@@ -142,16 +170,67 @@ export function Search() {
     changeButton.current?.focus();
   }, [editing]);
 
-  function run(request: Asked, near: Place | null = place) {
+  function run(
+    request: Asked,
+    near: Place | null = place,
+    options?: {
+      keepTrail?: RefinementEntry[];
+      keepBaseReading?: Reading | null;
+      scroll?: boolean;
+    },
+  ) {
     if (!token) return;
     // Each token works once, so the next Search needs a fresh one.
     setToken(null);
     botCheck.current?.reset();
     setEditing(false);
     // A typed place wins on the server, so a shared location only fills the gap.
-    search(request, token, taste?.artists ?? [], near);
+    search(request, token, taste?.artists ?? [], near, options);
     input.current?.blur();
-    window.scrollTo({ top: 0, behavior: reduced ? "instant" : "smooth" });
+    if (options?.scroll !== false) {
+      window.scrollTo({ top: 0, behavior: reduced ? "instant" : "smooth" });
+    }
+  }
+
+  function submitRefinement(refinementText: string) {
+    if (!reading) return;
+    run(
+      {
+        reading,
+        refinement: refinementText,
+        poster_artists: posterArtistNames(recommendations),
+        ...(searchId ? { search_id: searchId } : {}),
+      },
+      place,
+      { scroll: false },
+    );
+  }
+
+  function undoRefinement(index: number) {
+    if (!reading) return;
+    const base = baseReading ?? reading;
+    const { nextTrail, restoreReading, replayText } = planUndo(
+      refinements,
+      index,
+      base,
+    );
+    if (replayText) {
+      run(
+        {
+          reading: restoreReading,
+          refinement: replayText,
+          poster_artists: posterArtistNames(recommendations),
+        },
+        place,
+        { keepTrail: nextTrail, keepBaseReading: base, scroll: false },
+      );
+      return;
+    }
+    run({ reading: restoreReading }, place, {
+      keepTrail: nextTrail,
+      keepBaseReading: base,
+      scroll: false,
+    });
   }
 
   function closeEditor() {
@@ -211,7 +290,10 @@ export function Search() {
     <>
       <SiteHeader
         onHome={goHome}
-        onTaste={() => setTasteOpen(true)}
+        onTaste={() => {
+          setTasteSource(undefined);
+          setTasteOpen(true);
+        }}
         tasteLabel={
           taste ? `Your Taste: ${countOf(taste.artists)}` : "Your Taste"
         }
@@ -219,7 +301,11 @@ export function Search() {
       <TastePanel
         spotify={spotify}
         open={tasteOpen}
-        onOpenChange={setTasteOpen}
+        onOpenChange={(nextOpen) => {
+          setTasteOpen(nextOpen);
+          if (!nextOpen) setTasteSource(undefined);
+        }}
+        initialSource={tasteSource}
       />
 
       <AnimatePresence>
@@ -391,6 +477,16 @@ export function Search() {
                 Change
               </Button>
             )}
+            {searchId && phase === "finished" && (
+              <SteeringPills
+                sculpt={sculpt}
+                busy={sculpting}
+                onRemove={(kind, artist) =>
+                  void applySculpt(removeSteeringArtist(sculpt, kind, artist))
+                }
+                onReset={resetSculpt}
+              />
+            )}
           </div>
         )}
         {reading && editing && (
@@ -436,6 +532,16 @@ export function Search() {
                 searchId ? (id) => linkToPoster(searchId, id) : undefined
               }
               shareTitle={sharedTitle({ reading: reading ?? undefined, recommendations })}
+              saveSearchContext={
+                signedIn && reading && canSaveReading(reading)
+                  ? {
+                      queryText:
+                        searched.trim() ||
+                        sharedTitle({ reading, recommendations }),
+                      reading,
+                    }
+                  : undefined
+              }
               status={status}
               step={step}
               onChange={() => {
@@ -451,10 +557,32 @@ export function Search() {
                   ? searchAnywhere
                   : undefined
               }
+              sculpt={searchId ? sculpt : undefined}
+              sculpting={sculpting}
+              sculptMeta={sculptMeta}
+              sculptError={sculptError}
+              sculptVersion={sculptVersion}
+              onSculpt={searchId ? (next) => void applySculpt(next) : undefined}
+              onResetSculpt={searchId ? resetSculpt : undefined}
+              onRerunSearch={
+                canSearch ? () => run(asked ?? { text: searched }) : undefined
+              }
             />
           </motion.div>
         )}
       </AnimatePresence>
+      {(phase === "finished" || refining) && hasPoster && reading && (
+        <RefineBar
+          trail={refinements}
+          unanswerable={unanswerable}
+          recommendations={recommendations}
+          canRefine={canSearch}
+          refining={refining}
+          onRefine={submitRefinement}
+          onUndo={undoRefinement}
+          onDismissNote={dismissUnanswerable}
+        />
+      )}
       {elsewhere && phase === "finished" && (
         <div id="elsewhere">
           <Board
@@ -476,6 +604,15 @@ export function Search() {
           reading={reading}
           recommendations={recommendations}
           error={error}
+        />
+      )}
+      {home && taste && tasteSynced && (
+        <ForYouShelf
+          key={JSON.stringify([taste, place, signedIn])}
+          taste={taste}
+          place={place}
+          signedIn={signedIn}
+          onLocate={shareLocation}
         />
       )}
       {spotify.connected &&
@@ -515,7 +652,14 @@ export function Search() {
               personal={!spotify.connected}
               locationLabel={locationLabel}
               onLocation={toggleLocation}
-              onTaste={() => setTasteOpen(true)}
+              onTaste={() => {
+                setTasteSource(undefined);
+                setTasteOpen(true);
+              }}
+              onPickArtists={() => {
+                setTasteSource("seed");
+                setTasteOpen(true);
+              }}
             />
           </motion.div>
         )}

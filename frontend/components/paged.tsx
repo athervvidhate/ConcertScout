@@ -44,10 +44,11 @@ export function Paged({ heading, columns, children }: Props) {
   }, []);
 
   // Keyboard focus on a later page turns to that page, since nothing here scrolls into view.
+  // React bubbles focus out of portals too, so a panel an item opens must not turn the page.
   const follow = (target: EventTarget) => {
     const frame = windowRef.current;
     const track = trackRef.current;
-    if (!frame || !track || !(target instanceof HTMLElement)) return;
+    if (!frame || !track || !(target instanceof HTMLElement) || !track.contains(target)) return;
     const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
     // Both boxes move with the page, so this is the target's place along the whole track.
     const left = target.getBoundingClientRect().left - track.getBoundingClientRect().left;

@@ -73,12 +73,14 @@ async def find_concerts(
     end: dt.date | None,
     now: dt.datetime,
     on_found: ticketmaster.OnPage | None = None,
+    on_refresh: ticketmaster.OnPage | None = None,
 ) -> list[Concert]:
     """Every Concert for the Search, seed Artists first, then the pool soonest first.
 
     Chunks and lookups stay whole in the cache, so any date window can share them. `on_found`
     sees each page's Concerts in the window as they arrive, so later steps can start early.
-    `names` is the MusicBrainz client that confirms Artists read from titles.
+    `on_refresh` sees freshly fetched Ticketmaster Concerts after cache writes. `names` is the
+    MusicBrainz client that confirms Artists read from titles.
     """
     first, last = date_window(start, end, now.date())
     state = (
@@ -97,9 +99,18 @@ async def find_concerts(
         report = on_found
         return lambda concerts: report([c for c in concerts if _ahead(c, start, last_day, now)])
 
+    refreshed_ids: set[str] = set()
+
+    def mark(concerts: list[Concert]) -> None:
+        refreshed_ids.update(c.id for c in concerts)
+
+    mark_refreshed: ticketmaster.OnPage | None = mark if on_refresh else None
+
     seeds = await asyncio.gather(
         *(
-            _artist(client, redis, name, point, state, radius, found_within(seed_last))
+            _artist(
+                client, redis, name, point, state, radius, found_within(seed_last), mark_refreshed
+            )
             for name in artists
         )
     )
@@ -109,7 +120,17 @@ async def find_concerts(
         months = clock.months(earliest, last)
         chunks = await asyncio.gather(
             *(
-                _chunk(client, redis, point, m, earliest, state, radius, found_within(last))
+                _chunk(
+                    client,
+                    redis,
+                    point,
+                    m,
+                    earliest,
+                    state,
+                    radius,
+                    found_within(last),
+                    mark_refreshed,
+                )
                 for m in months
             )
         )
@@ -117,6 +138,9 @@ async def find_concerts(
     from_pool = [c for group in chunks for c in group if _ahead(c, start, last, now)]
     primary = list({c.id: c for c in [*from_seeds, *from_pool]}.values())
     primary = await _read_titles(names, redis, primary)
+    if on_refresh and refreshed_ids:
+        if fresh := [c for c in primary if c.id in refreshed_ids]:
+            on_refresh(fresh)
     # The JamBase catalog is local, so this never waits on JamBase.
     extra = await catalog.concerts_near(redis, place, start, end, now) if place else []
     merged = merge_sources(primary, extra)
@@ -232,6 +256,7 @@ async def _chunk(
     state: tuple[str, str] | None,
     radius: int,
     on_found: ticketmaster.OnPage | None,
+    on_refresh: ticketmaster.OnPage | None = None,
 ) -> list[Concert]:
     key = f"pool:{_scope(point, state, radius)}:{month:%Y-%m}"
     if cached := await cache.read(redis, key, CachedConcerts):
@@ -250,6 +275,8 @@ async def _chunk(
         on_page=on_found,
     )
     await cache.write(redis, key, CachedConcerts(concerts=concerts), CACHE_TTL)
+    if on_refresh and concerts:
+        on_refresh(concerts)
     return concerts
 
 
@@ -289,6 +316,7 @@ async def _artist(
     state: tuple[str, str] | None,
     radius: int,
     on_found: ticketmaster.OnPage | None,
+    on_refresh: ticketmaster.OnPage | None = None,
 ) -> list[Concert]:
     key = f"artist:{_scope(point, state, radius)}:{normalize(name)}"
     if cached := await cache.read(redis, key, CachedConcerts):
@@ -298,6 +326,8 @@ async def _artist(
             client, redis, name, point, state=state, radius=radius
         )
         await cache.write(redis, key, CachedConcerts(concerts=concerts), CACHE_TTL)
+        if on_refresh and concerts:
+            on_refresh(concerts)
     if on_found:
         on_found(concerts)
     return concerts

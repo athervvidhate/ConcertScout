@@ -26,10 +26,14 @@ from concert_scout import (
     home,
     interpreter,
     limits,
+    live_index,
+    sculpt,
     security,
     share,
     spotify,
+    suggest,
     sync,
+    taste_profile,
     warm,
 )
 from concert_scout.config import Settings
@@ -44,12 +48,15 @@ from concert_scout.models import (
 )
 from concert_scout.pipeline import (
     ASK_FOR_A_SEARCH,
+    RefinementInput,
     Services,
     find_artist_profiles,
     run_search,
 )
+from concert_scout.refinement import MAX_POSTER_ARTISTS, MAX_REFINEMENT_CHARS
 from concert_scout.security import Refused, SecurityHeaders
 from concert_scout.sources import (
+    embedder,
     geocoder,
     jambase,
     jev,
@@ -57,9 +64,12 @@ from concert_scout.sources import (
     listenbrainz,
     musicbrainz,
     resend,
+    setlistfm,
     spotify_catalog,
     supabase,
     ticketmaster,
+    venues,
+    youtube,
 )
 from concert_scout.sources.spotify import SpotifyError
 
@@ -77,6 +87,10 @@ class TasteRequest(BaseModel):
     username: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
 
 
+class YouTubePlaylistRequest(BaseModel):
+    url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2048)]
+
+
 class Coordinates(BaseModel):
     lat: Annotated[float, Field(ge=-90, le=90)]
     lon: Annotated[float, Field(ge=-180, le=180)]
@@ -87,12 +101,21 @@ FURTHEST_AHEAD = dt.timedelta(days=400)
 
 
 class SearchRequest(BaseModel):
-    """A Search's words, or a Reading the person corrected, which skips the interpreter."""
+    """A Search's words, a corrected Reading, or a typed Refinement against the current Reading."""
 
     text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)] = (
         ""
     )
     reading: Reading | None = None
+    refinement: (
+        Annotated[
+            str,
+            StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_REFINEMENT_CHARS),
+        ]
+        | None
+    ) = None
+    poster_artists: Annotated[list[Name], Field(max_length=MAX_POSTER_ARTISTS)] = []
+    search_id: Annotated[str, StringConstraints(pattern=share.SEARCH_ID)] | None = None
     token: Annotated[str, StringConstraints(min_length=1, max_length=2048)]
     taste: Annotated[list[Name], Field(max_length=MAX_TASTE)] = []
     # A location the visitor already shared, used when the Search names no place.
@@ -102,7 +125,10 @@ class SearchRequest(BaseModel):
 
     @model_validator(mode="after")
     def asks_one_thing(self) -> Self:
-        if bool(self.text) == bool(self.reading):
+        if self.refinement is not None:
+            if not self.reading or self.text:
+                raise ValueError("a Refinement requires the current Reading and no Search text")
+        elif bool(self.text) == bool(self.reading):
             raise ValueError("send the words or a Reading")
         if self.reading:
             furthest = clock.now_in(self.time_zone).date() + FURTHEST_AHEAD
@@ -111,7 +137,14 @@ class SearchRequest(BaseModel):
         return self
 
     @property
-    def asked(self) -> str | Reading:
+    def asked(self) -> str | Reading | RefinementInput:
+        if self.refinement is not None and self.reading is not None:
+            return RefinementInput(
+                reading=self.reading,
+                text=self.refinement,
+                poster_artists=tuple(self.poster_artists),
+                source_search_id=self.search_id,
+            )
         return self.reading or self.text
 
 
@@ -156,6 +189,11 @@ def make_services(
     lastfm_client = None
     if settings.lastfm_key:
         lastfm_client = lastfm.make_client(settings.lastfm_key.get_secret_value(), transport)
+    supabase_client = (
+        supabase.make_client(settings.supabase_url, transport)
+        if settings.supabase_url and settings.supabase_secret_key
+        else None
+    )
     return Services(
         ticketmaster=ticketmaster.make_client(settings.tm_key.get_secret_value(), transport),
         geocoder=geocoder.make_client(settings.geoapify_key.get_secret_value(), transport),
@@ -171,6 +209,11 @@ def make_services(
         if settings.jbd_api_key
         else None,
         jambase_days=settings.jambase_days,
+        supabase=supabase_client,
+        supabase_secret_key=settings.supabase_secret_key if supabase_client else None,
+        embedder=embedder.make_embedder(settings.google_api_key)
+        if settings.google_api_key and supabase_client
+        else None,
     )
 
 
@@ -201,6 +244,54 @@ async def _top_artists(source: str, username: str, services: Services) -> list[s
     return artists
 
 
+async def _youtube_artists(url: str, client: httpx.AsyncClient | None, redis: Redis) -> list[str]:
+    """Playlist URLs stay out of the logs: they can identify a person."""
+    invalid = Refused(
+        422,
+        "invalid_playlist_url",
+        "Paste a public YouTube or YouTube Music playlist link (with ?list=...).",
+    )
+    private = Refused(
+        403,
+        "playlist_private",
+        "That playlist is private. Change its visibility to Public or Unlisted on YouTube "
+        "and try again.",
+    )
+    unavailable = Refused(503, "taste_unavailable", "YouTube is not answering. Try again soon.")
+    try:
+        youtube.parse_playlist_id(url)
+    except youtube.InvalidPlaylistUrl:
+        raise invalid from None
+    except youtube.PlaylistPrivate:
+        raise private from None
+    if client is None:
+        raise unavailable
+    try:
+        artists = await youtube.playlist_artists(client, redis, url, IMPORT_SIZE)
+    except youtube.InvalidPlaylistUrl:
+        raise invalid from None
+    except youtube.PlaylistPrivate:
+        raise private from None
+    except youtube.PlaylistNotFound:
+        message = (
+            "We could not find that playlist. Check the link and make sure it is "
+            "Public or Unlisted."
+        )
+        raise Refused(404, "playlist_not_found", message) from None
+    except youtube.QuotaExceeded:
+        message = "YouTube playlist import has reached its daily limit. Try again tomorrow."
+        raise Refused(503, "youtube_quota_exceeded", message) from None
+    except youtube.YouTubeError as exc:
+        logger.warning("YouTube taste import failed: %s", exc)
+        raise unavailable from None
+    if not artists:
+        message = (
+            "We could not find any Artists in that playlist. Try another public music playlist."
+        )
+        raise Refused(404, "taste_empty", message)
+    return artists
+
+
 def create_app(
     settings: Settings | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
@@ -209,14 +300,21 @@ def create_app(
 ) -> FastAPI:
     settings = settings or Settings()  # pyright: ignore[reportCallIssue]
     services = make_services(settings, transport, redis, model)
-    accounts_client = (
-        supabase.make_client(settings.supabase_url, transport)
-        if settings.supabase_url and settings.accounts_enabled
-        else None
-    )
+    accounts_client = services.supabase if settings.accounts_enabled else None
     mail = (
         resend.make_client(settings.resend_api_key.get_secret_value(), transport)
         if settings.resend_api_key
+        else None
+    )
+    wikidata = venues.make_wikidata_client(transport)
+    setlistfm_client = (
+        setlistfm.make_client(settings.setlistfm_api_key.get_secret_value(), transport)
+        if settings.setlistfm_api_key
+        else None
+    )
+    youtube_client = (
+        youtube.make_client(settings.youtube_api_key.get_secret_value(), transport)
+        if settings.youtube_api_key
         else None
     )
 
@@ -228,6 +326,7 @@ def create_app(
             await services.jambase.aclose()
         await services.geocoder.aclose()
         await services.musicbrainz.aclose()
+        await wikidata.aclose()
         await services.listenbrainz.aclose()
         await services.jev.aclose()
         if services.lastfm:
@@ -236,10 +335,14 @@ def create_app(
             await services.spotify_catalog.aclose()
         await services.turnstile.aclose()
         await services.redis.aclose()
-        if accounts_client:
-            await accounts_client.aclose()
+        if services.supabase:
+            await services.supabase.aclose()
         if mail:
             await mail.aclose()
+        if setlistfm_client:
+            await setlistfm_client.aclose()
+        if youtube_client:
+            await youtube_client.aclose()
 
     app = FastAPI(title="Concert Scout", lifespan=lifespan)
     app.add_middleware(OneCallerPerRequest)
@@ -292,6 +395,31 @@ def create_app(
             services.turnstile, settings.turnstile_secret, search.token, ip
         )
 
+    async def guard_sculpt(body: sculpt.SculptRequest, request: Request) -> None:
+        """Same-origin, spend caps and visitor limit; no fresh Turnstile for an active session."""
+        del body
+        origin = request.headers.get("origin")
+        if origin and origin not in settings.cors_origins:
+            raise Refused(403, "origin_refused", "This site cannot sculpt Posters.")
+        if not settings.search_enabled:
+            raise Refused(503, "search_off", "Search is off for now.")
+        ip = security.client_ip(request, settings.client_ip_header)
+        try:
+            await limits.check_spend(services.redis)
+            await limits.visitor_call(services.redis, "sculpt", ip, settings.sculpts_per_hour)
+        except limits.SpendCapReached as exc:
+            message = "Concert Scout has used its Search budget for now."
+            raise Refused(503, "budget_reached", message, exc.retry_after) from None
+        except limits.VisitorLimitReached as exc:
+            minutes = exc.retry_after // 60 + 1
+            wait = "1 minute" if minutes == 1 else f"{minutes} minutes"
+            message = f"You have used this hour's Poster adjustments. Try again in {wait}."
+            raise Refused(429, "visitor_limit", message, exc.retry_after) from None
+        except RedisError as exc:
+            logger.warning("Sculpt limits failed: %s", type(exc).__name__)
+            message = "Poster adjustments are unavailable. Try again in a minute."
+            raise Refused(503, "limits_unavailable", message) from None
+
     @app.exception_handler(Refused)
     async def refused(_: Request, exc: Refused) -> JSONResponse:
         return _failure(exc.status, exc.error)
@@ -300,14 +428,32 @@ def create_app(
     async def invalid_request(request: Request, _: RequestValidationError) -> JSONResponse:
         if request.url.path == "/search":
             return _failure(422, SearchError(code="invalid_search", message=ASK_FOR_A_SEARCH))
+        if request.url.path.startswith("/search/") and request.url.path.endswith("/sculpt"):
+            message = "Check your Poster filters and try again."
+            return _failure(422, SearchError(code="invalid_sculpt", message=message))
         if request.url.path.startswith("/share"):
             message = "That is not a Search you can share."
             return _failure(422, SearchError(code="invalid_share", message=message))
-        if request.url.path == "/artist":
+        if request.url.path in {"/artist", "/artist/live-clip", "/artist/setlist"}:
             return _failure(422, SearchError(code="invalid_artist", message="Choose an Artist."))
+        if request.url.path == "/venue":
+            return _failure(422, SearchError(code="invalid_venue", message="Choose a venue."))
+        if request.url.path.startswith("/artists/"):
+            return _failure(
+                422, SearchError(code="invalid_artist", message="Enter an Artist name.")
+            )
+        if request.url.path in taste_profile.PATHS:
+            message = "Check your Taste and place, then try again."
+            return _failure(422, SearchError(code="invalid_taste", message=message))
+        if request.url.path.startswith("/account/saved-searches"):
+            message = "That is not a Search you can save."
+            return _failure(422, SearchError(code="invalid_saved_search", message=message))
         if request.url.path.startswith(accounts.PREFIX):
             message = "That is not a Concert you can save."
             return _failure(422, SearchError(code="invalid_save", message=message))
+        if request.url.path == "/taste/youtube-playlist":
+            message = "Paste a public YouTube or YouTube Music playlist link (with ?list=...)."
+            return _failure(422, SearchError(code="invalid_playlist_url", message=message))
         if request.url.path.startswith("/taste/"):
             return _failure(422, SearchError(code="invalid_username", message="Enter a username."))
         return _failure(422, SearchError(code="invalid_place", message="Choose a place."))
@@ -336,12 +482,9 @@ def create_app(
         )
     )
     app.include_router(feedback.router(settings, services.redis, transport))
+    app.include_router(taste_profile.guest_router(settings, services))
     if accounts_client:
-        app.include_router(
-            accounts.router(
-                settings, accounts_client, services.redis, services.ticketmaster, services.geocoder
-            )
-        )
+        app.include_router(accounts.router(settings, accounts_client, services))
         assert settings.supabase_secret_key
         app.include_router(alerts.router(accounts_client, settings.supabase_secret_key))
 
@@ -382,6 +525,14 @@ def create_app(
         async def sync_catalog() -> list[sync.Step]:
             return await sync.run(services, dt.datetime.now(dt.UTC))
 
+        # Once a week: the live sessions that Watch Live opens from (1 YouTube unit per 50 videos).
+        if youtube_client:
+            sessions = youtube_client
+
+            @scheduled.get("/sync-live-clips")
+            async def sync_live_clips() -> list[live_index.Indexed]:
+                return await live_index.sync(sessions, services.redis)
+
         if accounts_client and mail and settings.supabase_secret_key:
             secret_key = settings.supabase_secret_key
 
@@ -402,6 +553,106 @@ def create_app(
     ) -> ArtistProfiles:
         await limit_visitor(request, "artist", limits.ARTIST_PER_HOUR)
         return ArtistProfiles(profiles=await find_artist_profiles(name, services))
+
+    @app.get("/venue", response_model=venues.VenueCharacter, response_model_exclude_none=True)
+    async def venue(
+        request: Request,
+        name: Annotated[str, Query(min_length=1, max_length=200)],
+        city: Annotated[str | None, Query(min_length=1, max_length=120)] = None,
+        lat: Annotated[float | None, Query(ge=-90, le=90)] = None,
+        lon: Annotated[float | None, Query(ge=-180, le=180)] = None,
+    ) -> venues.VenueCharacter:
+        if (lat is None) != (lon is None):
+            raise Refused(422, "invalid_venue", "Send both latitude and longitude, or neither.")
+        await limit_visitor(request, "venue", venues.VENUE_PER_HOUR)
+        return await venues.lookup(
+            services.musicbrainz, wikidata, services.redis, name, city, lat, lon
+        )
+
+    @app.get(
+        "/artist/setlist",
+        response_model=setlistfm.SetlistSummary,
+        response_model_exclude_none=True,
+    )
+    async def artist_setlist(
+        request: Request,
+        name: Annotated[str, Query(min_length=1, max_length=200)],
+        mbid: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
+    ) -> setlistfm.SetlistSummary:
+        await limit_visitor(request, "setlist", limits.ARTIST_PER_HOUR)
+        if not setlistfm_client:
+            return setlistfm.SetlistSummary(artist=name)
+        try:
+            return await setlistfm.artist_setlist(setlistfm_client, services.redis, name, mbid=mbid)
+        except setlistfm.SetlistfmError as exc:
+            logger.warning("Setlist lookup failed: %s", exc)
+            return setlistfm.SetlistSummary(artist=name)
+
+    @app.get("/artist/live-clip", response_model=live_index.LiveClipResult)
+    async def artist_live_clip(
+        request: Request, name: Annotated[str, Query(min_length=1, max_length=200)]
+    ) -> live_index.LiveClipResult:
+        await limit_visitor(request, "live-clip", limits.LIVE_CLIP_PER_HOUR)
+        unavailable = Refused(
+            503, "live_clips_unavailable", "Live clips are not answering. Try again soon."
+        )
+        if youtube_client is None:
+            raise unavailable
+        try:
+            clip = await live_index.find_clip(
+                youtube_client,
+                services.redis,
+                name,
+                lastfm_client=services.lastfm,
+                setlistfm_client=setlistfm_client,
+            )
+        except (youtube.QuotaExceeded, limits.DailyLimitReached):
+            message = "Live clips have reached their limit for today. Try again tomorrow."
+            raise Refused(503, "live_clips_limit", message) from None
+        except youtube.YouTubeError as exc:
+            logger.warning("Live clip lookup failed: %s", exc)
+            raise unavailable from None
+        return live_index.LiveClipResult(clip=clip)
+
+    @app.get("/artists/suggest", response_model=suggest.ArtistSuggestions)
+    async def artists_suggest(
+        request: Request,
+        q: Annotated[str, Query(min_length=1, max_length=100)],
+        limit: Annotated[int, Query(ge=1, le=suggest.MAX_SUGGEST_LIMIT)] = (
+            suggest.DEFAULT_SUGGEST_LIMIT
+        ),
+    ) -> suggest.ArtistSuggestions:
+        if not q.strip():
+            raise Refused(422, "invalid_artist", "Enter an Artist name.")
+        await limit_visitor(request, "suggest", suggest.SUGGEST_PER_HOUR)
+        return suggest.ArtistSuggestions(
+            artists=await suggest.suggest_artists(q, services, limit=limit)
+        )
+
+    @app.get("/artists/related", response_model=suggest.ArtistSuggestions)
+    async def artists_related(
+        request: Request,
+        names: Annotated[list[str], Query(min_length=1, max_length=suggest.MAX_INPUT_NAMES)],
+        limit: Annotated[int, Query(ge=1, le=suggest.MAX_RELATED_LIMIT)] = (
+            suggest.DEFAULT_RELATED_LIMIT
+        ),
+    ) -> suggest.ArtistSuggestions:
+        if not suggest.parse_names(names):
+            raise Refused(422, "invalid_artist", "Choose at least one Artist.")
+        await limit_visitor(request, "related", suggest.RELATED_PER_HOUR)
+        return suggest.ArtistSuggestions(
+            artists=await suggest.related_artists(names, services, limit=limit)
+        )
+
+    # A POST, so the playlist URL stays out of access logs.
+    @app.post("/taste/youtube-playlist")
+    async def import_youtube_playlist(
+        request: Request, body: YouTubePlaylistRequest
+    ) -> ImportedTaste:
+        await limit_visitor(request, "taste", limits.TASTE_PER_HOUR)
+        return ImportedTaste(
+            artists=await _youtube_artists(body.url, youtube_client, services.redis)
+        )
 
     # A POST, so the username stays out of access logs.
     @app.post("/taste/{source}")
@@ -430,12 +681,31 @@ def create_app(
             message = "That Poster is not here. Its link may be wrong or older than 90 days."
             raise Refused(404, "share_not_found", message) from None
 
+    @app.post(
+        "/search/{search_id}/sculpt",
+        response_model=sculpt.SculptResponse,
+        response_model_exclude_none=True,
+        dependencies=[Depends(guard_sculpt)],
+    )
+    async def sculpt_search(
+        search_id: Annotated[str, Path(pattern=share.SEARCH_ID)],
+        body: sculpt.SculptRequest,
+    ) -> sculpt.SculptResponse:
+        try:
+            return await sculpt.sculpt_poster(search_id, body, services)
+        except sculpt.SessionExpired:
+            message = "This Poster session has expired. Run the Search again to sculpt it."
+            raise Refused(404, "session_expired", message) from None
+
     @app.post("/search", response_class=EventSourceResponse, dependencies=[Depends(guard_search)])
     async def search(search: SearchRequest) -> AsyncIterator[ServerSentEvent]:
         here = search.near
         near = Place(name="Near you", lat=here.lat, lon=here.lon) if here else None
         reading: Reading | None = None
-        async for event in run_search(search.asked, search.taste, near, search.time_zone, services):
+        search_id = share.new_search_id()
+        async for event in run_search(
+            search.asked, search.taste, near, search.time_zone, services, search_id=search_id
+        ):
             yield event
             if event.event == "reading":
                 reading = Reading.model_validate(event.data)
@@ -448,7 +718,7 @@ def create_app(
                         recommendations=poster.recommendations,
                     )
                     try:
-                        search_id = await share.keep(services.redis, made)
+                        await share.keep(services.redis, made, search_id=search_id)
                     except RedisError as exc:
                         # Without storage the Poster still shows. It just cannot be shared.
                         logger.warning("Search not kept for sharing: %s", type(exc).__name__)
