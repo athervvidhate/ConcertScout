@@ -38,6 +38,7 @@ return start - now
 
 
 SEARCHES_PER_HOUR = 10
+SCULPTS_PER_HOUR = 40
 TASTE_PER_HOUR = 30
 ARTIST_PER_HOUR = 120
 LIVE_CLIP_PER_HOUR = 60
@@ -52,6 +53,9 @@ DAILY_SPEND = Decimal(1)
 # Eval runs are paid tuning work by the owner, so they get more room per day than visitors.
 EVAL_DAILY_SPEND = Decimal(3)
 MONTHLY_SPEND = Decimal(10)
+# Saved Search reruns stop before live visitor Searches so background jobs never exhaust the budget.
+SAVED_SEARCH_DAILY_HEADROOM = Decimal("0.25")
+SAVED_SEARCH_MONTHLY_HEADROOM = Decimal("1.50")
 MICRODOLLARS = 1_000_000
 # Gemini's paid rate for gemini-embedding-001, which reports no usage itself. The free tier costs
 # nothing, so counting this rate can only over-count a Search.
@@ -162,18 +166,31 @@ def _seconds_until(moment: dt.datetime, now: dt.datetime) -> int:
     return int((moment - now).total_seconds()) + 1
 
 
-async def check_spend(redis: Redis, daily: Decimal = DAILY_SPEND) -> None:
+async def check_spend(
+    redis: Redis,
+    daily: Decimal = DAILY_SPEND,
+    monthly: Decimal = MONTHLY_SPEND,
+) -> None:
     """Raises at either cap. Redis failures are the caller's to handle."""
     now = dt.datetime.now(dt.UTC)
     day_key, month_key = _spend_keys(now)
     day, month = await redis.mget([day_key, month_key])
-    if Decimal(int(month or 0)) / MICRODOLLARS >= MONTHLY_SPEND:
+    if Decimal(int(month or 0)) / MICRODOLLARS >= monthly:
         next_month = (now.replace(day=1) + dt.timedelta(days=32)).replace(day=1)
         start = next_month.replace(hour=0, minute=0, second=0, microsecond=0)
         raise SpendCapReached(_seconds_until(start, now))
     if Decimal(int(day or 0)) / MICRODOLLARS >= daily:
         tomorrow = dt.datetime.combine(now.date() + dt.timedelta(days=1), dt.time(), dt.UTC)
         raise SpendCapReached(_seconds_until(tomorrow, now))
+
+
+async def check_saved_search_spend(redis: Redis) -> None:
+    """Stops Saved Search reruns before live visitor caps so visitor Searches keep headroom."""
+    await check_spend(
+        redis,
+        daily=DAILY_SPEND - SAVED_SEARCH_DAILY_HEADROOM,
+        monthly=MONTHLY_SPEND - SAVED_SEARCH_MONTHLY_HEADROOM,
+    )
 
 
 async def record_spend(redis: Redis, cost: Decimal) -> None:

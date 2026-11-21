@@ -62,6 +62,10 @@ _Avoid_: Stub, card
 A Concert a person chose to keep from a Poster.
 _Avoid_: Favorite, stub, wishlist item
 
+**Saved Search**:
+A Search a person chose to keep. Concert Scout reruns it weekly and sends new Recommendations as an Alert.
+_Avoid_: recipe, watch, saved query
+
 **Account**:
 An optional Concert Scout sign-in, with Google or an email and password, that keeps a person's Saved Concerts on every device. Spotify is a separate connection, not an account.
 _Avoid_: Profile, user, login
@@ -94,3 +98,11 @@ _Avoid_: Bio, description, embedding text
 
 **Shared Poster**: a Poster kept at its own link, which anyone can open without running a Search.
 _Avoid_: permalink, snapshot (an eval term)
+
+**Sculpt**:
+Adjust a Poster's filters or Taste balance using the Search's cached Concert pool, without re-fetching venues or running the interpreter.
+_Avoid_: chat, re-prompt
+
+**Refinement**:
+A follow-up a person types to change the Search on screen. It changes the Reading and produces a new Poster.
+_Avoid_: chat, message, turn, prompt

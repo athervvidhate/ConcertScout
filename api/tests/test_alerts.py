@@ -74,6 +74,8 @@ class Stack:
                     k: v for k, v in row.items() if k in ("place", "enabled")
                 }
             return httpx.Response(201)
+        if path == "/rest/v1/saved_searches" and request.method == "GET":
+            return httpx.Response(200, json=[])
         if path in (
             "/rest/v1/followed_artists",
             "/rest/v1/followed_venues",

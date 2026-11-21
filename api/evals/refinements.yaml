@@ -1,0 +1,48 @@
+# Refinement cases paired with judged Searches in `evals/searches.yaml`.
+- id: only-weekends
+  base_search: fred-again-san-francisco
+  poster_artists:
+    - Sammy Virji
+    - John Summit
+    - Jamie xx
+  refinement: Only weekends
+  expect_kind: refined
+  expect_filter_only: true
+  expect_weekends_only: true
+- id: try-oakland
+  base_search: fred-again-san-francisco
+  poster_artists:
+    - Sammy Virji
+    - John Summit
+    - Jamie xx
+  refinement: try Oakland instead
+  expect_kind: refined
+  expect_filter_only: false
+  expect_place_contains: Oakland
+- id: more-like-poster-artist
+  base_search: fred-again-san-francisco
+  poster_artists:
+    - Sammy Virji
+    - John Summit
+    - Jamie xx
+  refinement: more like Jamie xx
+  expect_kind: refined
+  expect_filter_only: false
+  expect_adds_artist: Jamie xx
+- id: cheaper
+  base_search: instrumental-san-francisco
+  poster_artists:
+    - Thundercat
+    - BadBadNotGood
+  refinement: cheaper
+  expect_kind: refined
+  expect_filter_only: true
+  expect_has_max_price: true
+- id: unanswerable-all-ages
+  base_search: fred-again-san-francisco
+  poster_artists:
+    - Sammy Virji
+    - John Summit
+  refinement: is it all ages?
+  expect_kind: unanswerable
+  expect_filter_only: false
