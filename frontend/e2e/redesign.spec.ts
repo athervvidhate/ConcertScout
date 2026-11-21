@@ -22,6 +22,8 @@ for (const reducedMotion of ["reduce","no-preference"] as const) {
     await page.goto("/");
     for (const n of [0,1,2,3,4,8]) {
       count=n;
+      const newMode=page.getByRole("group",{name:"Search bar mode"}).getByRole("button",{name:"New",exact:true});
+      if (await newMode.isVisible()) await newMode.click();
       await page.getByRole("textbox",{name:"Search",exact:true}).fill(`Search ${n}`);
       await page.getByRole("button",{name:"Search",exact:true}).click();
       await expect(page.locator(".concert-card")).toHaveCount(n);

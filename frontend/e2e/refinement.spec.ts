@@ -83,7 +83,18 @@ test.describe("Poster Refinements", () => {
       "Second Contract Artist",
     );
 
-    // Switching to "New" reveals the original Search text in the same single bar.
+    // Switching from "Refine" to "New" keeps the submit button's color, border,
+    // and radius steady (no flash) while revealing the original Search text.
+    const submitBtn = page.locator("form.search-bar button[type=submit]");
+    const refineStyle = await submitBtn.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return {
+        backgroundColor: style.backgroundColor,
+        color: style.color,
+        borderRadius: style.borderRadius,
+        borderTopWidth: style.borderTopWidth,
+      };
+    });
     await page
       .getByRole("group", { name: "Search bar mode" })
       .getByRole("button", { name: "New", exact: true })
@@ -91,6 +102,16 @@ test.describe("Poster Refinements", () => {
     await expect(
       page.getByRole("textbox", { name: "Search", exact: true }),
     ).toHaveValue("UKG in SF");
+    const newStyle = await submitBtn.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return {
+        backgroundColor: style.backgroundColor,
+        color: style.color,
+        borderRadius: style.borderRadius,
+        borderTopWidth: style.borderTopWidth,
+      };
+    });
+    expect(newStyle).toEqual(refineStyle);
 
     // Verify zero horizontal overflow at both desktop (1280px) and mobile (390px).
     const overflow = await page.evaluate(

@@ -410,7 +410,7 @@ button:disabled { opacity:.6; cursor:default; }
 .search-bar input { min-width:0; width:100%; min-height:54px; padding:8px; border:0; outline:none; background:none; font-size:18px; text-overflow:ellipsis; }
 .search-bar input::placeholder { color:var(--ink-2); }
 .search-bar button { min-height:52px; padding:0 22px; border:0; border-radius:16px; background:var(--ink); color:var(--surface); font-weight:650; }
-.search-bar.ready button[type=submit],.calendar-action { display:inline-flex; justify-content:center; align-items:center; gap:8px; min-height:48px; padding:12px 22px; border:1px solid var(--line-2); border-radius:999px; background:var(--surface); color:var(--ink); font-weight:650; cursor:pointer; transition:background .2s; }
+.calendar-action { display:inline-flex; justify-content:center; align-items:center; gap:8px; min-height:48px; padding:12px 22px; border:1px solid var(--line-2); border-radius:999px; background:var(--surface); color:var(--ink); font-weight:650; cursor:pointer; transition:background .2s; }
 .calendar-action:hover { background:var(--sunk); }
 .primary { background:var(--accent); color:var(--on-accent); }
 .search-bar .locate { display:grid; place-items:center; width:46px; height:52px; padding:0; background:none; color:var(--ink-2); }
@@ -715,7 +715,7 @@ button:disabled { opacity:.6; cursor:default; }
 .roll { position:relative; height:1.08em; overflow:hidden; }
 .search-bar { width:min(760px,100%); grid-template-columns:minmax(0,1fr) auto auto; padding:8px 8px 8px 24px; }
 .search-bar.compact { width:min(860px,100%); margin-top:16px; padding:6px 6px 6px 20px; border-radius:18px; }
-.search-bar .search-send { display:inline-flex; align-items:center; justify-content:center; gap:0; min-width:56px; height:56px; padding:0 17px; transition:background .3s var(--ease),gap .45s var(--spring),padding .45s var(--spring); }
+.search-bar .search-send { display:inline-flex; align-items:center; justify-content:center; gap:0; min-width:56px; height:56px; padding:0 17px; transition:background .3s var(--ease),opacity .2s var(--ease),gap .45s var(--spring),padding .45s var(--spring); }
 .send-label { display:inline-block; max-width:0; overflow:hidden; white-space:nowrap; opacity:0; transition:max-width .45s var(--spring),opacity .25s; }
 .search-bar.ready .search-send { background:var(--accent); color:var(--on-accent); gap:10px; padding:0 22px; }
 .search-bar.ready .send-label { max-width:90px; opacity:1; }
@@ -897,7 +897,7 @@ button:disabled { opacity:.6; cursor:default; }
 .search-bar.mode-refine { grid-template-columns:auto minmax(0,1fr) auto; }
 .search-bar.mode-refine:focus-within { border-color:var(--accent); }
 .search-bar.mode-refine input { font-size:16px; }
-.search-bar.mode-refine .search-send { background:var(--accent); color:var(--on-accent); gap:8px; padding:0 18px; }
+.search-bar.mode-refine .search-send { background:var(--accent); color:var(--on-accent); gap:10px; padding:0 22px; }
 .search-bar.mode-refine .send-label { max-width:90px; opacity:1; }
 .bar-mode { display:inline-flex; align-items:center; padding:3px; border-radius:999px; background:var(--sunk); gap:2px; flex:none; }
 .search-bar .bar-mode-btn { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:36px; height:36px; padding:0 12px; border:0; border-radius:999px; background:transparent; color:var(--ink-2); font-size:13px; font-weight:650; white-space:nowrap; transition:background .18s var(--ease),color .18s var(--ease),box-shadow .18s var(--ease); }
@@ -926,7 +926,7 @@ button:disabled { opacity:.6; cursor:default; }
   .search-bar.mode-refine { grid-template-columns:minmax(0,1fr) auto; }
   .bar-mode { grid-column:1/-1; justify-self:start; }
   .search-bar .bar-mode-btn { min-height:36px; height:36px; padding:0 12px; }
-  .search-bar.mode-refine .search-send { padding:0 15px; gap:0; }
+  .search-bar.mode-refine .search-send { padding:0 17px; gap:0; }
   .search-bar.mode-refine .send-label { max-width:0; opacity:0; }
   .refine-chip { min-height:40px; height:auto; }
   .refine-suggest-btn { min-height:36px; padding:0 12px; }
