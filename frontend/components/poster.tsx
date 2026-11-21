@@ -22,6 +22,7 @@ import {
 } from "react";
 import { AnimatedCount } from "@/components/animated-count";
 import { AddToCalendar } from "@/components/add-to-calendar";
+import { PosterDials } from "@/components/poster-dials";
 import { Ticket } from "@/components/ticket";
 import { listenTo, matchLine, nameOf } from "@/lib/lineup";
 import { WorkingSearch } from "@/components/working-search";
@@ -34,6 +35,15 @@ import {
   revealPoster,
   type NameFrame,
 } from "@/lib/poster-choreography";
+import {
+  isBoosted,
+  isDefaultSculpt,
+  relaxFilter,
+  toggleBoostArtist,
+  toggleExcludeArtist,
+  type SculptMeta,
+  type SculptState,
+} from "@/lib/sculpt";
 import { useTicketMotion } from "@/lib/use-ticket-motion";
 import { formatDate, formatConcertTime } from "@/lib/format";
 import { removeSaved, saveConcert, useDecisions } from "@/lib/saved";
@@ -65,6 +75,15 @@ type Props = {
   instant?: boolean;
   /** The Ticket to open on arrival. */
   openConcert?: string;
+  /** Poster Sculpting dials and Taste steering state, present for live Searches with a session. */
+  sculpt?: SculptState;
+  sculpting?: boolean;
+  sculptMeta?: SculptMeta | null;
+  sculptError?: { code: string; message: string } | null;
+  sculptVersion?: number;
+  onSculpt?: (next: SculptState) => void;
+  onResetSculpt?: () => void;
+  onRerunSearch?: () => void;
 };
 export function Poster({
   candidates,
@@ -80,6 +99,14 @@ export function Poster({
   shareTitle,
   instant = false,
   openConcert,
+  sculpt,
+  sculpting = false,
+  sculptMeta = null,
+  sculptError = null,
+  sculptVersion = 0,
+  onSculpt,
+  onResetSculpt,
+  onRerunSearch,
 }: Props) {
   const reduced = useReducedMotion();
   const [cached] = useState(!searching && hasPoster);
@@ -175,7 +202,18 @@ export function Poster({
       scope,
       changing,
     );
-  }, [results, stage, view, reduced]);
+  }, [results, stage, view, sculptVersion, reduced]);
+
+  function boostArtist(artist: string) {
+    if (!sculpt || !onSculpt) return;
+    onSculpt(toggleBoostArtist(sculpt, artist));
+  }
+
+  function excludeArtist(artist: string, closeDialog = false) {
+    if (!sculpt || !onSculpt) return;
+    if (closeDialog) closed();
+    onSculpt(toggleExcludeArtist(sculpt, artist));
+  }
 
   function chooseView(next: View) {
     setView(next);
@@ -278,6 +316,24 @@ export function Poster({
       )}
       {hasPoster && stage === "poster" && (
         <>
+          {sculpt && onSculpt && (
+            <PosterDials
+              sculpt={sculpt}
+              meta={sculptMeta}
+              busy={sculpting}
+              onChange={onSculpt}
+            />
+          )}
+          {sculptError && (
+            <div role="alert" className="sculpt-error">
+              <p>{sculptError.message}</p>
+              {sculptError.code === "session_expired" && onRerunSearch && (
+                <button type="button" onClick={onRerunSearch}>
+                  Rerun Search
+                </button>
+              )}
+            </div>
+          )}
           {recommendations.length > 0 ? (
             <>
               <motion.header
@@ -366,7 +422,7 @@ export function Poster({
               >
                 <AnimatePresence mode="wait" initial={false}>
                   <PosterView
-                    key={view}
+                    key={`${view}-${sculptVersion}`}
                     ref={setResults}
                     className={`concerts-${view}`}
                     data-view={view}
@@ -420,6 +476,19 @@ export function Poster({
                                 artistHint={hint}
                                 onArtistOpen={dismissArtistHint}
                                 hidePhoto
+                                boosted={
+                                  Boolean(
+                                    sculpt && listen && isBoosted(sculpt, listen),
+                                  )
+                                }
+                                onBoostArtist={
+                                  sculpt && onSculpt ? boostArtist : undefined
+                                }
+                                onExcludeArtist={
+                                  sculpt && onSculpt
+                                    ? (artist) => excludeArtist(artist, false)
+                                    : undefined
+                                }
                                 {...playerProps(`solo:${concert.id}`)}
                               />
                               <div className="solo-actions">
@@ -519,6 +588,19 @@ export function Poster({
                             artistHint={hint}
                             onArtistOpen={dismissArtistHint}
                             hidePhoto
+                            boosted={Boolean(
+                              sculpt &&
+                                listenTo(current) &&
+                                isBoosted(sculpt, listenTo(current) ?? ""),
+                            )}
+                            onBoostArtist={
+                              sculpt && onSculpt ? boostArtist : undefined
+                            }
+                            onExcludeArtist={
+                              sculpt && onSculpt
+                                ? (artist) => excludeArtist(artist, true)
+                                : undefined
+                            }
                             {...playerProps(`dialog:${current.concert.id}`)}
                           />
                           <div className="dialog-actions">
@@ -555,6 +637,34 @@ export function Poster({
                 </Dialog.Portal>
               </Dialog.Root>
             </>
+          ) : sculpt && !isDefaultSculpt(sculpt) && onSculpt ? (
+            (() => {
+              const relaxed = relaxFilter(sculpt, sculptMeta?.eliminated_by);
+              return (
+                <div className="empty sculpt-empty" role="status">
+                  <h2>No Concerts match these filters</h2>
+                  <p>{relaxed.reason}</p>
+                  <div className="empty-actions">
+                    <button
+                      type="button"
+                      disabled={sculpting}
+                      onClick={() => onSculpt(relaxed.next)}
+                    >
+                      {relaxed.label}
+                    </button>
+                    {onResetSculpt && (
+                      <button
+                        type="button"
+                        disabled={sculpting}
+                        onClick={onResetSculpt}
+                      >
+                        Reset all filters
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()
           ) : (
             <motion.div
               className="empty"

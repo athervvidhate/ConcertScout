@@ -1,4 +1,11 @@
-import { ChevronLeft, ChevronRight, ListMusic, Pointer } from "lucide-react";
+import {
+  Ban,
+  ChevronLeft,
+  ChevronRight,
+  ListMusic,
+  Pointer,
+  Sparkles,
+} from "lucide-react";
 import { Fragment, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
@@ -143,6 +150,10 @@ type TicketProps = {
   onWatch?: (watching: boolean) => void;
   // More actions beside Tickets, for a Ticket whose host offers none of its own.
   actions?: ReactNode;
+  /** Poster Sculpting Taste steering actions for this Ticket's headliner. */
+  boosted?: boolean;
+  onBoostArtist?: (artist: string) => void;
+  onExcludeArtist?: (artist: string) => void;
 };
 
 export function Ticket({
@@ -156,6 +167,9 @@ export function Ticket({
   watching: sharedWatching,
   onWatch,
   actions,
+  boosted = false,
+  onBoostArtist,
+  onExcludeArtist,
 }: TicketProps) {
   const { concert, reason, also = [] } = recommendation;
   // One player at a time, so a Ticket that holds its own state holds one name for it.
@@ -301,6 +315,27 @@ export function Ticket({
                     </button>
                   )}
                   {concert.venue && <FollowVenueButton name={concert.venue} city={concert.city} />}
+                  {heard && onBoostArtist && (
+                    <button
+                      type="button"
+                      className="ticket-pill steer-pill"
+                      aria-pressed={boosted}
+                      onClick={() => onBoostArtist(heard)}
+                    >
+                      <Sparkles aria-hidden size={15} />
+                      More like {heard}
+                    </button>
+                  )}
+                  {heard && onExcludeArtist && (
+                    <button
+                      type="button"
+                      className="ticket-pill steer-pill"
+                      onClick={() => onExcludeArtist(heard)}
+                    >
+                      <Ban aria-hidden size={15} />
+                      Not this vibe
+                    </button>
+                  )}
                 </div>
               )}
             </motion.div>

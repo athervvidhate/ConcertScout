@@ -50,9 +50,14 @@ def share_id(search_id: str) -> str:
     return base64.urlsafe_b64encode(digest[:9]).decode()
 
 
-async def keep(redis: Redis, made: Made) -> str:
+def new_search_id() -> str:
+    """A 22-character secret Search ID shared by the pool session and share record."""
+    return secrets.token_urlsafe(16)
+
+
+async def keep(redis: Redis, made: Made, search_id: str | None = None) -> str:
     """Store a finished Search's Poster and return its Search ID."""
-    search_id = secrets.token_urlsafe(16)
+    search_id = search_id or new_search_id()
     await redis.set(_search_key(search_id), made.model_dump_json(), ex=SEARCH_TTL)
     return search_id
 
