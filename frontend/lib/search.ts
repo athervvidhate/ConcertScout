@@ -41,11 +41,15 @@ export type Concert = {
   festival?: boolean;
 };
 
+// The effective ranking level assembly gave a Recommendation, or absent when ungraded.
+export type Grade = "seed" | "strong" | "fair";
+
 // `also` holds the same Artist's other dates. `lineup_match` names a festival's Artists who suit the
 // Search, best first, and `reason` describes the first of them.
 export type Recommendation = {
   concert: Concert;
   score?: number;
+  grade?: Grade;
   reason?: string;
   also?: Concert[];
   lineup_match?: string[];

@@ -17,7 +17,7 @@ from redis.exceptions import RedisError
 
 from concert_scout import limits, pool, security, taste_profile
 from concert_scout.config import Settings
-from concert_scout.models import Concert, Place
+from concert_scout.models import Concert, Grade, Place
 from concert_scout.names import normalize
 from concert_scout.pipeline import Services
 from concert_scout.security import Refused
@@ -39,11 +39,13 @@ Reason = Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000
 
 class SaveRequest(BaseModel):
     reason: Reason | None = None
+    grade: Grade | None = None
 
 
 class GuestSave(BaseModel):
     concert_id: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9._:-]{1,100}$")]
     reason: Reason | None = None
+    grade: Grade | None = None
 
 
 class ImportRequest(BaseModel):
@@ -159,12 +161,13 @@ def router(settings: Settings, client: httpx.AsyncClient, services: Services) ->
         account: Annotated[Account, Depends(current_account)],
     ) -> SavedConcert:
         concert = await source_facts(concert_id)
+        kept = SavedConcert(concert=concert, reason=body.reason, grade=body.grade)
         try:
-            await supabase.save(client, secret, account, [(concert, body.reason)])
+            await supabase.save(client, secret, account, [kept])
         except supabase.SupabaseError as exc:
             logger.warning("Saved Concert write failed: %s", exc)
             raise unavailable() from None
-        return SavedConcert(concert=concert, reason=body.reason)
+        return kept
 
     @routes.delete("/saved/{concert_id}", status_code=204)
     async def remove(
@@ -191,14 +194,13 @@ def router(settings: Settings, client: httpx.AsyncClient, services: Services) ->
                     concert = await pool.find_concert(ticketmaster, redis, save.concert_id)
                 except (pool.ConcertNotFound, pool.SourceUnavailable):
                     return None
-            return SavedConcert(concert=concert, reason=save.reason)
+            return SavedConcert(concert=concert, reason=save.reason, grade=save.grade)
 
         found = await asyncio.gather(*(look_up(save) for save in unique.values()))
         saved = [s for s in found if s]
         if saved:
             try:
-                pairs = [(s.concert, s.reason) for s in saved]
-                await supabase.save(client, secret, account, pairs)
+                await supabase.save(client, secret, account, saved)
             except supabase.SupabaseError as exc:
                 logger.warning("Saved Concert import failed: %s", exc)
                 raise unavailable() from None

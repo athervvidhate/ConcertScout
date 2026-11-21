@@ -19,7 +19,7 @@ from joserfc.errors import InvalidKeyIdError, JoseError
 from joserfc.jwk import KeySet
 from pydantic import BaseModel, SecretStr, field_validator
 
-from concert_scout.models import Concert, Place
+from concert_scout.models import Concert, Grade, Place
 from concert_scout.sources.http import USER_AGENT
 
 AUDIENCE = "authenticated"
@@ -62,6 +62,7 @@ class Account:
 class SavedConcert(BaseModel):
     concert: Concert
     reason: str | None = None
+    grade: Grade | None = None
 
 
 class FollowedArtist(BaseModel):
@@ -193,7 +194,7 @@ async def list_saved(
     request = client.build_request(
         "GET",
         TABLE,
-        params={"select": "concert,reason", "order": "saved_at.asc"},
+        params={"select": "concert,reason,grade", "order": "saved_at.asc"},
         headers=_as_person(account, publishable_key),
     )
     response = await _send(client, request)
@@ -219,17 +220,18 @@ async def save(
     client: httpx.AsyncClient,
     secret_key: SecretStr,
     account: Account,
-    saves: list[tuple[Concert, str | None]],
+    saves: Sequence[SavedConcert],
 ) -> None:
-    """Saving a Concert again refreshes its facts and reason and keeps when it was first saved."""
+    """Saving a Concert again refreshes its facts, reason and grade, keeping its first save time."""
     rows = [
         {
             "user_id": account.id,
-            "concert_id": concert.id,
-            "concert": concert.model_dump(mode="json", exclude_none=True),
-            "reason": reason,
+            "concert_id": item.concert.id,
+            "concert": item.concert.model_dump(mode="json", exclude_none=True),
+            "reason": item.reason,
+            "grade": item.grade,
         }
-        for concert, reason in saves
+        for item in saves
     ]
     request = client.build_request(
         "POST",
