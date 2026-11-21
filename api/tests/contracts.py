@@ -11,7 +11,7 @@ from pydantic import SecretStr
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, UserPromptPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from concert_scout import pool, ranker, security, similarity
+from concert_scout import pool, ranker, refinement, security, similarity
 from concert_scout.config import Settings
 from concert_scout.models import Artist, Concert, Place, Price, SeedArtist
 from concert_scout.sources import (
@@ -84,6 +84,86 @@ def idle_musicbrainz() -> httpx.AsyncClient:
     return musicbrainz.make_client(httpx.MockTransport(forbidden_http))
 
 
+def _contract_refinement(prompt: dict[str, Any]) -> dict[str, Any]:
+    reading: dict[str, Any] = dict(prompt.get("reading", {}))
+    poster_artists: list[str] = list(prompt.get("poster_artists", []))
+    raw = str(prompt.get("refinement", "")).strip()
+    lower = raw.casefold()
+
+    if any(word in lower for word in ("all ages", "age", "park", "parking", "doors", "set time")):
+        matched = poster_artists[0] if poster_artists else None
+        for name in poster_artists:
+            if name.casefold() in lower:
+                matched = name
+                break
+        return {
+            "kind": "unanswerable",
+            "note": (
+                "Concert Scout can't tell from the Concert listing. "
+                "Check the ticket page for details."
+            ),
+            "artist": matched,
+        }
+
+    base: dict[str, Any] = {
+        "kind": "refined",
+        "chip_label": raw[:48],
+        "artists": list(reading.get("artists", [])),
+        "descriptors": list(reading.get("descriptors", [])),
+        "tags": list(reading.get("tags", [])),
+        "genres": list(reading.get("genres", [])),
+        "place": reading.get("place"),
+        "region": reading.get("region"),
+        "radius_miles": reading.get("radius_miles"),
+        "start": reading.get("start"),
+        "end": reading.get("end"),
+        "max_price": reading.get("max_price"),
+        "weekends_only": bool(reading.get("weekends_only", False)),
+        "weekdays": list(reading.get("weekdays", [])),
+        "boost_artists": [],
+        "exclude_artists": [],
+    }
+
+    if "saturday" in lower:
+        base["weekdays"] = [5]
+        base["weekends_only"] = False
+        base["chip_label"] = "Saturdays only"
+    elif "weekend" in lower:
+        base["weekends_only"] = True
+        base["weekdays"] = []
+        base["chip_label"] = "Weekends only"
+    elif "oakland" in lower:
+        base["place"] = "Oakland, California, United States"
+        base["region"] = None
+        base["radius_miles"] = None
+        base["chip_label"] = "Try Oakland"
+    elif "cheaper" in lower or "under $" in lower:
+        current = reading.get("max_price")
+        cap = 40.0 if current is None else max(20.0, round(float(current) * 0.65))
+        base["max_price"] = cap
+        base["chip_label"] = f"Under ${int(cap)}"
+    elif "more like" in lower:
+        chosen: str | None = None
+        if ("second" in lower or "#2" in lower) and len(poster_artists) >= 2:
+            chosen = poster_artists[1]
+        elif ("first" in lower or "#1" in lower) and poster_artists:
+            chosen = poster_artists[0]
+        else:
+            for name in poster_artists:
+                if name.casefold() in lower:
+                    chosen = name
+                    break
+        if chosen is None:
+            chosen = raw.split("like", 1)[-1].strip()
+        if chosen:
+            if chosen not in base["artists"]:
+                base["artists"].append(chosen)
+            base["boost_artists"] = [chosen]
+            base["chip_label"] = f"More like {chosen}"
+
+    return base
+
+
 def contract_model() -> FunctionModel:
     def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
         text = " ".join(
@@ -101,6 +181,8 @@ def contract_model() -> FunctionModel:
                     for row in prompt["candidates"]
                 ]
             }
+        elif (info.instructions or "").startswith(refinement.INSTRUCTIONS):
+            output = _contract_refinement(json.loads(text))
         else:
             output = {
                 "artists": [],

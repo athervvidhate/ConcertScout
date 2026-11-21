@@ -48,10 +48,12 @@ from concert_scout.models import (
 )
 from concert_scout.pipeline import (
     ASK_FOR_A_SEARCH,
+    RefinementInput,
     Services,
     find_artist_profiles,
     run_search,
 )
+from concert_scout.refinement import MAX_POSTER_ARTISTS, MAX_REFINEMENT_CHARS
 from concert_scout.security import Refused, SecurityHeaders
 from concert_scout.sources import (
     embedder,
@@ -99,12 +101,21 @@ FURTHEST_AHEAD = dt.timedelta(days=400)
 
 
 class SearchRequest(BaseModel):
-    """A Search's words, or a Reading the person corrected, which skips the interpreter."""
+    """A Search's words, a corrected Reading, or a typed Refinement against the current Reading."""
 
     text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)] = (
         ""
     )
     reading: Reading | None = None
+    refinement: (
+        Annotated[
+            str,
+            StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_REFINEMENT_CHARS),
+        ]
+        | None
+    ) = None
+    poster_artists: Annotated[list[Name], Field(max_length=MAX_POSTER_ARTISTS)] = []
+    search_id: Annotated[str, StringConstraints(pattern=share.SEARCH_ID)] | None = None
     token: Annotated[str, StringConstraints(min_length=1, max_length=2048)]
     taste: Annotated[list[Name], Field(max_length=MAX_TASTE)] = []
     # A location the visitor already shared, used when the Search names no place.
@@ -114,7 +125,10 @@ class SearchRequest(BaseModel):
 
     @model_validator(mode="after")
     def asks_one_thing(self) -> Self:
-        if bool(self.text) == bool(self.reading):
+        if self.refinement is not None:
+            if not self.reading or self.text:
+                raise ValueError("a Refinement requires the current Reading and no Search text")
+        elif bool(self.text) == bool(self.reading):
             raise ValueError("send the words or a Reading")
         if self.reading:
             furthest = clock.now_in(self.time_zone).date() + FURTHEST_AHEAD
@@ -123,7 +137,14 @@ class SearchRequest(BaseModel):
         return self
 
     @property
-    def asked(self) -> str | Reading:
+    def asked(self) -> str | Reading | RefinementInput:
+        if self.refinement is not None and self.reading is not None:
+            return RefinementInput(
+                reading=self.reading,
+                text=self.refinement,
+                poster_artists=tuple(self.poster_artists),
+                source_search_id=self.search_id,
+            )
         return self.reading or self.text
 
 

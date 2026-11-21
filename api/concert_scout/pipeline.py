@@ -26,6 +26,7 @@ from concert_scout import (
     matching,
     pool,
     ranker,
+    refinement,
     sculpt,
     share,
     similarity,
@@ -43,12 +44,15 @@ from concert_scout.models import (
     Poster,
     Reading,
     Recommendation,
+    RefinementApplied,
     SearchError,
     SeedArtist,
     Status,
+    Unanswerable,
 )
 from concert_scout.names import collab_names
 from concert_scout.ranker import RankerError
+from concert_scout.refinement import RefinementError
 from concert_scout.sources import (
     geocoder,
     jev,
@@ -286,6 +290,16 @@ async def _find_elsewhere(
     return Elsewhere(keyword=words[0], concerts=others) if others else None
 
 
+@dataclass(frozen=True)
+class RefinementInput:
+    """A typed Refinement against the Reading and Poster currently on screen."""
+
+    reading: Reading
+    text: str
+    poster_artists: tuple[str, ...] = ()
+    source_search_id: str | None = None
+
+
 async def _read(asked: str | Reading, today: dt.date, services: Services) -> Reading:
     """A corrected Reading skips the interpreter. Its place still goes to the geocoder."""
     if isinstance(asked, Reading):
@@ -294,17 +308,125 @@ async def _read(asked: str | Reading, today: dt.date, services: Services) -> Rea
         return await _interpreted(asked, today, services)
 
 
+async def _filter_only_from_session(
+    session: sculpt.PoolSession,
+    reading: Reading,
+    exclude_artists: Sequence[str],
+    services: Services,
+    search_id: str | None,
+) -> AsyncIterator[ServerSentEvent]:
+    """Reuse the cached Concert pool and Jev grades with zero ranker or source calls."""
+    yield _event("reading", reading)
+    filtered = refinement.apply_reading_filters(
+        session.pool, reading, exclude_artists=exclude_artists
+    )
+    yield _event("pool", PoolTotal(total=len(filtered)))
+
+    if not filtered:
+        shortlist: list[matching.Candidate] = []
+    elif session.has_taste:
+        taste = session.taste.to_taste()
+        shortlist = matching.shortlist(
+            matching.score_concerts(filtered, taste, session.artist_tags)
+        )
+    else:
+        shortlist = matching.notable(filtered)
+
+    yield _event(
+        "candidates",
+        Candidates(names=matching.candidate_names(shortlist), total=len(shortlist)),
+    )
+
+    if not shortlist:
+        recommendations: list[Recommendation] = []
+    elif not session.has_taste:
+        recommendations = assemble.from_notable(shortlist)
+    else:
+        shortlist_grades = {
+            c.concert.id: session.grades[c.concert.id]
+            for c in shortlist
+            if c.concert.id in session.grades
+        }
+        poster_recs = (
+            assemble.from_levels(shortlist_grades, shortlist)
+            if shortlist_grades
+            else assemble.from_matches(shortlist)
+        )
+        recommendations = [
+            rec.model_copy(update={"reason": session.reasons[rec.concert.id]})
+            if rec.concert.id in session.reasons
+            else rec
+            for rec in poster_recs
+        ]
+
+    sid = search_id or share.new_search_id()
+    updated_session = session.model_copy(update={"reading": reading})
+    try:
+        await sculpt.save_session(services.redis, sid, updated_session)
+    except RedisError as exc:
+        logger.warning("Refined pool session not kept: %s", type(exc).__name__)
+
+    yield _event("poster", Poster(recommendations=recommendations))
+
+
 async def _steps(
-    asked: str | Reading,
+    asked: str | Reading | RefinementInput,
     imported: Sequence[str],
     near: Place | None,
     services: Services,
     now: dt.datetime,
     search_id: str | None = None,
 ) -> AsyncIterator[ServerSentEvent]:
-    if isinstance(asked, str):
-        yield _event("status", Status(step="interpret", message="Reading your Search"))
-    reading = await _read(asked, now.date(), services)
+    exclude_artists: Sequence[str] = ()
+    if isinstance(asked, RefinementInput):
+        yield _event("status", Status(step="refine", message="Refining your Search"))
+        with telemetry.step("refine"):
+            outcome = await refinement.refine(
+                asked.reading, asked.poster_artists, asked.text, now.date(), services.model
+            )
+        session: sculpt.PoolSession | None = None
+        if asked.source_search_id:
+            try:
+                session = await sculpt.load_session(services.redis, asked.source_search_id)
+            except (sculpt.SessionExpired, RedisError):
+                session = None
+
+        if isinstance(outcome, refinement.UnanswerableRefinement):
+            source_url, source_label = (
+                refinement.source_link_for(session.pool, outcome.artist)
+                if session
+                else (None, None)
+            )
+            yield _event(
+                "unanswerable",
+                Unanswerable(
+                    message=outcome.message,
+                    artist=outcome.artist,
+                    source_url=source_url,
+                    source_label=source_label,
+                ),
+            )
+            return
+
+        yield _event("refinement", RefinementApplied(label=outcome.label))
+        if session is not None and refinement.is_filter_only(
+            session.reading,
+            outcome.reading,
+            boost_artists=outcome.boost_artists,
+            today=now.date(),
+        ):
+            async for event in _filter_only_from_session(
+                session, outcome.reading, outcome.exclude_artists, services, search_id
+            ):
+                yield event
+            return
+
+        reading = outcome.reading
+        exclude_artists = outcome.exclude_artists
+    else:
+        if isinstance(asked, str):
+            yield _event("status", Status(step="interpret", message="Reading your Search"))
+        reading = await _read(asked, now.date(), services)
     names_only: Sequence[str] = ()
     # A Taste typed into this Search says what the person wants now, so it beats an import.
     if not (reading.artists or reading.tags or reading.descriptors):
@@ -434,7 +556,10 @@ async def _steps(
                 concert_lookup = start(find_pool(None, [*reading.artists, *closest]))
             if cobilled:
                 taste = replace(taste, cobilling=cobilled)
-            concerts = await concert_lookup
+            raw_concerts = await concert_lookup
+            concerts = refinement.apply_reading_filters(
+                raw_concerts, reading, exclude_artists=exclude_artists
+            )
             yield _event("pool", PoolTotal(total=len(concerts)))
             query_embedding = await query_lookup
             if semantic := await find_semantic(query_embedding, concerts):
@@ -473,12 +598,12 @@ async def _steps(
                     reading, shortlist, artist_tags, services
                 )
 
-        if concerts:
+        if raw_concerts:
             sid = search_id or share.new_search_id()
-            listeners, venue_tiers = await sculpt.load_cached_metadata(services.redis, concerts)
+            listeners, venue_tiers = await sculpt.load_cached_metadata(services.redis, raw_concerts)
             pool_session = sculpt.PoolSession(
                 reading=reading,
-                pool=concerts[: sculpt.MAX_POOL_SIZE],
+                pool=raw_concerts[: sculpt.MAX_POOL_SIZE],
                 artist_tags=artist_tags,
                 query_embedding=query_embedding,
                 taste=sculpt.StoredTaste.from_taste(taste),
@@ -509,7 +634,7 @@ async def _steps(
 
 
 async def run_search(
-    asked: str | Reading,
+    asked: str | Reading | RefinementInput,
     imported: Sequence[str],
     near: Place | None,
     time_zone: str,
@@ -533,7 +658,7 @@ async def run_search(
 
 
 async def stream_search(
-    asked: str | Reading,
+    asked: str | Reading | RefinementInput,
     imported: Sequence[str],
     near: Place | None,
     services: Services,
@@ -541,7 +666,7 @@ async def stream_search(
     *,
     search_id: str | None = None,
 ) -> AsyncIterator[ServerSentEvent]:
-    """`asked` is the Search's words, or a Reading the person corrected."""
+    """`asked` is the Search's words, a corrected Reading, or a typed Refinement."""
     try:
         async for event in _steps(asked, imported, near, services, now, search_id=search_id):
             yield event
@@ -549,6 +674,10 @@ async def stream_search(
         logger.warning("Interpreter failed: %s", exc)
         message = "We could not read that Search. Try again in a minute."
         yield _error("interpreter_unavailable", message)
+    except RefinementError as exc:
+        logger.warning("Refinement failed: %s", exc)
+        message = "We could not read that Refinement. Try again in a minute."
+        yield _error("refinement_unavailable", message)
     except geocoder.GeocoderError as exc:
         logger.warning("Geocoder failed: %s", exc)
         message = "We could not look up that place. Try again in a minute."

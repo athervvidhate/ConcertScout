@@ -98,3 +98,7 @@ _Avoid_: permalink, snapshot (an eval term)
 **Sculpt**:
 Adjust a Poster's filters or Taste balance using the Search's cached Concert pool, without re-fetching venues or running the interpreter.
 _Avoid_: chat, re-prompt
+
+**Refinement**:
+A follow-up a person types to change the Search on screen. It changes the Reading and produces a new Poster.
+_Avoid_: chat, message, turn, prompt
