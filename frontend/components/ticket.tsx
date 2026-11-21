@@ -274,9 +274,10 @@ export function Ticket({
               <p className="venue">
                 {details.join(", ")}
                 {concert.venue && <VenueBadge name={concert.venue} city={concert.city} />}
+                {concert.venue && <FollowVenueButton name={concert.venue} city={concert.city} />}
               </p>
               {presale && <p className="presale">{presale}</p>}
-              {(heard || lineup > 0 || also.length > 0 || concert.venue) && (
+              {(heard || lineup > 0 || also.length > 0) && (
                 <div className="ticket-pills">
                   {heard && <ListenButton name={heard} listening={listening} onListen={listen} />}
                   {heard && <WatchLiveButton name={heard} watching={watching} onWatch={watch} />}
@@ -287,9 +288,9 @@ export function Ticket({
                       className="ticket-pill"
                       onClick={() => swap("setlist")}
                     >
-                      <ListMusic aria-hidden size={15} />
+                      <ListMusic aria-hidden size={14} />
                       Setlist
-                      <ChevronRight aria-hidden size={16} />
+                      <ChevronRight aria-hidden size={15} />
                     </button>
                   )}
                   {lineup > 0 && (
@@ -300,7 +301,7 @@ export function Ticket({
                       onClick={() => swap("lineup")}
                     >
                       Lineup · {lineup}
-                      <ChevronRight aria-hidden size={16} />
+                      <ChevronRight aria-hidden size={15} />
                     </button>
                   )}
                   {also.length > 0 && (
@@ -311,28 +312,31 @@ export function Ticket({
                       onClick={() => swap("dates")}
                     >
                       {moreDates(also.length)}
-                      <ChevronRight aria-hidden size={16} />
+                      <ChevronRight aria-hidden size={15} />
                     </button>
                   )}
-                  {concert.venue && <FollowVenueButton name={concert.venue} city={concert.city} />}
-                  {heard && onBoostArtist && (
+                </div>
+              )}
+              {heard && (onBoostArtist || onExcludeArtist) && (
+                <div className="ticket-steer" role="group" aria-label="Taste steering">
+                  {onBoostArtist && (
                     <button
                       type="button"
-                      className="ticket-pill steer-pill"
+                      className="steer-action"
                       aria-pressed={boosted}
                       onClick={() => onBoostArtist(heard)}
                     >
-                      <Sparkles aria-hidden size={15} />
+                      <Sparkles aria-hidden size={14} />
                       More like {heard}
                     </button>
                   )}
-                  {heard && onExcludeArtist && (
+                  {onExcludeArtist && (
                     <button
                       type="button"
-                      className="ticket-pill steer-pill"
+                      className="steer-action"
                       onClick={() => onExcludeArtist(heard)}
                     >
-                      <Ban aria-hidden size={15} />
+                      <Ban aria-hidden size={14} />
                       Not this vibe
                     </button>
                   )}

@@ -29,10 +29,10 @@ export function FollowVenueButton({ name, city, lat, lon }: FollowVenueButtonPro
       <>
         <button
           type="button"
-          className="ticket-pill venue-follow"
+          className="venue-follow-inline"
           onClick={() => setSigningIn(true)}
         >
-          <MapPin aria-hidden size={15} />
+          <MapPin aria-hidden size={13} />
           Follow venue<span className="sr-only"> {name}</span>
         </button>
         <AccountDialog open={signingIn} onOpenChange={setSigningIn} />
@@ -60,19 +60,19 @@ export function FollowVenueButton({ name, city, lat, lon }: FollowVenueButtonPro
     <>
       <button
         type="button"
-        className="ticket-pill venue-follow"
+        className="venue-follow-inline"
         aria-pressed={following}
         disabled={busy || !alerts}
         onClick={toggle}
       >
-        {following ? <Check aria-hidden size={15} strokeWidth={3} /> : <MapPin aria-hidden size={15} />}
+        {following ? <Check aria-hidden size={13} strokeWidth={2.75} /> : <MapPin aria-hidden size={13} />}
         {following ? "Following venue" : "Follow venue"}
         <span className="sr-only"> {name}</span>
       </button>
       {failed && (
-        <p role="alert" className="venue-follow-error">
+        <span role="alert" className="venue-follow-error">
           That did not save. Try again soon.
-        </p>
+        </span>
       )}
     </>
   );

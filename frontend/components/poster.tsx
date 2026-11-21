@@ -175,7 +175,9 @@ export function Poster({
   }, [notice, pending.size]);
 
   useEffect(() => {
-    if (!hasPoster || instant) return;
+    // Run the Working -> Picks -> Poster narrowing reveal once per Search; in-place
+    // Sculpting and Refinements keep the Poster on screen and transition cards directly.
+    if (!hasPoster || instant || revealed.current) return;
     const scope = new Choreography();
     void (async () => {
       // Live Searches have already shown candidates; cached Posters replay their narrowing.
@@ -208,8 +210,9 @@ export function Poster({
     );
   }, [results, stage, view, sculptVersion, reduced]);
 
-  function boostArtist(artist: string) {
+  function boostArtist(artist: string, closeDialog = false) {
     if (!sculpt || !onSculpt) return;
+    if (closeDialog) closed();
     onSculpt(toggleBoostArtist(sculpt, artist));
   }
 
@@ -320,14 +323,6 @@ export function Poster({
       )}
       {hasPoster && stage === "poster" && (
         <>
-          {sculpt && onSculpt && (
-            <PosterDials
-              sculpt={sculpt}
-              meta={sculptMeta}
-              busy={sculpting}
-              onChange={onSculpt}
-            />
-          )}
           {sculptError && (
             <div role="alert" className="sculpt-error">
               <p>{sculptError.message}</p>
@@ -423,6 +418,14 @@ export function Poster({
                 </div>
                 </div>
               </motion.header>
+              {sculpt && onSculpt && (
+                <PosterDials
+                  sculpt={sculpt}
+                  meta={sculptMeta}
+                  busy={sculpting}
+                  onChange={onSculpt}
+                />
+              )}
               <Dialog.Root
                 open={open}
                 onOpenChange={(next) => {
@@ -609,7 +612,9 @@ export function Poster({
                                 isBoosted(sculpt, listenTo(current) ?? ""),
                             )}
                             onBoostArtist={
-                              sculpt && onSculpt ? boostArtist : undefined
+                              sculpt && onSculpt
+                                ? (artist) => boostArtist(artist, true)
+                                : undefined
                             }
                             onExcludeArtist={
                               sculpt && onSculpt
@@ -624,6 +629,11 @@ export function Poster({
                               pending={pending.has(current.concert.id)}
                               onToggle={() => void toggleSave()}
                             />
+                            <AddToCalendar
+                              iconOnly
+                              concert={current.concert}
+                              name={nameOf(current)}
+                            />
                             {shareLink && (
                               <ShareButton
                                 iconOnly
@@ -632,10 +642,6 @@ export function Poster({
                               />
                             )}
                           </div>
-                          <AddToCalendar
-                            concert={current.concert}
-                            name={nameOf(current)}
-                          />
                           <p className="decision-status" role="status">
                             {notice}
                           </p>
@@ -656,28 +662,36 @@ export function Poster({
             (() => {
               const relaxed = relaxFilter(sculpt, sculptMeta?.eliminated_by);
               return (
-                <div className="empty sculpt-empty" role="status">
-                  <h2>No Concerts match these filters</h2>
-                  <p>{relaxed.reason}</p>
-                  <div className="empty-actions">
-                    <button
-                      type="button"
-                      disabled={sculpting}
-                      onClick={() => onSculpt(relaxed.next)}
-                    >
-                      {relaxed.label}
-                    </button>
-                    {onResetSculpt && (
+                <>
+                  <PosterDials
+                    sculpt={sculpt}
+                    meta={sculptMeta}
+                    busy={sculpting}
+                    onChange={onSculpt}
+                  />
+                  <div className="empty sculpt-empty" role="status">
+                    <h2>No Concerts match these filters</h2>
+                    <p>{relaxed.reason}</p>
+                    <div className="empty-actions">
                       <button
                         type="button"
                         disabled={sculpting}
-                        onClick={onResetSculpt}
+                        onClick={() => onSculpt(relaxed.next)}
                       >
-                        Reset all filters
+                        {relaxed.label}
                       </button>
-                    )}
+                      {onResetSculpt && (
+                        <button
+                          type="button"
+                          disabled={sculpting}
+                          onClick={onResetSculpt}
+                        >
+                          Reset all filters
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </>
               );
             })()
           ) : (

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ExternalLink, X } from "lucide-react";
+import { ArrowRight, CornerDownRight, ExternalLink, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import {
@@ -22,7 +22,10 @@ type Props = {
   onDismissNote: () => void;
 };
 
-/** Typed Refinement input under the Poster, with a horizontal trail of undoable chips above it. */
+/**
+ * Slim editorial Refinement strip tucked into the Search context right beneath the Reading chips,
+ * keeping follow-ups immediately visible without bolting a second shadowed search box at the bottom.
+ */
 export function RefineBar({
   trail,
   unanswerable,
@@ -52,6 +55,31 @@ export function RefineBar({
       aria-label="Refine Search"
       aria-busy={refining || undefined}
     >
+      <form className="refine-form" onSubmit={submit}>
+        <CornerDownRight aria-hidden size={15} className="refine-glyph" />
+        <label htmlFor="refine-input" className="sr-only">
+          Refine this Poster
+        </label>
+        <input
+          id="refine-input"
+          type="text"
+          className="refine-input"
+          value={draft}
+          maxLength={MAX_REFINEMENT_CHARS}
+          disabled={refining}
+          placeholder="Refine this Poster — only weekends, under $50, try Oakland, more like #2…"
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <button
+          type="submit"
+          className="refine-submit"
+          disabled={!canRefine || refining || !draft.trim()}
+        >
+          <span>{refining ? "Refining…" : "Refine"}</span>
+          <ArrowRight aria-hidden size={14} />
+        </button>
+      </form>
+
       {trail.length > 0 && (
         <ul className="refine-trail" aria-label="Applied Refinements">
           {trail.map((entry, index) => (
@@ -97,30 +125,6 @@ export function RefineBar({
           </button>
         </div>
       )}
-
-      <form className="refine-form" onSubmit={submit}>
-        <label htmlFor="refine-input" className="sr-only">
-          Refine this Poster
-        </label>
-        <input
-          id="refine-input"
-          type="text"
-          className="refine-input"
-          value={draft}
-          maxLength={MAX_REFINEMENT_CHARS}
-          disabled={refining}
-          placeholder="Try: only Saturdays, cheaper, try Oakland, more like #2…"
-          onChange={(event) => setDraft(event.target.value)}
-        />
-        <button
-          type="submit"
-          className="refine-submit"
-          disabled={!canRefine || refining || !draft.trim()}
-        >
-          <span>{refining ? "Refining…" : "Refine"}</span>
-          <ArrowRight aria-hidden size={16} />
-        </button>
-      </form>
     </section>
   );
 }

@@ -498,6 +498,18 @@ export function Search() {
             onCancel={closeEditor}
           />
         )}
+        {(phase === "finished" || refining) && hasPoster && reading && !editing && (
+          <RefineBar
+            trail={refinements}
+            unanswerable={unanswerable}
+            recommendations={recommendations}
+            canRefine={canSearch}
+            refining={refining}
+            onRefine={submitRefinement}
+            onUndo={undoRefinement}
+            onDismissNote={dismissUnanswerable}
+          />
+        )}
       </div>
 
       {error && (
@@ -571,18 +583,6 @@ export function Search() {
           </motion.div>
         )}
       </AnimatePresence>
-      {(phase === "finished" || refining) && hasPoster && reading && (
-        <RefineBar
-          trail={refinements}
-          unanswerable={unanswerable}
-          recommendations={recommendations}
-          canRefine={canSearch}
-          refining={refining}
-          onRefine={submitRefinement}
-          onUndo={undoRefinement}
-          onDismissNote={dismissUnanswerable}
-        />
-      )}
       {elsewhere && phase === "finished" && (
         <div id="elsewhere">
           <Board

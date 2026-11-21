@@ -126,6 +126,7 @@ export function useSearch() {
   const [state, setState] = useState(IDLE);
   const current = useRef<AbortController | null>(null);
   const sculptAbort = useRef<AbortController | null>(null);
+  const sculptSeq = useRef(0);
   const stateRef = useRef(state);
 
   useEffect(() => {
@@ -329,6 +330,7 @@ export function useSearch() {
 
   const applySculpt = useCallback(async (next: SculptState) => {
     const snap = stateRef.current;
+    const seq = ++sculptSeq.current;
     if (isDefaultSculpt(next) && snap.basePoster) {
       sculptAbort.current?.abort();
       setState((prev) => ({
@@ -360,7 +362,7 @@ export function useSearch() {
 
     try {
       const response = await sculptPoster(activeId, next, controller.signal);
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || sculptSeq.current !== seq) return;
       setState((prev) => ({
         ...prev,
         searchId: response.search_id,
@@ -373,7 +375,7 @@ export function useSearch() {
         sculptVersion: prev.sculptVersion + 1,
       }));
     } catch (caught) {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || sculptSeq.current !== seq) return;
       const err =
         caught instanceof SearchRefused
           ? { code: caught.code, message: caught.message }
