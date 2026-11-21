@@ -11,8 +11,50 @@ export type Alerts = {
   place: AlertPlace | null;
   followed: FollowedArtist[];
   followed_venues?: FollowedVenue[];
+  sale_reminders_enabled?: boolean;
+  timezone?: string | null;
 };
 export const RADII = [10, 25, 50, 100] as const;
+
+const FALLBACK_TIMEZONES = [
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Phoenix",
+  "America/Los_Angeles",
+  "America/Anchorage",
+  "Pacific/Honolulu",
+  "America/Toronto",
+  "America/Vancouver",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "UTC",
+] as const;
+
+/** The browser's IANA time zone, falling back to UTC when unavailable. */
+export function defaultTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+/** IANA time zones for the Account page selector, always including `current` and the browser zone. */
+export function timeZoneOptions(current?: string | null, browserZone = defaultTimeZone()): string[] {
+  const supported =
+    typeof Intl.supportedValuesOf === "function"
+      ? Intl.supportedValuesOf("timeZone")
+      : [...FALLBACK_TIMEZONES];
+  const zones = new Set<string>(supported);
+  zones.add("UTC");
+  if (browserZone) zones.add(browserZone);
+  if (current) zones.add(current);
+  return [...zones].sort((a, b) => a.localeCompare(b));
+}
 
 /**
  * The key two spellings of one Artist share. It mirrors the API's `names.normalize`, so the
@@ -152,6 +194,38 @@ export async function setAlertsEnabled(enabled: boolean): Promise<void> {
     });
   } catch (error) {
     if (alerts) set({ ...alerts, enabled: !enabled });
+    throw error;
+  }
+}
+
+/** Updates Saved Concert sale reminders and IANA time zone, reverting if the API refuses. */
+export async function setSaleReminders(enabled: boolean, timezone?: string | null): Promise<void> {
+  const previous = alerts;
+  if (alerts) {
+    set({
+      ...alerts,
+      sale_reminders_enabled: enabled,
+      timezone: timezone !== undefined ? timezone : alerts.timezone,
+    });
+  }
+  try {
+    const body: { enabled: boolean; timezone?: string } = { enabled };
+    if (timezone) body.timezone = timezone;
+    const response = await accountFetch("/alerts/sale-reminders", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    const updated: { sale_reminders_enabled: boolean; timezone: string | null } =
+      await response.json();
+    if (alerts) {
+      set({
+        ...alerts,
+        sale_reminders_enabled: updated.sale_reminders_enabled,
+        timezone: updated.timezone,
+      });
+    }
+  } catch (error) {
+    if (previous) set(previous);
     throw error;
   }
 }

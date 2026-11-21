@@ -47,7 +47,7 @@ export function StopAlerts() {
   return (
     <article className="account-page">
       <h1>Stop Alert emails?</h1>
-      <p>Concert Scout will stop emailing you about new Concerts by Artists you follow.</p>
+      <p>Concert Scout will stop sending you daily Alert emails.</p>
       <div className="account-actions">
         <button type="button" onClick={stop} disabled={state === "busy" || !account || !token}>
           Stop Alerts
