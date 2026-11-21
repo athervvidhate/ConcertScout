@@ -2,7 +2,7 @@
 
 The Taste Profile is the confirmed Artist names of a Taste, favourites first, kept on the Account
 so every device sees it. Spotify account data never reaches it (ADR 0003): the source is one of
-the non-Spotify imports, and the table refuses anything else.
+the non-Spotify imports, which a Taste may combine, and the table refuses anything else.
 
 For You matches those names to the Concert pool by code alone: exact Lineup names, the closest
 similar Artists and Artists who have shared bills with them. It makes no model call (ADR 0002).
@@ -50,7 +50,8 @@ type Turn = Callable[[Request], Awaitable[None]]
 
 
 class TasteBody(BaseModel):
-    source: TasteSource
+    # Newest first, each once. A Taste can combine every non-Spotify source there is.
+    sources: Annotated[list[TasteSource], Field(min_length=1, max_length=9)]
     artists: Annotated[list[Name], Field(min_length=1, max_length=MAX_TASTE)]
 
 
@@ -246,7 +247,7 @@ def account_routes(
     ) -> TasteProfile:
         try:
             return await supabase.put_taste(
-                client, secret, account, body.source, distinct(body.artists)
+                client, secret, account, list(dict.fromkeys(body.sources)), distinct(body.artists)
             )
         except supabase.SupabaseError as exc:
             logger.warning("Taste Profile write failed: %s", exc)

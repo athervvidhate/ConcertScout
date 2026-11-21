@@ -29,12 +29,58 @@ export function isFileTasteSource(source: TasteSource): source is FileTasteSourc
   );
 }
 
-// A Taste brought in from elsewhere: Artist names, favourites first. It lives only on this device.
+// A Taste brought in from elsewhere: Artist names, favourites first, and the sources they came
+// from, newest first. It lives on this device, and on a signed-in Account too.
 export type ImportedTaste = {
-  source: TasteSource;
+  sources: TasteSource[];
   artists: string[];
   importedAt?: string;
 };
+
+function artistKey(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** Each Artist once, in the order given. */
+function distinctArtists(names: string[]): string[] {
+  const seen = new Set<string>();
+  return names.filter((name) => {
+    const key = artistKey(name);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * The Taste with a source's Artists added. The new list and the old take turns, the new one first,
+ * so a long playlist cannot push hand-picked Artists past what a Search reads.
+ */
+export function combineTaste(
+  current: ImportedTaste | null,
+  source: TasteSource,
+  artists: string[],
+): ImportedTaste {
+  const importedAt = new Date().toISOString();
+  if (!current) return { sources: [source], artists: distinctArtists(artists), importedAt };
+  const turns: string[] = [];
+  for (let i = 0; i < Math.max(artists.length, current.artists.length); i++) {
+    if (i < artists.length) turns.push(artists[i]);
+    if (i < current.artists.length) turns.push(current.artists[i]);
+  }
+  return {
+    sources: [source, ...current.sources.filter((kept) => kept !== source)],
+    artists: distinctArtists(turns),
+    importedAt,
+  };
+}
+
+/** "your Taste picks and your YouTube playlist". */
+export function describeSources(sources: TasteSource[]): string {
+  const names = sources.map((source) => SOURCE_NAMES[source]);
+  if (names.length < 3) return names.join(" and ");
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
 
 export async function fetchTaste(source: UsernameSource, username: string): Promise<string[]> {
   const response = await fetch(`${API_URL}/taste/${source}`, {
@@ -96,7 +142,9 @@ function parse(raw: string | null): ImportedTaste | null {
   if (!raw) return null;
   try {
     const taste: ImportedTaste = JSON.parse(raw);
-    return Array.isArray(taste.artists) ? taste : null;
+    return Array.isArray(taste.artists) && Array.isArray(taste.sources) && taste.sources.length > 0
+      ? taste
+      : null;
   } catch {
     return null;
   }
@@ -122,6 +170,24 @@ export function keepTaste(taste: ImportedTaste): void {
     : { ...taste, importedAt: new Date().toISOString() };
   localStorage.setItem(TASTE_KEY, JSON.stringify(stamped));
   listeners.forEach((listener) => listener());
+}
+
+/** Adds a source's Artists to the Taste on this device. */
+export function addToTaste(source: TasteSource, artists: string[]): void {
+  keepTaste(combineTaste(snapshot(), source, artists));
+}
+
+/** The Taste's whole list, as edited. A name the list did not have was picked by hand. */
+export function replaceTasteArtists(artists: string[]): void {
+  const current = snapshot();
+  const known = new Set(current?.artists.map(artistKey));
+  const picked = artists.some((name) => !known.has(artistKey(name)));
+  const sources = current?.sources ?? [];
+  keepTaste({
+    sources: picked || sources.length === 0 ? ["seed", ...sources.filter((s) => s !== "seed")] : sources,
+    artists: distinctArtists(artists),
+    importedAt: new Date().toISOString(),
+  });
 }
 
 export function forgetTaste(): void {

@@ -26,7 +26,7 @@ export const NEEDS_PLACE = "for_you_needs_place";
 
 /** An Account's saved Taste, as the API returns it. */
 export type TasteProfile = {
-  source: TasteSource;
+  sources: TasteSource[];
   artists: string[];
   updated_at: string;
 };
@@ -50,9 +50,9 @@ export function shelfTitle(place: string): string {
 }
 
 function signature(
-  taste: Pick<ImportedTaste, "source" | "artists"> | null,
+  taste: Pick<ImportedTaste, "sources" | "artists"> | null,
 ): string {
-  return taste ? `${taste.source}\n${taste.artists.join("\n")}` : "";
+  return taste ? `${taste.sources.join(",")}\n${taste.artists.join("\n")}` : "";
 }
 
 /** Which side holds the newer Taste when this device and the Account disagree. */
@@ -75,7 +75,7 @@ async function writeProfile(taste: ImportedTaste): Promise<void> {
   await accountFetch("/taste", {
     method: "PUT",
     body: JSON.stringify({
-      source: taste.source,
+      sources: taste.sources,
       artists: taste.artists.slice(0, MAX_SYNCED),
     }),
   });
@@ -105,7 +105,7 @@ export function useTasteSync(): boolean {
       if (side === "pull" && remote) {
         known.current = signature(remote);
         keepTaste({
-          source: remote.source,
+          sources: remote.sources,
           artists: remote.artists,
           importedAt: remote.updated_at,
         });

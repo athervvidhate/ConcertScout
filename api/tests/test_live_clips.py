@@ -105,7 +105,31 @@ def test_the_most_liked_comment_stamp_is_the_peak() -> None:
         comment("love this", 900),
         comment("1:05", 20),
     ]
-    assert live_clips.comment_start(comments, 600) == 252
+    assert live_clips.crowd_start(comments, 600) == 252
+
+
+def test_many_fans_on_one_moment_outvote_one_liked_comment() -> None:
+    comments = [
+        comment("40:23 THE DROP", 30),
+        comment("40:30 goosebumps", 25),
+        comment("40:20", 12),
+        comment("12:00 my favourite", 60),
+    ]
+    # 31 + 26 + 13 votes within 20 seconds beat 61 at 12:00, and the moment opens on its top stamp.
+    assert live_clips.crowd_start(comments, 3600) == 2423
+
+
+def test_a_moment_needs_ten_votes() -> None:
+    assert live_clips.crowd_start([comment("4:12 nice", 8)], 600) is None
+    assert live_clips.crowd_start([comment("4:12 nice", 9)], 600) == 252
+
+
+def test_a_commenters_tracklist_reads_as_chapters() -> None:
+    tracklist = "Tracklist:\n0:00 Intro\n3:45 Song A\n9:10 Evaluation\n14:00 Song C\n20:00 Outro"
+    comments = [comment("5:00 lol", 2), comment(tracklist, 4)]
+    found = live_clips.comment_chapters(comments)
+    assert [c.title for c in found] == ["Intro", "Song A", "Evaluation", "Song C", "Outro"]
+    assert live_clips.comment_chapters([comment("1:00 a\n2:00 b", 50)]) == []
 
 
 @pytest.mark.parametrize(
@@ -122,11 +146,29 @@ def test_the_most_liked_comment_stamp_is_the_peak() -> None:
 def test_a_comment_outside_the_show_or_a_spammer_or_a_tracklist_is_skipped(
     text: str, likes: int
 ) -> None:
-    assert live_clips.comment_start([comment(text, likes)], 600) is None
+    assert live_clips.crowd_start([comment(text, likes)], 600) is None
 
 
 def test_a_comment_with_its_first_stamp_out_of_range_uses_the_next_valid_one() -> None:
-    assert live_clips.comment_start([comment("0:05 count in, 3:30 the peak", 50)], 600) == 210
+    assert live_clips.crowd_start([comment("0:05 count in, 3:30 the peak", 50)], 600) == 210
+
+
+@pytest.mark.parametrize(
+    ("title", "name", "named"),
+    [
+        ("Omar+ | Boiler Room London", "Omar+", True),
+        ("Omar: Tiny Desk Concert", "Omar+", False),
+        ("Omar+ | Boiler Room London", "Omar", False),
+        ("Omari Live at the Fillmore", "Omar", False),
+        ("Disclosure + Friends live", "Disclosure", True),
+        ("The Strokes - Live at Reading 2006", "The Strokes", True),
+        ("Sigur Rós - Live in Reykjavík", "Sigur Ros", True),
+    ],
+)
+def test_a_title_names_an_artist_in_whole_words_with_their_symbols(
+    title: str, name: str, named: bool
+) -> None:
+    assert live_clips.names_artist(title, name) is named
 
 
 @pytest.mark.parametrize(
@@ -376,15 +418,18 @@ async def test_a_curated_artist_opens_at_the_stamp_of_its_most_liked_comment() -
     assert api.paths() == ["/videos", "/commentThreads"]
     assert api.params("/videos")["part"] == "snippet,contentDetails,status"
     comments = api.params("/commentThreads")
-    assert comments["order"] == "relevance" and comments["maxResults"] == "15"
+    assert comments["order"] == "relevance" and comments["maxResults"] == "100"
     assert await redis.get(f"youtube:search:calls:{dt.datetime.now(dt.UTC).date()}") is None
 
 
-async def test_a_chapter_of_a_top_track_beats_comments_and_costs_no_comment_call() -> None:
+@pytest.mark.parametrize(("likes", "start"), [(999, 540), (5, 400)])
+async def test_the_crowds_moment_beats_a_chapter_and_a_weak_one_leaves_the_chapter(
+    likes: int, start: int
+) -> None:
     description = "Setlist\n0:00 Intro\n2:30 Maria Tambien\n6:40 Evaluation\n"
     api = Youtube(
         videos={"desk1": video("PT15M", description)},
-        comments={"desk1": [("9:00 amazing", 999)]},
+        comments={"desk1": [("9:00 amazing", likes)]},
     )
     redis = FakeAsyncRedis()
     await indexed(
@@ -393,8 +438,37 @@ async def test_a_chapter_of_a_top_track_beats_comments_and_costs_no_comment_call
     async with api.client() as client, lastfm_tracks(["Evaluation", "Maria Tambien"]) as lf:
         clip = await live_index.find_clip(client, redis, "Khruangbin", lastfm_client=lf)
 
-    assert clip and clip.start == 400
-    assert api.paths() == ["/videos"]
+    assert clip and clip.start == start
+    assert api.paths() == ["/videos", "/commentThreads"]
+
+
+async def test_with_no_description_chapters_a_commenters_tracklist_finds_the_hit() -> None:
+    tracklist = "0:00 Intro\n4:00 Song A\n18:20 Evaluation\n25:00 Song C"
+    api = Youtube(videos={"kexp": video("PT35M")}, comments={"kexp": [(tracklist, 3)]})
+    redis = FakeAsyncRedis()
+    await indexed(redis, "khruangbin", ("kexp", "Khruangbin - Full Performance", "KEXP"))
+    async with api.client() as client, lastfm_tracks(["Evaluation"]) as lf:
+        clip = await live_index.find_clip(client, redis, "Khruangbin", lastfm_client=lf)
+    assert clip and clip.start == 1100
+
+
+async def test_omar_plus_is_not_given_omars_video() -> None:
+    desk = SERIES["Tiny Desk Concert"]
+    api = Youtube(
+        playlists={desk.uploads: [playlist_item("omar", "Omar: Tiny Desk Concert")]},
+        videos={"omar": video("PT20M"), "plus": video("PT60M")},
+        search=[
+            ("omar", "Omar: Tiny Desk Concert", "NPR Music"),
+            ("plus", "Omar+ | Boiler Room London", "Boiler Room"),
+        ],
+    )
+    redis = FakeAsyncRedis()
+    async with api.client() as client:
+        await live_index.sync(client, redis)
+        plus = await live_index.find_clip(client, redis, "Omar+")
+        omar = await live_index.find_clip(client, redis, "Omar")
+    assert plus and plus.video_id == "plus"
+    assert omar and omar.video_id == "omar"
 
 
 async def test_a_setlist_staple_is_matched_before_a_studio_track(

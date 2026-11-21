@@ -44,6 +44,17 @@ test(
 
     await page.getByRole("button", { name: "Save Taste" }).click();
     await expect(page.getByText("Using 2 Artists from your YouTube playlist.")).toBeVisible();
+    // A saved Taste can still come from somewhere else.
+    await page.getByRole("button", { name: "Other ways to add your Taste" }).click();
+    await expect(page.getByText("What you add here joins your 2 Artists.")).toBeVisible();
+    // Picking an Artist by hand adds to the playlist's Artists.
+    await page.getByLabel("Import from").selectOption("seed");
+    await page.getByRole("combobox", { name: "Search for an Artist" }).fill("Bono");
+    await page.getByRole("option", { name: "Bonobo" }).click();
+    await page.getByRole("button", { name: "Save Taste" }).click();
+    await expect(
+      page.getByText("Using 3 Artists from your Taste picks and your YouTube playlist."),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "Close", exact: true }).click();
     const request = page.waitForRequest((r) => r.url().endsWith("/search"));
@@ -52,9 +63,24 @@ test(
     await expect(searchButton).toBeEnabled();
     await searchButton.click();
     const data = (await request).postDataJSON();
-    expect(data.taste).toEqual(["Khruangbin", "Tame Impala"]);
+    expect(data.taste).toEqual(["Bonobo", "Khruangbin", "Tame Impala"]);
   },
 );
+
+test("a long playlist grows down the panel instead of scrolling inside it", async ({ page }) => {
+  await page.goto("/");
+  await openTastePanel(page);
+  await page.getByLabel("YouTube playlist URL").fill("https://www.youtube.com/playlist?list=PLcontractLong123");
+  await page.getByRole("button", { name: "Find Artists" }).click();
+
+  const chips = page.getByRole("list", { name: "Extracted Artists" });
+  await expect(chips.getByRole("listitem")).toHaveCount(50);
+  expect(await chips.evaluate((e) => e.scrollHeight - e.clientHeight)).toBeLessThanOrEqual(1);
+  const panel = page.locator(".taste-panel");
+  expect(await panel.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(true);
+  await page.getByRole("button", { name: "Save Taste" }).scrollIntoViewIfNeeded();
+  await expect(page.getByRole("button", { name: "Save Taste" })).toBeInViewport();
+});
 
 test("invalid, private, and empty YouTube playlists show actionable inline errors", async ({
   page,

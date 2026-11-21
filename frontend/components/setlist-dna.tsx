@@ -1,6 +1,5 @@
 "use client";
 
-import { Paged } from "@/components/paged";
 import {
   type SetlistSummary,
   formatLastShow,
@@ -42,8 +41,8 @@ function SetlistBody({ summary }: { summary: SetlistSummary }) {
 }
 
 /**
- * Ticket detail swap pane for Recent Setlist DNA. Renders inside Paged so the Ticket keeps its
- * fixed height and never scrolls on desktop or mobile viewports.
+ * Ticket detail swap pane for Recent Setlist DNA. Only its own list scrolls, so the Ticket keeps
+ * its fixed height on desktop and phone.
  */
 export function SetlistDnaPane({ name, mbid }: { name: string; mbid?: string }) {
   const summary = useArtistSetlist(name, mbid, true);
@@ -51,21 +50,20 @@ export function SetlistDnaPane({ name, mbid }: { name: string; mbid?: string }) 
   const state = summary === null ? "loading" : available ? "ready" : "empty";
 
   return (
-    <Paged
-      key={state}
-      columns={1}
-      heading={<p className="dates-heading">Recent setlist</p>}
-    >
-      {summary === null && (
-        <p className="setlist-status" role="status">
-          Looking up recent setlists for {name}
-        </p>
-      )}
-      {summary !== null && !available && (
-        <p className="setlist-empty">No recent setlists recorded for {name}.</p>
-      )}
-      {available && <SetlistBody summary={summary} />}
-    </Paged>
+    <div className="setlist-pane" data-state={state}>
+      <p className="dates-heading">Recent setlist</p>
+      <div className="setlist-scroll" role="region" aria-label={`Recent setlist of ${name}`} tabIndex={0}>
+        {summary === null && (
+          <p className="setlist-status" role="status">
+            Looking up recent setlists for {name}
+          </p>
+        )}
+        {summary !== null && !available && (
+          <p className="setlist-empty">No recent setlists recorded for {name}.</p>
+        )}
+        {available && <SetlistBody summary={summary} />}
+      </div>
+    </div>
   );
 }
 

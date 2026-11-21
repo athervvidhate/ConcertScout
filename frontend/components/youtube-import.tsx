@@ -5,9 +5,8 @@ import { X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import { SearchRefused, UNREACHABLE } from "@/lib/search";
-import { fetchYouTubePlaylistTaste, keepTaste } from "@/lib/taste";
+import { addToTaste, fetchYouTubePlaylistTaste } from "@/lib/taste";
 
-import styles from "./youtube-import.module.css";
 
 const UNREADABLE = "That playlist could not be read. Try again.";
 
@@ -57,7 +56,7 @@ export function YouTubeImport({ onSaved }: YouTubeImportProps) {
 
   function save() {
     if (selected.length === 0) return;
-    keepTaste({ source: "youtube", artists: selected });
+    addToTaste("youtube", selected);
     onSaved?.(selected);
   }
 
@@ -68,7 +67,7 @@ export function YouTubeImport({ onSaved }: YouTubeImportProps) {
   }
 
   return (
-    <div className={styles.root}>
+    <div className="taste-flow">
       <form onSubmit={findArtists} noValidate>
         <label>
           YouTube playlist URL
@@ -86,7 +85,7 @@ export function YouTubeImport({ onSaved }: YouTubeImportProps) {
             maxLength={2048}
           />
         </label>
-        <p className={styles.hint}>
+        <p className="taste-note">
           Paste a public or unlisted YouTube or YouTube Music playlist link. Only the Artist names
           you save stay on this device.
         </p>
@@ -97,19 +96,19 @@ export function YouTubeImport({ onSaved }: YouTubeImportProps) {
       </form>
 
       {extracted && (
-        <div className={styles.review} aria-live="polite">
+        <div className="taste-section" aria-live="polite">
           {selected.length > 0 ? (
             <>
-              <p className={styles.summary}>
+              <p className="taste-note">
                 Found {artistCount(selected.length)}. Remove any that don&apos;t belong, then save.
               </p>
-              <ul className={styles.chips} aria-label="Extracted Artists">
+              <ul className="taste-chips" aria-label="Extracted Artists">
                 {selected.map((artist) => (
-                  <li key={artist} className={styles.chip}>
-                    <span className={styles.chipName}>{artist}</span>
+                  <li key={artist} className="taste-chip">
+                    <span className="taste-chip-name">{artist}</span>
                     <Button
                       type="button"
-                      className={styles.chipRemove}
+                      className="taste-chip-remove"
                       aria-label={`Remove ${artist}`}
                       onClick={() => removeArtist(artist)}
                     >
@@ -120,14 +119,14 @@ export function YouTubeImport({ onSaved }: YouTubeImportProps) {
               </ul>
             </>
           ) : (
-            <p className={styles.summary}>
+            <p className="taste-note">
               All Artists removed. Restore the list or paste another playlist link.
             </p>
           )}
-          <div className={styles.actions}>
+          <div className="taste-actions">
             <Button
               type="button"
-              className={styles.primary}
+              className="taste-primary"
               onClick={save}
               disabled={selected.length === 0}
             >
@@ -136,13 +135,13 @@ export function YouTubeImport({ onSaved }: YouTubeImportProps) {
             {selected.length < extracted.length && (
               <Button
                 type="button"
-                className={styles.secondary}
+                className="taste-secondary"
                 onClick={() => setSelected(extracted)}
               >
                 Restore list
               </Button>
             )}
-            <Button type="button" className={styles.secondary} onClick={resetDraft}>
+            <Button type="button" className="taste-secondary" onClick={resetDraft}>
               Cancel
             </Button>
           </div>

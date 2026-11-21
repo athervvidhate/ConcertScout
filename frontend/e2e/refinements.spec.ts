@@ -176,6 +176,19 @@ test("eight dates swap in without resizing the Ticket, its photo or scrolling", 
   await expect(sheet).toHaveCount(0);
 });
 
+/** A finger dragged across the middle of a box, as the browser's own touch input. */
+async function swipe(page: Page, box: { x: number; y: number; width: number; height: number }, dx: number) {
+  const cdp = await page.context().newCDPSession(page);
+  const y = box.y + box.height / 2;
+  const from = box.x + box.width / 2 - dx / 2;
+  const touch = (type: "touchStart" | "touchMove" | "touchEnd", x?: number) =>
+    cdp.send("Input.dispatchTouchEvent", { type, touchPoints: x === undefined ? [] : [{ x, y }] });
+  await touch("touchStart", from);
+  for (let step = 1; step <= 8; step++) await touch("touchMove", from + (dx * step) / 8);
+  await touch("touchEnd");
+  await cdp.detach();
+}
+
 test("a festival's whole Lineup pages without scrolling, its matches first", async ({
   page,
 }, info) => {
@@ -268,5 +281,38 @@ test("a festival's whole Lineup pages without scrolling, its matches first", asy
   await expect(
     sheet.getByRole("button", { name: "Save", exact: true }),
   ).toBeInViewport();
+
+  // Opening an Artist from the Lineup keeps the page it was opened from.
+  const firstShown = () =>
+    frame.evaluate((e) => {
+      const box = e.getBoundingClientRect();
+      return [...e.querySelectorAll("li")].findIndex((li) => {
+        const r = li.getBoundingClientRect();
+        return r.left >= box.left - 1 && r.right <= box.right + 1;
+      });
+    });
+  // The page slides over, so wait for it to settle before choosing a row of page 2.
+  await expect
+    .poll(() => frame.evaluate((e) => e.querySelector(".paged-track")!.getAnimations().length))
+    .toBe(0);
+  expect(await firstShown()).toBeGreaterThan(0);
+  const artist = rows.nth(await firstShown()).getByRole("button");
+  const name = (await artist.textContent())!;
+  await artist.click();
+  const panel = page.getByRole("dialog", { name });
+  await expect(panel).toBeVisible();
+  await expect(pager).toHaveText(/^2 of /);
+  await panel.getByRole("button", { name: "Close" }).click();
+  await expect(panel).toBeHidden();
+  await expect(pager).toHaveText(/^2 of /);
+
+  // On a phone a swipe turns the page either way.
+  if (info.project.name === "mobile") {
+    const box = (await frame.boundingBox())!;
+    await swipe(page, box, -160);
+    await expect(pager).toHaveText(/^3 of /);
+    await swipe(page, box, 160);
+    await expect(pager).toHaveText(/^2 of /);
+  }
   await page.screenshot({ path: info.outputPath("lineup.png") });
 });
