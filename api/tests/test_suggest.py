@@ -269,6 +269,26 @@ async def test_related_follows_the_newest_picks_which_the_picker_sends_first(
     assert response.json()["artists"][:2] == ["Like Fred again..", "Rap Star"]
 
 
+async def test_related_reaches_past_new_picks_that_have_no_related_artists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def seed(_: httpx.AsyncClient, __: object, name: str) -> SeedArtist:
+        return SeedArtist(name=name, mbid=name)
+
+    async def similar(_: httpx.AsyncClient, __: object, mbid: str) -> list[SimilarArtist]:
+        if mbid.startswith("Obscure"):
+            return []
+        return [SimilarArtist(name=f"Like {mbid}", mbid=f"like-{mbid}", score=90)]
+
+    monkeypatch.setattr(musicbrainz, "resolve", AsyncMock(side_effect=seed))
+    monkeypatch.setattr(listenbrainz, "similar_artists", AsyncMock(side_effect=similar))
+    names = [f"Obscure {n}" for n in range(1, 7)] + ["Tame Impala", "Bonobo"]
+    async with api_for(FakeAsyncRedis()) as api:
+        response = await api.get("/artists/related", params=[("names", n) for n in names])
+
+    assert response.json()["artists"] == ["Like Tame Impala", "Like Bonobo"]
+
+
 async def test_related_falls_back_to_lastfm_when_listenbrainz_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

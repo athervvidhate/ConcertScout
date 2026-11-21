@@ -349,9 +349,16 @@ async def related_artists(
     cap = max(1, min(limit, MAX_RELATED_LIMIT))
     excluded = {normalize(name) for name in parsed}
 
-    # The picker sends its newest picks first, so follow-up chips react to the latest taps.
-    active_seeds = parsed[:MAX_SEED_LOOKUPS]
-    groups = await asyncio.gather(*(_seed_related(seed, services) for seed in active_seeds))
+    # The picker sends its newest picks first, so follow-up chips react to the latest taps. A pick
+    # with no related Artists doesn't count, so a few obscure taps can't empty the chips.
+    groups: list[list[tuple[SimilarArtist, float, float]]] = []
+    for start in range(0, len(parsed), MAX_SEED_LOOKUPS):
+        if len(groups) >= MAX_SEED_LOOKUPS:
+            break
+        batch = parsed[start : start + MAX_SEED_LOOKUPS]
+        found = await asyncio.gather(*(_seed_related(seed, services) for seed in batch))
+        groups.extend(group for group in found if group)
+    groups = groups[:MAX_SEED_LOOKUPS]
 
     # Each seed's own ranking, then taken in turns, newest seed first, so a new pick shows at once.
     rankings: list[list[str]] = []
