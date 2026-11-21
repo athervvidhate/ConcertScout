@@ -21,6 +21,8 @@ async function search(page: Page, text = "UKG in SF", openTicket = true) {
       await page.getByRole("button", {name:"Close Ticket"}).click();
     await expect(ticket).toHaveCount(0);
   }
+  const newMode = page.getByRole("group", { name: "Search bar mode" }).getByRole("button", { name: "New", exact: true });
+  if (await newMode.isVisible()) await newMode.click();
   await page.getByRole("textbox", { name: "Search", exact:true }).fill(text);
   await expect(page.getByRole("button", { name: "Search", exact:true })).toBeEnabled();
   await page.getByRole("button", { name: "Search", exact:true }).click();
@@ -134,6 +136,7 @@ test("an emptied box stays blank after a Search until home returns", async ({pag
   await search(page);
   await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
   await page.getByRole("button", {name:"Close Ticket"}).click();
+  await page.getByRole("group", {name: "Search bar mode"}).getByRole("button", {name: "New", exact: true}).click();
   await input.clear();
   await expect(input).not.toHaveAttribute("placeholder");
   await page.waitForTimeout(350);

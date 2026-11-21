@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Literal, Self, cast
 
 from pydantic import BaseModel, ValidationError, model_validator
-from pydantic_ai import Agent, NativeOutput, RunContext
+from pydantic_ai import Agent, PromptedOutput, RunContext
 from pydantic_ai.exceptions import AgentRunError
 from pydantic_ai.models import Model
 from pydantic_ai.models.anthropic import AnthropicModelSettings
@@ -147,9 +147,9 @@ class RefinementError(Exception):
 
 agent = Agent(
     deps_type=dt.date,
-    output_type=NativeOutput(RefinementInterpretation),
+    output_type=PromptedOutput(RefinementInterpretation),
     instructions=INSTRUCTIONS,
-    model_settings=AnthropicModelSettings(anthropic_effort="medium", max_tokens=2048, timeout=15.0),
+    model_settings=AnthropicModelSettings(anthropic_effort="low", max_tokens=1024, timeout=15.0),
 )
 
 

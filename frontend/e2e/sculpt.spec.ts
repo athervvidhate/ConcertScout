@@ -29,6 +29,8 @@ test.describe("Instant Poster Sculpting", () => {
     await page.keyboard.press("Enter");
 
     await expect(under40).toHaveAttribute("aria-pressed", "true");
+    // Sculpting updates cards in place and never replays the Working View candidate cloud.
+    await expect(poster).toHaveAttribute("data-stage", "poster");
     await expect(poster).toContainText("Contract Artist");
     await expect(poster).not.toContainText("Second Contract Artist");
     await expect(dials.locator(".dial-note")).toContainText(
@@ -80,7 +82,6 @@ test.describe("Instant Poster Sculpting", () => {
     await firstDialog
       .getByRole("button", { name: "More like Contract Artist" })
       .click();
-    await page.keyboard.press("Escape");
     await expect(firstDialog).toHaveCount(0);
 
     // Active steering pill appears beside the Reading chips with one-click undo.
