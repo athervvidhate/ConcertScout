@@ -47,6 +47,7 @@ import {
 } from "@/lib/sculpt";
 import { useTicketMotion } from "@/lib/use-ticket-motion";
 import { formatDate, formatConcertTime } from "@/lib/format";
+import { gradeLabel } from "@/lib/grade";
 import { removeSaved, saveConcert, useDecisions } from "@/lib/saved";
 import type { Candidates, Reading, Recommendation } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
@@ -460,6 +461,7 @@ export function Poster({
                         .filter(Boolean)
                         .join(" · ");
                       const bill = matchLine(r) ?? showTitle(concert, name);
+                      const gradeText = gradeLabel(r.grade);
                       if (recommendations.length === 1 && view === "grid")
                         return (
                           <article
@@ -554,6 +556,11 @@ export function Poster({
                           )}
                           {bookmark(r)}
                           <div className="card-body">
+                            {gradeText && (
+                              <p className="card-grade" data-grade={r.grade}>
+                                {gradeText}
+                              </p>
+                            )}
                             <h3 className="card-name">{name}</h3>
                             {bill && <p className="card-bill">{bill}</p>}
                             <p className="card-meta">{meta}</p>
