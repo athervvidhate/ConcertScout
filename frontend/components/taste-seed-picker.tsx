@@ -9,7 +9,8 @@ import {
   fetchArtistSuggestions,
   fetchRelatedArtists,
   type FileTasteSource,
-  keepTaste,
+  addToTaste,
+  replaceTasteArtists,
 } from "@/lib/taste";
 import {
   artistsFromPlaylistFiles,
@@ -55,6 +56,7 @@ function progressCopy(count: number): string {
 }
 
 type TasteSeedPickerProps = {
+  /** The Taste's whole list, to edit. Without it, the picks join the Taste. */
   initialArtists?: string[];
   onSaved?: (artists: string[]) => void;
   onCancel?: () => void;
@@ -207,7 +209,8 @@ export function TasteSeedPicker({ initialArtists = [], onSaved, onCancel }: Tast
 
   function save() {
     if (selected.length === 0) return;
-    keepTaste({ source: "seed", artists: selected, importedAt: new Date().toISOString() });
+    if (initialArtists.length > 0) replaceTasteArtists(selected);
+    else addToTaste("seed", selected);
     onSaved?.(selected);
   }
 
@@ -366,7 +369,6 @@ export function TasteSeedPicker({ initialArtists = [], onSaved, onCancel }: Tast
 
 type PlaylistCsvImportProps = {
   onSaved?: (artists: string[]) => void;
-  onCancel?: () => void;
 };
 
 function sourceForFormat(format: PlaylistExportFormat): FileTasteSource {
@@ -375,7 +377,7 @@ function sourceForFormat(format: PlaylistExportFormat): FileTasteSource {
   return "csv";
 }
 
-export function PlaylistCsvImport({ onSaved, onCancel }: PlaylistCsvImportProps) {
+export function PlaylistCsvImport({ onSaved }: PlaylistCsvImportProps) {
   const [dragging, setDragging] = useState(false);
   const [reading, setReading] = useState(false);
   const [parsed, setParsed] = useState<ParsedPlaylistImport | null>(null);
@@ -410,11 +412,7 @@ export function PlaylistCsvImport({ onSaved, onCancel }: PlaylistCsvImportProps)
 
   function save() {
     if (!parsed || selected.length === 0) return;
-    keepTaste({
-      source: sourceForFormat(parsed.format),
-      artists: selected,
-      importedAt: new Date().toISOString(),
-    });
+    addToTaste(sourceForFormat(parsed.format), selected);
     onSaved?.(selected);
   }
 
@@ -515,7 +513,6 @@ export function PlaylistCsvImport({ onSaved, onCancel }: PlaylistCsvImportProps)
                 setParsed(null);
                 setSelected([]);
                 setError(null);
-                onCancel?.();
               }}
             >
               Cancel
@@ -524,13 +521,6 @@ export function PlaylistCsvImport({ onSaved, onCancel }: PlaylistCsvImportProps)
         </div>
       )}
 
-      {!parsed && onCancel && (
-        <div className="taste-actions">
-          <Button type="button" className="taste-secondary" onClick={onCancel}>
-            Cancel
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

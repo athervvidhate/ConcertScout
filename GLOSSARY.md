@@ -13,7 +13,7 @@ What a person likes in music for the purpose of a Search, such as named artists 
 _Avoid_: Preferences, profile (except Taste Profile), playlist info
 
 **Taste Profile**:
-The Taste an Account keeps on every device: Artist names, favourites first, and where they came from. It never holds data from a Spotify account.
+The Taste an Account keeps on every device: Artist names, favourites first, and every source they came from. It never holds data from a Spotify account.
 _Avoid_: Synced Taste, saved profile
 
 **For You shelf**:

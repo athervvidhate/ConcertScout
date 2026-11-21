@@ -46,8 +46,15 @@ test(
     await expect(page.getByText("Using 2 Artists from your YouTube playlist.")).toBeVisible();
     // A saved Taste can still come from somewhere else.
     await page.getByRole("button", { name: "Other ways to add your Taste" }).click();
-    await expect(page.getByText("Saving from here replaces your 2 Artists.")).toBeVisible();
-    await expect(page.getByLabel("Import from")).toBeVisible();
+    await expect(page.getByText("What you add here joins your 2 Artists.")).toBeVisible();
+    // Picking an Artist by hand adds to the playlist's Artists.
+    await page.getByLabel("Import from").selectOption("seed");
+    await page.getByRole("combobox", { name: "Search for an Artist" }).fill("Bono");
+    await page.getByRole("option", { name: "Bonobo" }).click();
+    await page.getByRole("button", { name: "Save Taste" }).click();
+    await expect(
+      page.getByText("Using 3 Artists from your Taste picks and your YouTube playlist."),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "Close", exact: true }).click();
     const request = page.waitForRequest((r) => r.url().endsWith("/search"));
@@ -56,7 +63,7 @@ test(
     await expect(searchButton).toBeEnabled();
     await searchButton.click();
     const data = (await request).postDataJSON();
-    expect(data.taste).toEqual(["Khruangbin", "Tame Impala"]);
+    expect(data.taste).toEqual(["Bonobo", "Khruangbin", "Tame Impala"]);
   },
 );
 

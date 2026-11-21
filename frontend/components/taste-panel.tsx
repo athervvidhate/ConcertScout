@@ -14,12 +14,11 @@ import { useAccount } from "@/lib/account";
 import type { SpotifyConnection } from "@/lib/spotify";
 import { SearchRefused } from "@/lib/search";
 import {
+  addToTaste,
+  describeSources,
   fetchTaste,
   forgetTaste,
   isFileTasteSource,
-  keepTaste,
-  SOURCE_NAMES,
-  type TasteSource,
   useImportedTaste,
 } from "@/lib/taste";
 import { artistsFromHistory, artistsFromList, TasteFileError } from "@/lib/taste-files";
@@ -69,11 +68,6 @@ function formatImportDate(iso?: string): string | null {
   });
 }
 
-function optionForSource(source: TasteSource): ImportOption {
-  if (source === "exportify" || source === "tunemymusic" || source === "csv") return "csv";
-  return source;
-}
-
 function HistoryHelp() {
   return (
     <Popover.Root>
@@ -106,18 +100,10 @@ function HistoryHelp() {
 type ImportFormProps = {
   source: ImportOption;
   onSourceChange: (source: ImportOption) => void;
-  initialArtists?: string[];
   onSaved?: () => void;
-  onCancel?: () => void;
 };
 
-function ImportForm({
-  source,
-  onSourceChange,
-  initialArtists,
-  onSaved,
-  onCancel,
-}: ImportFormProps) {
+function ImportForm({ source, onSourceChange, onSaved }: ImportFormProps) {
   const [username, setUsername] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [list, setList] = useState("");
@@ -142,7 +128,7 @@ function ImportForm({
     setError(null);
     try {
       if (source === "history" || source === "list" || source === "lastfm" || source === "listenbrainz") {
-        keepTaste({ source, artists: await read(), importedAt: new Date().toISOString() });
+        addToTaste(source, await read());
         onSaved?.();
       }
     } catch (caught) {
@@ -170,9 +156,9 @@ function ImportForm({
         </select>
       </label>
       {source === "seed" ? (
-        <TasteSeedPicker initialArtists={initialArtists} onSaved={onSaved} onCancel={onCancel} />
+        <TasteSeedPicker onSaved={onSaved} />
       ) : source === "csv" ? (
-        <PlaylistCsvImport onSaved={onSaved} onCancel={onCancel} />
+        <PlaylistCsvImport onSaved={onSaved} />
       ) : source === "youtube" ? (
         <YouTubeImport onSaved={onSaved} />
       ) : (
@@ -214,11 +200,6 @@ function ImportForm({
           <Button type="submit" disabled={importing || !ready}>
             {importing ? "Importing" : "Import"}
           </Button>
-          {onCancel && (
-            <Button type="button" className="taste-secondary" onClick={onCancel}>
-              Cancel
-            </Button>
-          )}
           {error && <p role="alert">{error}</p>}
         </form>
       )}
@@ -248,7 +229,7 @@ function TastePanelBody({
   const [updating, setUpdating] = useState(false);
 
   const importedDate = formatImportDate(taste?.importedAt);
-  const fileProvenance = taste ? isFileTasteSource(taste.source) : false;
+  const fileProvenance = taste ? taste.sources.some(isFileTasteSource) : false;
 
   function openOtherWith(nextSource: ImportOption) {
     setSource(nextSource);
@@ -285,49 +266,22 @@ function TastePanelBody({
         <div className="taste-current-card">
           <div className="taste-current">
             <p>
-              Using {countOf(taste.artists)} from {SOURCE_NAMES[taste.source]}.
+              Using {countOf(taste.artists)} from {describeSources(taste.sources)}.
             </p>
           </div>
-          {fileProvenance ? (
+          {importedDate && (
             <p className="taste-note">
-              {importedDate ? `Imported ${importedDate} · ` : ""}
-              File import on this device (not a live Spotify connection).
+              Updated {importedDate} · {kept}
             </p>
-          ) : (
-            importedDate && (
-              <p className="taste-note">Saved {importedDate} · {kept}</p>
-            )
+          )}
+          {fileProvenance && (
+            <p className="taste-note">Includes a file import, not a live Spotify connection.</p>
           )}
           <div className="taste-actions">
-            {fileProvenance && (
-              <Button
-                type="button"
-                className="taste-primary"
-                onClick={() => {
-                  setSource(optionForSource(taste.source));
-                  setUpdating(true);
-                }}
-              >
-                Update import
-              </Button>
-            )}
-            {taste.source === "seed" && (
-              <Button
-                type="button"
-                className="taste-primary"
-                onClick={() => {
-                  setSource("seed");
-                  setUpdating(true);
-                }}
-              >
-                Edit picks
-              </Button>
-            )}
-            <Button
-              type="button"
-              className={fileProvenance || taste.source === "seed" ? "taste-secondary" : "taste-primary"}
-              onClick={forgetTaste}
-            >
+            <Button type="button" className="taste-primary" onClick={() => setUpdating(true)}>
+              Edit list
+            </Button>
+            <Button type="button" className="taste-secondary" onClick={forgetTaste}>
               Remove
             </Button>
           </div>
@@ -335,10 +289,8 @@ function TastePanelBody({
       ) : taste && updating ? (
         <div className="taste-other">
           <div className="taste-other-panel">
-            <ImportForm
-              source={source}
-              onSourceChange={setSource}
-              initialArtists={taste.source === "seed" ? taste.artists : undefined}
+            <TasteSeedPicker
+              initialArtists={taste.artists}
               onSaved={() => setUpdating(false)}
               onCancel={() => setUpdating(false)}
             />
@@ -358,15 +310,10 @@ function TastePanelBody({
           <Collapsible.Panel className="taste-other-panel">
             <p>
               {taste
-                ? `Saving from here replaces your ${countOf(taste.artists)}.`
+                ? `What you add here joins your ${countOf(taste.artists)}.`
                 : "A Search that doesn't name an Artist or style uses this list."}
             </p>
-            <ImportForm
-              source={source}
-              onSourceChange={setSource}
-              initialArtists={taste?.source === "seed" ? taste.artists : undefined}
-              onSaved={() => setOtherOpen(false)}
-            />
+            <ImportForm source={source} onSourceChange={setSource} onSaved={() => setOtherOpen(false)} />
           </Collapsible.Panel>
         </Collapsible.Root>
       )}

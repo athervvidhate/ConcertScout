@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import { SearchRefused, UNREACHABLE } from "@/lib/search";
-import { fetchYouTubePlaylistTaste, keepTaste } from "@/lib/taste";
+import { addToTaste, fetchYouTubePlaylistTaste } from "@/lib/taste";
 
 
 const UNREADABLE = "That playlist could not be read. Try again.";
@@ -56,7 +56,7 @@ export function YouTubeImport({ onSaved }: YouTubeImportProps) {
 
   function save() {
     if (selected.length === 0) return;
-    keepTaste({ source: "youtube", artists: selected });
+    addToTaste("youtube", selected);
     onSaved?.(selected);
   }
 

@@ -87,7 +87,7 @@ test(
 );
 
 test(
-  "Exportify and TuneMyMusic files parse strictly in the browser with clear provenance and Update import",
+  "Exportify and TuneMyMusic files parse strictly in the browser, keep clear provenance and combine",
   { tag: "@phone" },
   async ({ page }) => {
     await page.goto("/");
@@ -131,12 +131,14 @@ test(
 
     await dialog.getByRole("button", { name: "Save Taste" }).click();
     await expect(dialog.getByText("Using 2 Artists from your Exportify CSV file.")).toBeVisible();
-    await expect(dialog.getByText(/Imported .*File import on this device \(not a live Spotify connection\)/)).toBeVisible();
+    await expect(dialog.getByText("Includes a file import, not a live Spotify connection.")).toBeVisible();
     // Raw file stayed completely client-side: zero POSTs to the API.
     expect(outboundPosts).toEqual([]);
 
-    // Update import with a TuneMyMusic TXT export.
-    await dialog.getByRole("button", { name: "Update import" }).click();
+    // A TuneMyMusic TXT export joins the Exportify Artists instead of replacing them.
+    await dialog.getByRole("button", { name: "Other ways to add your Taste" }).click();
+    await expect(dialog.getByText("What you add here joins your 2 Artists.")).toBeVisible();
+    await dialog.getByLabel("Import from").selectOption("csv");
     const tuneMyMusicTxt = [
       "Bonobo - PRIVATE_TMM_TRACK_1",
       "Bonobo - PRIVATE_TMM_TRACK_2",
@@ -150,8 +152,10 @@ test(
 
     await expect(dialog.getByText(/from your TuneMyMusic TXT/)).toBeVisible();
     await dialog.getByRole("button", { name: "Save Taste" }).click();
-    await expect(dialog.getByText("Using 2 Artists from your TuneMyMusic file.")).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Update import" })).toBeVisible();
+    await expect(
+      dialog.getByText("Using 4 Artists from your TuneMyMusic file and your Exportify CSV file."),
+    ).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Edit list" })).toBeVisible();
     expect(outboundPosts).toEqual([]);
 
     // Confirm only ranked Artist names leave the browser on Search.
@@ -162,7 +166,8 @@ test(
     await expect(searchButton).toBeEnabled();
     await searchButton.click();
     const sent = (await request).postDataJSON();
-    expect(sent.taste).toEqual(["Bonobo", "Four Tet"]);
+    // The newer file and the older take turns.
+    expect(sent.taste).toEqual(["Bonobo", "Khruangbin", "Four Tet", "Leon Bridges"]);
     expect(JSON.stringify(sent)).not.toMatch(/SECRET_TRACK|PRIVATE_TMM_TRACK|spotify:track/);
   },
 );

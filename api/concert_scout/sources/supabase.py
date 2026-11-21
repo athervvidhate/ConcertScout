@@ -84,9 +84,10 @@ type TasteSource = Literal[
 
 
 class TasteProfile(BaseModel):
-    """An Account's Taste: Artist names, favourites first, and when it was last saved."""
+    """An Account's Taste: Artist names, favourites first, the sources they came from, newest
+    first, and when it was last saved."""
 
-    source: TasteSource
+    sources: list[TasteSource]
     artists: list[str]
     updated_at: dt.datetime
 
@@ -399,7 +400,7 @@ async def get_taste(
     request = client.build_request(
         "GET",
         TASTE,
-        params={"select": "source,artists,updated_at"},
+        params={"select": "sources,artists,updated_at"},
         headers=_as_person(account, publishable_key),
     )
     rows = _rows(await _send(client, request), TasteProfile)
@@ -410,13 +411,13 @@ async def put_taste(
     client: httpx.AsyncClient,
     secret_key: SecretStr,
     account: Account,
-    source: TasteSource,
+    sources: list[TasteSource],
     artists: list[str],
 ) -> TasteProfile:
     """Replaces the Account's Taste. Its `updated_at` is the moment of this write."""
     row = {
         "user_id": account.id,
-        "source": source,
+        "sources": sources,
         "artists": artists,
         "updated_at": dt.datetime.now(dt.UTC).isoformat(),
     }

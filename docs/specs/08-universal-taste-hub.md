@@ -27,8 +27,8 @@ Any visitor can paste a public or unlisted YouTube or YouTube Music playlist URL
 - Keep client-side parsing in `frontend/lib/taste-files.ts` (raw files never leave the browser).
 - Add explicit format detection and tested presets for **Exportify** (`Artist Name(s)` semicolon/comma-separated, ranking by track count) and **TuneMyMusic** CSV/TXT exports.
 - In the Taste panel, present a clear two-step helper beside Connect Spotify: *"Not on the invite list? Export a playlist with Exportify or TuneMyMusic and drop the CSV here."*
-- **Provenance rule**: Keep Exportify/TuneMyMusic imports labeled clearly as a file import (with import date and "Update import"), never as a live Spotify connection.
-- A saved Taste keeps "Other ways to add your Taste" open to every source. Saving from another source replaces the saved list, and the panel says so first.
+- **Provenance rule**: A Taste that includes an Exportify/TuneMyMusic import says so ("Includes a file import, not a live Spotify connection"), with the date it last changed.
+- **Combining**: A saved Taste keeps "Other ways to add your Taste" open to every source, and what is added there joins the saved list. The new Artists and the saved ones take turns, the new first, each Artist once, so a long playlist cannot push hand picks past what a Search reads. The Taste names every source in it, newest first ("Using 53 Artists from your YouTube playlist and your Taste picks"). Edit list opens the picker over the whole list.
 
 ### 30-second visual Taste Seed picker
 - For visitors with no music account to export, provide a fast interactive picker inside the Taste panel and home guide:
@@ -43,12 +43,12 @@ Any visitor can paste a public or unlisted YouTube or YouTube Music playlist URL
 
 ## 4. Account-synced Taste Profile & "For You" home shelf
 
-- **Schema (`supabase/migrations/`)**: New table `public.taste_profiles` (`user_id uuid primary key references auth.users(id) on delete cascade`, `source text`, `artists jsonb not null`, `updated_at timestamptz not null default now()`).
+- **Schema (`supabase/migrations/`)**: New table `public.taste_profiles` (`user_id uuid primary key references auth.users(id) on delete cascade`, `sources text[]` (1–9 non-Spotify sources, newest first), `artists jsonb not null`, `updated_at timestamptz not null default now()`).
   - RLS enabled: `authenticated` may `select` and `delete` own row; only the FastAPI API writes using the secret key (matching [ADR 0004](../adr/0004-optional-accounts-on-supabase.md)).
   - **Strict ADR 0003 boundary**: Spotify OAuth session data NEVER enters `taste_profiles`. Only non-Spotify-OAuth sources (YouTube playlist, Last.fm, ListenBrainz, Taste Seed, pasted list, user-held privacy archive) may sync here.
 - **API routes** (all deterministic: no LLM call, no model spend):
-  - `GET /account/taste` → the saved Taste Profile (`source`, `artists`, `updated_at`), or `null`.
-  - `PUT /account/taste` → replaces it. Takes `{source, artists}` with 1–100 names; a source outside the non-Spotify list is refused (ADR 0003). Names are deduplicated by normalized name, favourites first.
+  - `GET /account/taste` → the saved Taste Profile (`sources`, `artists`, `updated_at`), or `null`.
+  - `PUT /account/taste` → replaces it. Takes `{sources, artists}` with 1–100 names; a source outside the non-Spotify list is refused (ADR 0003). Names are deduplicated by normalized name, favourites first.
   - `DELETE /account/taste` → clears it.
   - `POST /account/for-you` → body `{near?, time_zone}`. Reads the Account's own Taste Profile server-side, so the browser sends no names. With no `near`, it uses the Alert place; with neither, it answers `for_you_needs_place`.
   - `POST /for-you` → the same shelf for a guest, from `{artists, near, time_zone}`. Nothing is kept.

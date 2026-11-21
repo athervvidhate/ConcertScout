@@ -9,12 +9,12 @@ import {
 import type { ImportedTaste } from "@/lib/taste";
 
 const local = (importedAt: string, ...artists: string[]): ImportedTaste => ({
-  source: "seed",
+  sources: ["seed"],
   artists,
   importedAt,
 });
 const remote = (updated_at: string, ...artists: string[]): TasteProfile => ({
-  source: "seed",
+  sources: ["seed"],
   artists,
   updated_at,
 });
@@ -54,7 +54,7 @@ describe("which Taste wins at sign-in", () => {
   });
 
   it("treats a device Taste with no date as older", () => {
-    const undated: ImportedTaste = { source: "list", artists: ["Old"] };
+    const undated: ImportedTaste = { sources: ["list"], artists: ["Old"] };
     expect(reconcile(undated, remote("2026-11-20T00:00:00Z", "New"))).toBe(
       "pull",
     );
