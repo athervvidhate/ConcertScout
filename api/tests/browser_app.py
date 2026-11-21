@@ -115,7 +115,9 @@ async def youtube_items(_: httpx.AsyncClient, playlist_id: str) -> list[dict[str
 CONTRACT_VIDEO = "contractVid"
 
 
-async def contract_live_search(_: httpx.AsyncClient, name: str) -> list[live_clips.LiveVideo]:
+async def contract_live_search(
+    _: httpx.AsyncClient, name: str, _sessions: frozenset[str]
+) -> list[live_clips.LiveVideo]:
     """Contract Artist has an official live session on YouTube. Nobody else does."""
     if name != "Contract Artist":
         return []

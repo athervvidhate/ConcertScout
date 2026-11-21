@@ -18,9 +18,10 @@ import {
   TasteFileError,
 } from "@/lib/taste-files";
 
-import styles from "./taste-seed-picker.module.css";
 
 const MAX_SEEDS = 100;
+// The newest picks lead: a Search seeds from the first few, and related Artists follow them.
+const RELATED_FROM = 20;
 const SUGGEST_DEBOUNCE_MS = 200;
 const EXPORTIFY_URL = "https://exportify.net/";
 const TUNEMYMUSIC_URL = "https://www.tunemymusic.com/transfer/spotify-to-file";
@@ -48,10 +49,9 @@ function sameArtist(a: string, b: string): boolean {
 }
 
 function progressCopy(count: number): string {
-  if (count === 0) return "Pick 3 to 5 Artists you love, then tap related picks to grow your list.";
-  if (count < 3) return `${artistCount(count)} picked — add a few more or tap related Artists below.`;
-  if (count < 10) return `${artistCount(count)} picked — tap related Artists to reach 10+, or save anytime.`;
-  return `${artistCount(count)} ready — save your Taste or keep adding.`;
+  if (count === 0) return "Pick 3 to 5 Artists you love.";
+  if (count < 3) return `${artistCount(count)} picked. Add a few more.`;
+  return `${artistCount(count)} picked. Save, or keep adding.`;
 }
 
 type TasteSeedPickerProps = {
@@ -116,7 +116,7 @@ export function TasteSeedPicker({ initialArtists = [], onSaved, onCancel }: Tast
     };
   }, [trimmed]);
 
-  const selectedKey = selected.join("\u0000");
+  const selectedKey = selected.slice(0, RELATED_FROM).join("\u0000");
 
   useEffect(() => {
     if (selected.length === 0) return;
@@ -153,7 +153,7 @@ export function TasteSeedPicker({ initialArtists = [], onSaved, onCancel }: Tast
       if (current.length >= MAX_SEEDS || current.some((picked) => sameArtist(picked, name))) {
         return current;
       }
-      return [...current, name];
+      return [name, ...current];
     });
     setQuery("");
     setSuggestions([]);
@@ -214,12 +214,12 @@ export function TasteSeedPicker({ initialArtists = [], onSaved, onCancel }: Tast
   const showListbox = dropdownOpen && trimmed.length > 0 && (options.length > 0 || suggestLoading);
 
   return (
-    <div className={styles.root}>
-      <p className={styles.intro}>{progressCopy(selected.length)}</p>
+    <div className="taste-flow">
+      <p className="taste-note">{progressCopy(selected.length)}</p>
 
-      <div className={styles.searchWrap}>
+      <div className="taste-combobox">
         <label htmlFor={inputId}>Search for an Artist</label>
-        <div className={styles.inputRow}>
+        <div className="taste-input-row">
           <input
             ref={inputRef}
             id={inputId}
@@ -259,7 +259,7 @@ export function TasteSeedPicker({ initialArtists = [], onSaved, onCancel }: Tast
           />
           <Button
             type="button"
-            className={styles.addButton}
+            className="taste-add"
             disabled={!trimmed || selected.length >= MAX_SEEDS}
             onClick={() => addArtist(trimmed, true)}
           >
@@ -268,26 +268,27 @@ export function TasteSeedPicker({ initialArtists = [], onSaved, onCancel }: Tast
         </div>
 
         {showListbox && (
-          <ul id={listboxId} role="listbox" aria-label="Artist suggestions" className={styles.listbox}>
+          <ul id={listboxId} role="listbox" aria-label="Artist suggestions" className="taste-listbox">
             {options.map((option, index) => (
               <li
                 key={`${option.manual ? "manual" : "suggest"}-${option.name}`}
                 id={`${listboxId}-opt-${index}`}
                 role="option"
                 aria-selected={index === activeIndex}
-                className={`${styles.option} ${index === activeIndex ? styles.optionActive : ""}`}
+                className="taste-option"
+                data-active={index === activeIndex || undefined}
                 onMouseDown={(event) => {
                   event.preventDefault();
                   addArtist(option.name, true);
                 }}
               >
                 <span>{option.manual ? `Add "${option.name}"` : option.name}</span>
-                {option.manual && <span className={styles.optionHint}>Custom</span>}
+                {option.manual && <span className="taste-option-hint">Custom</span>}
               </li>
             ))}
             {suggestLoading && options.length === 0 && (
-              <li className={styles.option} role="presentation">
-                <span className={styles.optionHint}>Searching Artists…</span>
+              <li className="taste-option" role="presentation">
+                <span className="taste-option-hint">Searching Artists…</span>
               </li>
             )}
           </ul>
@@ -297,17 +298,17 @@ export function TasteSeedPicker({ initialArtists = [], onSaved, onCancel }: Tast
       {error && <p role="alert">{error}</p>}
 
       {selected.length > 0 && (
-        <div className={styles.section} aria-live="polite">
-          <div className={styles.sectionHeader}>
-            <span className={styles.sectionTitle}>Your picks ({selected.length})</span>
+        <div className="taste-section" aria-live="polite">
+          <div className="taste-section-head">
+            <span className="taste-section-title">Your picks ({selected.length})</span>
           </div>
-          <ul className={styles.chips} aria-label="Selected Artists">
+          <ul className="taste-chips" aria-label="Selected Artists">
             {selected.map((artist) => (
-              <li key={artist} className={styles.chip}>
-                <span className={styles.chipName}>{artist}</span>
+              <li key={artist} className="taste-chip">
+                <span className="taste-chip-name">{artist}</span>
                 <Button
                   type="button"
-                  className={styles.chipRemove}
+                  className="taste-chip-remove"
                   aria-label={`Remove ${artist}`}
                   onClick={() => removeArtist(artist)}
                 >
@@ -320,18 +321,18 @@ export function TasteSeedPicker({ initialArtists = [], onSaved, onCancel }: Tast
       )}
 
       {selected.length > 0 && (visibleRelated.length > 0 || relatedLoading) && (
-        <section className={styles.section} aria-label="Also like">
-          <div className={styles.sectionHeader}>
-            <span className={styles.sectionTitle}>Also like…</span>
-            {relatedLoading && <span className={styles.status}>Updating…</span>}
+        <section className="taste-section" aria-label="Also like">
+          <div className="taste-section-head">
+            <span className="taste-section-title">Also like…</span>
+            {relatedLoading && <span className="taste-status">Updating…</span>}
           </div>
           {visibleRelated.length > 0 && (
-            <div className={styles.relatedList}>
+            <div className="taste-related">
               {visibleRelated.map((artist) => (
                 <Button
                   key={artist}
                   type="button"
-                  className={styles.relatedChip}
+                  className="taste-related-chip"
                   aria-label={`Add ${artist}`}
                   onClick={() => addArtist(artist)}
                 >
@@ -344,17 +345,17 @@ export function TasteSeedPicker({ initialArtists = [], onSaved, onCancel }: Tast
         </section>
       )}
 
-      <div className={styles.actions}>
+      <div className="taste-actions">
         <Button
           type="button"
-          className={styles.primary}
+          className="taste-primary"
           onClick={save}
           disabled={selected.length === 0}
         >
           Save Taste
         </Button>
         {onCancel && (
-          <Button type="button" className={styles.secondary} onClick={onCancel}>
+          <Button type="button" className="taste-secondary" onClick={onCancel}>
             Cancel
           </Button>
         )}
@@ -375,7 +376,6 @@ function sourceForFormat(format: PlaylistExportFormat): FileTasteSource {
 }
 
 export function PlaylistCsvImport({ onSaved, onCancel }: PlaylistCsvImportProps) {
-  const fileInputId = useId();
   const [dragging, setDragging] = useState(false);
   const [reading, setReading] = useState(false);
   const [parsed, setParsed] = useState<ParsedPlaylistImport | null>(null);
@@ -398,7 +398,7 @@ export function PlaylistCsvImport({ onSaved, onCancel }: PlaylistCsvImportProps)
     setReading(false);
   }
 
-  function onDrop(event: DragEvent<HTMLDivElement>) {
+  function onDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setDragging(false);
     void loadFiles([...event.dataTransfer.files]);
@@ -419,26 +419,22 @@ export function PlaylistCsvImport({ onSaved, onCancel }: PlaylistCsvImportProps)
   }
 
   return (
-    <div className={styles.root}>
-      <p className={styles.intro}>
-        Not on the invite list? Export a playlist with{" "}
+    <div className="taste-flow">
+      <p className="taste-note">
+        Export a playlist or your Liked Songs with{" "}
         <a href={EXPORTIFY_URL} target="_blank" rel="noopener noreferrer">
           Exportify
         </a>{" "}
         or{" "}
         <a href={TUNEMYMUSIC_URL} target="_blank" rel="noopener noreferrer">
           TuneMyMusic
-        </a>{" "}
-        and drop the file here.
+        </a>
+        , then add the file here.
       </p>
 
-      <ol className={styles.steps}>
-        <li>Export Liked Songs or a playlist as CSV (Exportify / TuneMyMusic) or TXT (TuneMyMusic).</li>
-        <li>Drop or choose the file below — parsed strictly in your browser, raw tracks discarded.</li>
-      </ol>
-
-      <div
-        className={`${styles.dropzone} ${dragging ? styles.dropzoneActive : ""}`}
+      <label
+        className="taste-dropzone"
+        data-dragging={dragging || undefined}
         onDragOver={(event) => {
           event.preventDefault();
           setDragging(true);
@@ -446,46 +442,40 @@ export function PlaylistCsvImport({ onSaved, onCancel }: PlaylistCsvImportProps)
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
       >
-        <label htmlFor={fileInputId}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Upload aria-hidden size={16} />
-            Playlist export file (CSV or TXT)
-          </span>
-          <input
-            id={fileInputId}
-            type="file"
-            accept=".csv,.txt,text/csv,text/plain"
-            multiple
-            onChange={(event) => {
-              const chosen = [...(event.target.files ?? [])];
-              event.target.value = "";
-              void loadFiles(chosen);
-            }}
-          />
-        </label>
-        <p className={styles.provenance}>
-          File import only (not a live Spotify connection). Your file never leaves this device.
-        </p>
-      </div>
+        <Upload aria-hidden size={22} />
+        <span className="taste-dropzone-title">Drop a CSV or TXT file</span>
+        <span className="taste-dropzone-sub">or click to choose one. It never leaves this device.</span>
+        <input
+          className="sr-only"
+          type="file"
+          accept=".csv,.txt,text/csv,text/plain"
+          multiple
+          onChange={(event) => {
+            const chosen = [...(event.target.files ?? [])];
+            event.target.value = "";
+            void loadFiles(chosen);
+          }}
+        />
+      </label>
 
-      {reading && <p role="status">Reading file in your browser…</p>}
+      {reading && <p role="status">Reading the file…</p>}
       {error && <p role="alert">{error}</p>}
 
       {parsed && (
-        <div className={styles.section} aria-live="polite">
+        <div className="taste-section" aria-live="polite">
           {selected.length > 0 ? (
             <>
-              <p className={styles.intro}>
-                Detected <strong>{FORMAT_LABELS[parsed.format]}</strong> · {artistCount(selected.length)}{" "}
-                ranked by frequency. Remove any that don&apos;t belong, then save.
+              <p className="taste-note">
+                {artistCount(selected.length)} from your {FORMAT_LABELS[parsed.format]}, most played
+                first. Remove any you don&apos;t want.
               </p>
-              <ul className={styles.chips} aria-label="Imported Artists">
+              <ul className="taste-chips" aria-label="Imported Artists">
                 {selected.map((artist) => (
-                  <li key={artist} className={styles.chip}>
-                    <span className={styles.chipName}>{artist}</span>
+                  <li key={artist} className="taste-chip">
+                    <span className="taste-chip-name">{artist}</span>
                     <Button
                       type="button"
-                      className={styles.chipRemove}
+                      className="taste-chip-remove"
                       aria-label={`Remove ${artist}`}
                       onClick={() => removeArtist(artist)}
                     >
@@ -496,14 +486,14 @@ export function PlaylistCsvImport({ onSaved, onCancel }: PlaylistCsvImportProps)
               </ul>
             </>
           ) : (
-            <p className={styles.intro}>
-              All Artists removed. Restore the list or choose another export file.
+            <p className="taste-note">
+              All Artists removed. Restore the list or choose another file.
             </p>
           )}
-          <div className={styles.actions}>
+          <div className="taste-actions">
             <Button
               type="button"
-              className={styles.primary}
+              className="taste-primary"
               onClick={save}
               disabled={selected.length === 0}
             >
@@ -512,7 +502,7 @@ export function PlaylistCsvImport({ onSaved, onCancel }: PlaylistCsvImportProps)
             {selected.length < parsed.artists.length && (
               <Button
                 type="button"
-                className={styles.secondary}
+                className="taste-secondary"
                 onClick={() => setSelected(parsed.artists)}
               >
                 Restore list
@@ -520,7 +510,7 @@ export function PlaylistCsvImport({ onSaved, onCancel }: PlaylistCsvImportProps)
             )}
             <Button
               type="button"
-              className={styles.secondary}
+              className="taste-secondary"
               onClick={() => {
                 setParsed(null);
                 setSelected([]);
@@ -535,8 +525,8 @@ export function PlaylistCsvImport({ onSaved, onCancel }: PlaylistCsvImportProps)
       )}
 
       {!parsed && onCancel && (
-        <div className={styles.actions}>
-          <Button type="button" className={styles.secondary} onClick={onCancel}>
+        <div className="taste-actions">
+          <Button type="button" className="taste-secondary" onClick={onCancel}>
             Cancel
           </Button>
         </div>

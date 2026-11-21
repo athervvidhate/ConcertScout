@@ -242,6 +242,33 @@ async def test_related_blends_listenbrainz_and_cobilling_and_excludes_selected(
     assert "Glass Beams" in artists
 
 
+async def test_related_follows_the_newest_picks_which_the_picker_sends_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def seed(_: httpx.AsyncClient, __: object, name: str) -> SeedArtist:
+        return SeedArtist(name=name, mbid=name)
+
+    resolve = AsyncMock(side_effect=seed)
+
+    async def similar(_: httpx.AsyncClient, __: object, mbid: str) -> list[SimilarArtist]:
+        # Every rapper shares one neighbour, which a sum across seeds would put first.
+        shared = [SimilarArtist(name="Rap Star", mbid="rap-star", score=95)]
+        own = [SimilarArtist(name=f"Like {mbid}", mbid=f"like-{mbid}", score=90)]
+        return own if mbid == "Fred again.." else shared + own
+
+    monkeypatch.setattr(musicbrainz, "resolve", resolve)
+    monkeypatch.setattr(listenbrainz, "similar_artists", AsyncMock(side_effect=similar))
+    rap = [f"Rapper {n}" for n in range(1, 8)]
+    async with api_for(FakeAsyncRedis()) as api:
+        response = await api.get(
+            "/artists/related", params=[("names", n) for n in ["Fred again..", *rap]]
+        )
+
+    looked_up = [call.args[2] for call in resolve.await_args_list]
+    assert looked_up[0] == "Fred again.." and "Rapper 7" not in looked_up
+    assert response.json()["artists"][:2] == ["Like Fred again..", "Rap Star"]
+
+
 async def test_related_falls_back_to_lastfm_when_listenbrainz_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

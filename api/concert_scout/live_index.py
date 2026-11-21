@@ -99,6 +99,9 @@ SERIES = (
 )
 
 
+SESSION_CHANNELS = frozenset(series.channel_id for series in SERIES)
+
+
 class IndexedVideos(BaseModel):
     videos: list[LiveVideo]
 
@@ -275,7 +278,9 @@ async def find_clip(
     clip = await _clip_of(client, indexed.videos, tracks) if indexed else None
     if clip is None:
         await limits.youtube_search_call(redis)
-        clip = await _clip_of(client, await live_clips.search_videos(client, name), tracks)
+        clip = await _clip_of(
+            client, await live_clips.search_videos(client, name, SESSION_CHANNELS), tracks
+        )
     await cache.write(
         redis, _clip_key(key), LiveClipResult(clip=clip), CLIP_TTL if clip else MISS_TTL
     )

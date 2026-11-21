@@ -24,7 +24,6 @@ import {
 } from "@/lib/taste";
 import { artistsFromHistory, artistsFromList, TasteFileError } from "@/lib/taste-files";
 
-import pickerStyles from "./taste-seed-picker.module.css";
 
 const UNREACHABLE = "Concert Scout's API is not responding.";
 const UNREADABLE = "That could not be read. Try again.";
@@ -40,8 +39,8 @@ export type ImportOption =
   | "list";
 
 const SOURCE_LABELS: Record<ImportOption, string> = {
-  seed: "Pick Artists (30 sec)",
-  csv: "Exportify / TuneMyMusic CSV",
+  seed: "Pick Artists",
+  csv: "Playlist file (Exportify, TuneMyMusic)",
   youtube: "YouTube playlist",
   lastfm: "Last.fm",
   listenbrainz: "ListenBrainz",
@@ -216,7 +215,7 @@ function ImportForm({
             {importing ? "Importing" : "Import"}
           </Button>
           {onCancel && (
-            <Button type="button" className={pickerStyles.secondary} onClick={onCancel}>
+            <Button type="button" className="taste-secondary" onClick={onCancel}>
               Cancel
             </Button>
           )}
@@ -243,7 +242,7 @@ function TastePanelBody({
 }) {
   const taste = useImportedTaste();
   // A signed-in Account keeps its Taste on every device it signs in to.
-  const kept = useAccount().status === "signed-in" ? "Synced to your account." : "Saved on this device.";
+  const kept = useAccount().status === "signed-in" ? "Synced to your account" : "Kept on this device";
   const [otherOpen, setOtherOpen] = useState(initialSource !== undefined);
   const [source, setSource] = useState<ImportOption>(initialSource ?? "seed");
   const [updating, setUpdating] = useState(false);
@@ -260,51 +259,50 @@ function TastePanelBody({
     <>
       <SpotifyControl connection={spotify} />
       {!taste && !spotify.connected && (
-        <div className={pickerStyles.panelHint}>
+        <div className="taste-hint">
           <p>
-            Not on the invite list? Export a playlist with Exportify or TuneMyMusic and drop the
-            CSV here, or pick 3–5 Artists in seconds.
+            No Spotify invite? Pick a few Artists or import a playlist.
           </p>
-          <div className={pickerStyles.panelHintActions}>
+          <div className="taste-hint-actions">
             <Button
               type="button"
-              className={pickerStyles.panelHintButton}
+              className="taste-pill"
               onClick={() => openOtherWith("seed")}
             >
               Pick Artists
             </Button>
             <Button
               type="button"
-              className={pickerStyles.panelHintButton}
+              className="taste-pill"
               onClick={() => openOtherWith("csv")}
             >
-              Drop CSV file
+              Import a playlist
             </Button>
           </div>
         </div>
       )}
       {taste && !updating ? (
-        <div className={pickerStyles.currentCard}>
+        <div className="taste-current-card">
           <div className="taste-current">
             <p>
               Using {countOf(taste.artists)} from {SOURCE_NAMES[taste.source]}.
             </p>
           </div>
           {fileProvenance ? (
-            <p className={pickerStyles.currentMeta}>
+            <p className="taste-note">
               {importedDate ? `Imported ${importedDate} · ` : ""}
               File import on this device (not a live Spotify connection).
             </p>
           ) : (
             importedDate && (
-              <p className={pickerStyles.currentMeta}>Saved {importedDate} · {kept}</p>
+              <p className="taste-note">Saved {importedDate} · {kept}</p>
             )
           )}
-          <div className={pickerStyles.currentActions}>
+          <div className="taste-actions">
             {fileProvenance && (
               <Button
                 type="button"
-                className={pickerStyles.currentPrimary}
+                className="taste-primary"
                 onClick={() => {
                   setSource(optionForSource(taste.source));
                   setUpdating(true);
@@ -316,7 +314,7 @@ function TastePanelBody({
             {taste.source === "seed" && (
               <Button
                 type="button"
-                className={pickerStyles.currentPrimary}
+                className="taste-primary"
                 onClick={() => {
                   setSource("seed");
                   setUpdating(true);
@@ -327,11 +325,7 @@ function TastePanelBody({
             )}
             <Button
               type="button"
-              className={
-                fileProvenance || taste.source === "seed"
-                  ? pickerStyles.currentSecondary
-                  : pickerStyles.currentPrimary
-              }
+              className={fileProvenance || taste.source === "seed" ? "taste-secondary" : "taste-primary"}
               onClick={forgetTaste}
             >
               Remove
@@ -362,8 +356,7 @@ function TastePanelBody({
           </Collapsible.Trigger>
           <Collapsible.Panel className="taste-other-panel">
             <p>
-              Searches that don&apos;t name an Artist or style use this list. It stays on this
-              device, and an account syncs it.
+              A Search that doesn&apos;t name an Artist or style uses this list.
             </p>
             <ImportForm source={source} onSourceChange={setSource} />
           </Collapsible.Panel>

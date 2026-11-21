@@ -2,6 +2,7 @@
 
 import asyncio
 import datetime as dt
+import itertools
 import logging
 import re
 from collections import defaultdict
@@ -348,27 +349,24 @@ async def related_artists(
     cap = max(1, min(limit, MAX_RELATED_LIMIT))
     excluded = {normalize(name) for name in parsed}
 
-    # Query the most recently picked seeds first so follow-up chips react to the latest taps.
-    active_seeds = list(reversed(parsed[-MAX_SEED_LOOKUPS:]))
+    # The picker sends its newest picks first, so follow-up chips react to the latest taps.
+    active_seeds = parsed[:MAX_SEED_LOOKUPS]
     groups = await asyncio.gather(*(_seed_related(seed, services) for seed in active_seeds))
 
-    totals: dict[str, float] = defaultdict(float)
-    display: dict[str, str] = {}
-    for seed_index, group in enumerate(groups):
-        recency = 1.0 - 0.05 * seed_index
-        per_seed_best: dict[str, tuple[float, str]] = {}
+    # Each seed's own ranking, then taken in turns, newest seed first, so a new pick shows at once.
+    rankings: list[list[str]] = []
+    for group in groups:
+        best: dict[str, tuple[float, str]] = {}
         for artist, ratio, weight in group:
             name = " ".join(artist.name.split())
             key = normalize(name)
-            if not key or key in excluded:
-                continue
-            contribution = ratio * weight * recency
-            previous = per_seed_best.get(key)
-            if previous is None or contribution > previous[0]:
-                per_seed_best[key] = (contribution, name)
-        for key, (contribution, name) in per_seed_best.items():
-            totals[key] += contribution
-            display.setdefault(key, name)
+            if key and key not in excluded and (key not in best or ratio * weight > best[key][0]):
+                best[key] = (ratio * weight, name)
+        rankings.append([name for _, name in sorted(best.values(), key=lambda b: (-b[0], b[1]))])
 
-    ranked_keys = sorted(totals, key=lambda key: (-totals[key], display[key].casefold()))
-    return [display[key] for key in ranked_keys[:cap]]
+    picked: dict[str, str] = {}
+    for turn in itertools.zip_longest(*rankings):
+        for name in turn:
+            if name is not None:
+                picked.setdefault(normalize(name), name)
+    return list(picked.values())[:cap]
