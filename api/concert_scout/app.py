@@ -424,6 +424,9 @@ def create_app(
         if request.url.path in taste_profile.PATHS:
             message = "Check your Taste and place, then try again."
             return _failure(422, SearchError(code="invalid_taste", message=message))
+        if request.url.path.startswith("/account/saved-searches"):
+            message = "That is not a Search you can save."
+            return _failure(422, SearchError(code="invalid_saved_search", message=message))
         if request.url.path.startswith(accounts.PREFIX):
             message = "That is not a Concert you can save."
             return _failure(422, SearchError(code="invalid_save", message=message))

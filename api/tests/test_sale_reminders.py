@@ -129,6 +129,8 @@ class ReminderStack:
                     if key in patch:
                         self.settings[user][key] = patch[key]
             return httpx.Response(204)
+        if path == "/rest/v1/saved_searches" and request.method == "GET":
+            return httpx.Response(200, json=[])
         tables: dict[str, list[dict[str, Any]]] = {
             "/rest/v1/followed_artists": self.followed,
             "/rest/v1/followed_venues": self.followed_venues,

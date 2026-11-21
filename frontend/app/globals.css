@@ -285,6 +285,11 @@ body:has(.information)::before { animation:none; opacity:.35; }
 .followed-artists { list-style:none; padding:0; margin:0; }
 .followed-artists li { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid currentColor; margin:0; }
 .followed-artists button { min-height:44px; padding:0 14px; border:2px solid currentColor; border-radius:8px; background:transparent; color:inherit; font:700 16px var(--font-ui),sans-serif; cursor:pointer; }
+.saved-search-count { font-weight:600; }
+.saved-searches-list li { align-items:flex-start; padding:12px 0; }
+.saved-search-copy { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.saved-search-copy strong { overflow-wrap:anywhere; }
+.saved-search-meta { font-size:15px; opacity:.8; overflow-wrap:anywhere; }
 @media(max-width:560px) { .information article { font-size:17px; } }
 
 /* Artist panel: shares the Taste drawer, with its own contents. */

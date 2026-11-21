@@ -27,6 +27,7 @@ import { Ticket } from "@/components/ticket";
 import { listenTo, matchLine, nameOf } from "@/lib/lineup";
 import { WorkingSearch } from "@/components/working-search";
 import { SaveButton } from "@/components/save-button";
+import { SaveSearchButton } from "@/components/saved-searches";
 import { ShareButton } from "@/components/share-button";
 import { dismissArtistHint, useArtistHint } from "@/lib/artist-hint";
 import { Choreography, EXPO_OUT_CURVE } from "@/lib/choreography";
@@ -47,7 +48,7 @@ import {
 import { useTicketMotion } from "@/lib/use-ticket-motion";
 import { formatDate, formatConcertTime } from "@/lib/format";
 import { removeSaved, saveConcert, useDecisions } from "@/lib/saved";
-import type { Candidates, Recommendation } from "@/lib/search";
+import type { Candidates, Reading, Recommendation } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
 
 type View = "grid" | "list";
@@ -71,6 +72,8 @@ type Props = {
   shareLink?: (concertId?: string) => Promise<string>;
   /** The title the share sheet gives a link to this Poster. */
   shareTitle?: string;
+  /** Signed-in Search context for "Save this Search". Omitted for guests and Shared Posters. */
+  saveSearchContext?: { queryText: string; reading: Reading };
   /** Shows the finished Poster at once, as a reloaded Search and a Shared Poster do. */
   instant?: boolean;
   /** The Ticket to open on arrival. */
@@ -97,6 +100,7 @@ export function Poster({
   onChange,
   shareLink,
   shareTitle,
+  saveSearchContext,
   instant = false,
   openConcert,
   sculpt,
@@ -359,6 +363,12 @@ export function Poster({
                   )}
                 </div>
                 <div className="poster-tools">
+                {saveSearchContext && (
+                  <SaveSearchButton
+                    queryText={saveSearchContext.queryText}
+                    reading={saveSearchContext.reading}
+                  />
+                )}
                 {shareLink && (
                   <ShareButton
                     title={shareTitle ?? "Concert Scout"}
