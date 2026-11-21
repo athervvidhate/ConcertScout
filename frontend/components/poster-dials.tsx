@@ -28,7 +28,7 @@ type DialsProps = {
   onChange: (next: SculptState) => void;
 };
 
-/** Compact tactile dial and filter bar above the Poster. Every filter uses source facts only. */
+/** Hairline-ruled editorial filter strip integrated directly into the Poster flow. */
 export function PosterDials({ sculpt, meta, busy, onChange }: DialsProps) {
   const notes: string[] = [];
   if (sculpt.max_price !== null && meta && meta.unpriced_count > 0) {
@@ -53,48 +53,43 @@ export function PosterDials({ sculpt, meta, busy, onChange }: DialsProps) {
       aria-busy={busy || undefined}
     >
       <div className="dials-row">
-        <div className="dial-group" role="group" aria-label="Discovery">
-          <span className="dial-label">Discovery</span>
-          <div className="dial-segment">
-            {DISCOVERY_OPTIONS.map(({ value, label }) => (
-              <button
-                key={value}
-                type="button"
-                className="dial-btn"
-                aria-pressed={sculpt.discovery === value}
-                disabled={busy}
-                onClick={() => onChange({ ...sculpt, discovery: value })}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+        <div className="dial-segment" role="group" aria-label="Discovery">
+          {DISCOVERY_OPTIONS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              className="dial-btn"
+              aria-pressed={sculpt.discovery === value}
+              onClick={() => onChange({ ...sculpt, discovery: value })}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        <div className="dial-group" role="group" aria-label="Budget">
-          <span className="dial-label">Budget</span>
-          <div className="dial-segment">
-            {BUDGET_OPTIONS.map(({ value, label }) => (
-              <button
-                key={label}
-                type="button"
-                className="dial-btn"
-                aria-pressed={sculpt.max_price === value}
-                disabled={busy}
-                onClick={() => onChange({ ...sculpt, max_price: value })}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+        <span className="dial-divider" aria-hidden="true" />
+
+        <div className="dial-segment" role="group" aria-label="Budget">
+          {BUDGET_OPTIONS.map(({ value, label }) => (
+            <button
+              key={label}
+              type="button"
+              className="dial-btn"
+              aria-pressed={sculpt.max_price === value}
+              onClick={() => onChange({ ...sculpt, max_price: value })}
+            >
+              {label}
+            </button>
+          ))}
         </div>
+
+        <span className="dial-divider" aria-hidden="true" />
 
         <div className="dial-toggles" role="group" aria-label="Poster filters">
           <button
             type="button"
             className="dial-chip"
             aria-pressed={sculpt.weekends_only}
-            disabled={busy}
             onClick={() =>
               onChange({ ...sculpt, weekends_only: !sculpt.weekends_only })
             }
@@ -105,7 +100,6 @@ export function PosterDials({ sculpt, meta, busy, onChange }: DialsProps) {
             type="button"
             className="dial-chip"
             aria-pressed={sculpt.intimate_only}
-            disabled={busy}
             onClick={() =>
               onChange({ ...sculpt, intimate_only: !sculpt.intimate_only })
             }
@@ -116,13 +110,17 @@ export function PosterDials({ sculpt, meta, busy, onChange }: DialsProps) {
             type="button"
             className="dial-chip"
             aria-pressed={sculpt.hide_festivals}
-            disabled={busy}
             onClick={() =>
               onChange({ ...sculpt, hide_festivals: !sculpt.hide_festivals })
             }
           >
             {sculpt.hide_festivals ? "Solo shows only" : "Festivals included"}
           </button>
+          {busy && (
+            <span className="dial-updating" role="status">
+              Updating…
+            </span>
+          )}
         </div>
       </div>
 
@@ -142,7 +140,7 @@ type SteeringProps = {
   onReset: () => void;
 };
 
-/** Active Taste steering pills and one-click Reset, shown neatly beside the Reading chips. */
+/** Active Taste steering pills and one-click Reset, aligned cleanly beside the Reading chips. */
 export function SteeringPills({
   sculpt,
   busy,
@@ -160,7 +158,7 @@ export function SteeringPills({
           type="button"
           className="chip steer-chip"
           data-steer="boost"
-          disabled={busy}
+          aria-busy={busy || undefined}
           aria-label={`Remove More like ${artist}`}
           onClick={() => onRemove("boost", artist)}
         >
@@ -178,7 +176,7 @@ export function SteeringPills({
           type="button"
           className="chip steer-chip"
           data-steer="exclude"
-          disabled={busy}
+          aria-busy={busy || undefined}
           aria-label={`Remove Not ${artist}`}
           onClick={() => onRemove("exclude", artist)}
         >
@@ -193,7 +191,6 @@ export function SteeringPills({
       <button
         type="button"
         className="reading-change steer-reset"
-        disabled={busy}
         onClick={onReset}
       >
         <RotateCcw aria-hidden size={13} />

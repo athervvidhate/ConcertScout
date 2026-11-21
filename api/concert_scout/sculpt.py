@@ -554,8 +554,17 @@ async def _steered_taste(
 
         if resolved_boosts:
             try:
-                extra_neighbours = await similarity.find_neighbours(
-                    services.listenbrainz, services.lastfm, services.redis, resolved_boosts
+                # 1-hop similarity with a tight budget keeps interactive steering snappy;
+                # Co-Billing peers and Rocchio embeddings already cover broader similarity.
+                extra_neighbours = await asyncio.wait_for(
+                    similarity.find_neighbours(
+                        services.listenbrainz,
+                        services.lastfm,
+                        services.redis,
+                        resolved_boosts,
+                        hops=1,
+                    ),
+                    timeout=2.5,
                 )
                 neighbours.extend(n for n in extra_neighbours if normalize(n.name) not in excluded)
             except Exception as exc:  # Similarity is best-effort during sculpt.

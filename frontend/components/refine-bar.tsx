@@ -1,74 +1,121 @@
 "use client";
 
-import { ArrowRight, ExternalLink, X } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { ExternalLink, X } from "lucide-react";
 
+import { headlinerOf } from "@/lib/lineup";
 import {
   findSourceForNote,
-  MAX_REFINEMENT_CHARS,
   type RefinementEntry,
   type UnanswerableNote,
 } from "@/lib/refinement";
-import type { Recommendation } from "@/lib/search";
+import type { Reading, Recommendation } from "@/lib/search";
 
-type Props = {
+type TrailProps = {
   trail: RefinementEntry[];
-  unanswerable: UnanswerableNote | null;
+  disabled: boolean;
+  onUndo: (index: number) => void;
+};
+
+/** Undoable Refinement chips rendered inline inside `.understood-row` beside the Reading chips. */
+export function RefineTrail({ trail, disabled, onUndo }: TrailProps) {
+  if (trail.length === 0) return null;
+  return (
+    <>
+      {trail.map((entry, index) => (
+        <button
+          key={entry.id}
+          type="button"
+          className="chip refine-chip"
+          disabled={disabled}
+          aria-label={`Undo Refinement: ${entry.label}`}
+          onClick={() => onUndo(index)}
+        >
+          <span>{entry.label}</span>
+          <X aria-hidden size={13} className="refine-chip-x" />
+        </button>
+      ))}
+    </>
+  );
+}
+
+type Suggestion = { label: string; prompt: string };
+
+function buildSuggestions(
+  reading: Reading,
+  recommendations: Recommendation[],
+): Suggestion[] {
+  const items: Suggestion[] = [];
+  if (!reading.weekends_only && !reading.weekdays?.length) {
+    items.push({ label: "Weekends only", prompt: "only weekends" });
+  }
+  if (reading.max_price === undefined) {
+    items.push({ label: "Under $50", prompt: "under $50" });
+  }
+  const existing = new Set(reading.artists.map((a) => a.toLowerCase()));
+  const firstArtist = recommendations
+    .map((r) => headlinerOf(r.concert))
+    .find((name): name is string => Boolean(name && !existing.has(name.toLowerCase())));
+  if (firstArtist) {
+    items.push({ label: `More like ${firstArtist}`, prompt: `more like ${firstArtist}` });
+  }
+  if (!reading.start && !reading.end) {
+    items.push({ label: "Next 30 days", prompt: "in the next 30 days" });
+  }
+  return items.slice(0, 4);
+}
+
+type ExtrasProps = {
+  reading: Reading;
   recommendations: Recommendation[];
+  unanswerable: UnanswerableNote | null;
+  showSuggestions: boolean;
   canRefine: boolean;
   refining: boolean;
   onRefine: (text: string) => void;
-  onUndo: (index: number) => void;
   onDismissNote: () => void;
 };
 
-/** Typed Refinement input under the Poster, with a horizontal trail of undoable chips above it. */
-export function RefineBar({
-  trail,
-  unanswerable,
+/** 1-tap Refinement suggestions and inline unanswerable notes beneath the Reading chips. */
+export function RefineExtras({
+  reading,
   recommendations,
+  unanswerable,
+  showSuggestions,
   canRefine,
   refining,
   onRefine,
-  onUndo,
   onDismissNote,
-}: Props) {
-  const [draft, setDraft] = useState("");
+}: ExtrasProps) {
+  const suggestions = showSuggestions
+    ? buildSuggestions(reading, recommendations)
+    : [];
   const source = unanswerable
     ? findSourceForNote(unanswerable, recommendations)
     : null;
 
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = draft.trim();
-    if (!trimmed || !canRefine || refining) return;
-    onRefine(trimmed);
-    setDraft("");
-  }
+  if (suggestions.length === 0 && !unanswerable) return null;
 
   return (
-    <section
-      className="refine-bar"
-      aria-label="Refine Search"
+    <div
+      className="refine-extras"
+      aria-label="Refine suggestions"
       aria-busy={refining || undefined}
     >
-      {trail.length > 0 && (
-        <ul className="refine-trail" aria-label="Applied Refinements">
-          {trail.map((entry, index) => (
-            <li key={entry.id}>
-              <button
-                type="button"
-                className="chip refine-chip"
-                disabled={!canRefine || refining}
-                aria-label={`Undo Refinement: ${entry.label}`}
-                onClick={() => onUndo(index)}
-              >
-                <span>{entry.label}</span>
-                <X aria-hidden size={13} className="refine-chip-x" />
-              </button>
-            </li>
+      {suggestions.length > 0 && (
+        <div className="refine-suggestions" role="group" aria-label="Quick refinements">
+          <span className="refine-suggest-label">Try:</span>
+          {suggestions.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className="refine-suggest-btn"
+              disabled={!canRefine || refining}
+              onClick={() => onRefine(item.prompt)}
+            >
+              {item.label}
+            </button>
           ))}
-        </ul>
+        </div>
       )}
 
       {unanswerable && (
@@ -97,30 +144,6 @@ export function RefineBar({
           </button>
         </div>
       )}
-
-      <form className="refine-form" onSubmit={submit}>
-        <label htmlFor="refine-input" className="sr-only">
-          Refine this Poster
-        </label>
-        <input
-          id="refine-input"
-          type="text"
-          className="refine-input"
-          value={draft}
-          maxLength={MAX_REFINEMENT_CHARS}
-          disabled={refining}
-          placeholder="Try: only Saturdays, cheaper, try Oakland, more like #2…"
-          onChange={(event) => setDraft(event.target.value)}
-        />
-        <button
-          type="submit"
-          className="refine-submit"
-          disabled={!canRefine || refining || !draft.trim()}
-        >
-          <span>{refining ? "Refining…" : "Refine"}</span>
-          <ArrowRight aria-hidden size={16} />
-        </button>
-      </form>
-    </section>
+    </div>
   );
 }

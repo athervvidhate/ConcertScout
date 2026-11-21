@@ -257,6 +257,10 @@ test("Ticket interruption restores photos and focus; view arrows persist and the
   await page.route("**/search", (route) =>
     route.fulfill({ contentType: "text/event-stream", body }),
   );
+  const newMode = page
+    .getByRole("group", { name: "Search bar mode" })
+    .getByRole("button", { name: "New", exact: true });
+  if (await newMode.isVisible()) await newMode.click();
   await page
     .getByRole("textbox", { name: "Search", exact: true })
     .fill("Rhye in Chicago");
