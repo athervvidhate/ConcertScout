@@ -34,6 +34,7 @@ FOLLOWED = "/rest/v1/followed_artists"
 FOLLOWED_VENUES = "/rest/v1/followed_venues"
 SETTINGS = "/rest/v1/alert_settings"
 SENT = "/rest/v1/alerts_sent"
+SALE_REMINDERS_SENT = "/rest/v1/sale_reminders_sent"
 TASTE = "/rest/v1/taste_profiles"
 COBILLING_RECORD = "/rest/v1/rpc/record_cobilling_bills"
 COBILLING_NEIGHBORS = "/rest/v1/rpc/cobilling_neighbors"
@@ -102,13 +103,18 @@ class FollowedVenue(BaseModel):
 class AlertSettings(BaseModel):
     place: Place | None = None
     enabled: bool = False
+    sale_reminders_enabled: bool = False
+    timezone: str | None = None
 
 
 class AlertAccount(BaseModel):
     """An Account with Alerts on, as the daily run reads it."""
 
     user_id: str
-    place: Place
+    place: Place | None = None
+    enabled: bool = True
+    sale_reminders_enabled: bool = False
+    timezone: str | None = None
 
 
 def make_client(url: str, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
@@ -352,7 +358,7 @@ async def alert_settings(
     request = client.build_request(
         "GET",
         SETTINGS,
-        params={"select": "place,enabled"},
+        params={"select": "place,enabled,sale_reminders_enabled,timezone"},
         headers=_as_person(account, publishable_key),
     )
     rows = _rows(await _send(client, request), AlertSettings)
@@ -388,6 +394,50 @@ async def set_alerts_enabled(
         SETTINGS,
         params={"user_id": f"eq.{user_id}"},
         json={"enabled": enabled, "updated_at": dt.datetime.now(dt.UTC).isoformat()},
+        headers=_as_server(secret_key) | {"Prefer": "return=minimal"},
+    )
+    await _send(client, request)
+
+
+async def set_sale_reminders(
+    client: httpx.AsyncClient,
+    secret_key: SecretStr,
+    user_id: str,
+    enabled: bool,
+    timezone: str | None,
+) -> None:
+    """Creates the Account's settings row if needed, or updates only sale reminder fields."""
+    row: dict[str, Any] = {
+        "user_id": user_id,
+        "sale_reminders_enabled": enabled,
+        "updated_at": dt.datetime.now(dt.UTC).isoformat(),
+    }
+    if timezone is not None:
+        row["timezone"] = timezone
+    request = client.build_request(
+        "POST",
+        SETTINGS,
+        params={"on_conflict": "user_id"},
+        json=[row],
+        headers=_as_server(secret_key)
+        | {"Prefer": "resolution=merge-duplicates,return=minimal,missing=default"},
+    )
+    await _send(client, request)
+
+
+async def disable_all_alerts(
+    client: httpx.AsyncClient, secret_key: SecretStr, user_id: str
+) -> None:
+    """Turns off all Alert emails for an Account, used by one-click unsubscribe."""
+    request = client.build_request(
+        "PATCH",
+        SETTINGS,
+        params={"user_id": f"eq.{user_id}"},
+        json={
+            "enabled": False,
+            "sale_reminders_enabled": False,
+            "updated_at": dt.datetime.now(dt.UTC).isoformat(),
+        },
         headers=_as_server(secret_key) | {"Prefer": "return=minimal"},
     )
     await _send(client, request)
@@ -450,7 +500,11 @@ async def accounts_with_alerts(
     request = client.build_request(
         "GET",
         SETTINGS,
-        params={"select": "user_id,place", "enabled": "is.true", "order": "updated_at.asc"},
+        params={
+            "select": "user_id,place,enabled,sale_reminders_enabled,timezone",
+            "or": "(enabled.is.true,sale_reminders_enabled.is.true)",
+            "order": "updated_at.asc",
+        },
         headers=_as_server(secret_key),
     )
     return _rows(await _send(client, request), AlertAccount)
@@ -510,11 +564,65 @@ async def sent_to(
 async def record_sent(
     client: httpx.AsyncClient, secret_key: SecretStr, user_id: str, concert_ids: list[str]
 ) -> None:
+    if not concert_ids:
+        return
     request = client.build_request(
         "POST",
         SENT,
         params={"on_conflict": "user_id,concert_id"},
         json=[{"user_id": user_id, "concert_id": c} for c in concert_ids],
+        headers=_as_server(secret_key) | {"Prefer": "resolution=ignore-duplicates,return=minimal"},
+    )
+    await _send(client, request)
+
+
+async def saved_concerts_by(
+    client: httpx.AsyncClient, secret_key: SecretStr, user_ids: list[str]
+) -> dict[str, list[Concert]]:
+    if not user_ids:
+        return {}
+    request = client.build_request(
+        "GET",
+        TABLE,
+        params={"select": "user_id,concert", "user_id": _among(user_ids)},
+        headers=_as_server(secret_key),
+    )
+    saved: dict[str, list[Concert]] = {}
+    for row in _rows(await _send(client, request), _SavedConcertRow):
+        saved.setdefault(row.user_id, []).append(row.concert)
+    return saved
+
+
+async def sale_reminders_sent_to(
+    client: httpx.AsyncClient, secret_key: SecretStr, user_ids: list[str]
+) -> dict[str, set[tuple[str, str]]]:
+    if not user_ids:
+        return {}
+    request = client.build_request(
+        "GET",
+        SALE_REMINDERS_SENT,
+        params={"select": "user_id,concert_id,sale_key", "user_id": _among(user_ids)},
+        headers=_as_server(secret_key),
+    )
+    sent: dict[str, set[tuple[str, str]]] = {}
+    for row in _rows(await _send(client, request), _SaleReminderSentRow):
+        sent.setdefault(row.user_id, set()).add((row.concert_id, row.sale_key))
+    return sent
+
+
+async def record_sale_reminders_sent(
+    client: httpx.AsyncClient,
+    secret_key: SecretStr,
+    user_id: str,
+    keys: Sequence[tuple[str, str]],
+) -> None:
+    if not keys:
+        return
+    request = client.build_request(
+        "POST",
+        SALE_REMINDERS_SENT,
+        params={"on_conflict": "user_id,concert_id,sale_key"},
+        json=[{"user_id": user_id, "concert_id": c, "sale_key": k} for c, k in keys],
         headers=_as_server(secret_key) | {"Prefer": "resolution=ignore-duplicates,return=minimal"},
     )
     await _send(client, request)
@@ -544,6 +652,17 @@ class _FollowedVenueRow(FollowedVenue):
 class _SentRow(BaseModel):
     user_id: str
     concert_id: str
+
+
+class _SavedConcertRow(BaseModel):
+    user_id: str
+    concert: Concert
+
+
+class _SaleReminderSentRow(BaseModel):
+    user_id: str
+    concert_id: str
+    sale_key: str
 
 
 class CoBillingBill(BaseModel):

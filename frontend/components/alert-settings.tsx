@@ -3,9 +3,12 @@
 import { type FormEvent, useState } from "react";
 
 import {
+  defaultTimeZone,
   RADII,
   setAlertPlace,
   setAlertsEnabled,
+  setSaleReminders,
+  timeZoneOptions,
   unfollowArtist,
   unfollowVenue,
   useAlerts,
@@ -96,6 +99,45 @@ export function AlertSettings() {
         />
         Email me about new Concerts from Artists and venues I follow
       </label>
+
+      <h3>Saved Concert sale reminders</h3>
+      <p>
+        Get a reminder in your daily Alert before a Saved Concert&apos;s presale or general sale
+        opens within the next 36 hours.
+      </p>
+      <label className="alert-switch">
+        <input
+          type="checkbox"
+          checked={Boolean(alerts.sale_reminders_enabled)}
+          disabled={busy}
+          onChange={(event) => {
+            const zone = alerts.timezone || defaultTimeZone();
+            void act(() => setSaleReminders(event.target.checked, zone));
+          }}
+        />
+        Email me before my Saved Concerts go on sale
+      </label>
+      <div className="alert-place">
+        <label htmlFor="alert-timezone">Time zone</label>
+        <div className="alert-fields">
+          <select
+            id="alert-timezone"
+            value={alerts.timezone || defaultTimeZone()}
+            disabled={busy}
+            onChange={(event) =>
+              void act(() =>
+                setSaleReminders(Boolean(alerts.sale_reminders_enabled), event.target.value),
+              )
+            }
+          >
+            {timeZoneOptions(alerts.timezone).map((zone) => (
+              <option key={zone} value={zone}>
+                {zone}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       <h3>Followed Artists</h3>
       {alerts.followed.length === 0 ? (

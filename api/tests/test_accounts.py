@@ -222,6 +222,8 @@ async def test_followed_artists_and_the_alert_place_follow_the_account(
         "place": None,
         "followed": [],
         "followed_venues": [],
+        "sale_reminders_enabled": False,
+        "timezone": None,
     }
 
     for name in ("Contract Artist", "contract  artist", "Second Contract Artist"):
