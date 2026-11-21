@@ -3,7 +3,7 @@
 import { Button } from "@base-ui/react/button";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowRight, LocateFixed, Pencil } from "lucide-react";
+import { ArrowRight, LocateFixed, Pencil, Sparkles } from "lucide-react";
 import { type SubmitEvent, useEffect, useRef, useState } from "react";
 
 import { ReadingEditor } from "@/components/reading-editor";
@@ -17,7 +17,7 @@ import { HomeGuide } from "@/components/home-guide";
 import { Listing } from "@/components/listing";
 import { Poster } from "@/components/poster";
 import { SteeringPills } from "@/components/poster-dials";
-import { RefineBar } from "@/components/refine-bar";
+import { RefineExtras, RefineTrail } from "@/components/refine-bar";
 import { SearchFeedback } from "@/components/search-feedback";
 import { SiteHeader } from "@/components/site-header";
 import { SearchExamples } from "@/components/search-examples";
@@ -31,6 +31,7 @@ import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/place";
 import { dateIn, viewerZone } from "@/lib/format";
 import { anywhere, overNextMonths } from "@/lib/reading";
 import {
+  MAX_REFINEMENT_CHARS,
   planUndo,
   posterArtistNames,
   type RefinementEntry,
@@ -61,6 +62,9 @@ export function Search() {
   const [returningHome, setReturningHome] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
+  const [refineDraft, setRefineDraft] = useState("");
+  const [barMode, setBarMode] = useState<"refine" | "new">("new");
+  const [refinedRun, setRefinedRun] = useState(0);
   const [tasteOpen, setTasteOpen] = useState(false);
   const [tasteSource, setTasteSource] = useState<ImportOption | undefined>(undefined);
   const [token, setToken] = useState<string | null>(null);
@@ -120,10 +124,30 @@ export function Search() {
   const home = phase === "idle";
   const locationLabel = place ? "Forget my location" : "Use my location";
   const canSearch = token !== null && phase !== "searching";
+  const canRefineBar =
+    (phase === "finished" || refining) &&
+    hasPoster &&
+    Boolean(reading) &&
+    (recommendations.length > 0 || refinements.length > 0);
+  const isRefineMode = canRefineBar && barMode === "refine";
   const searchedFor =
     reading && !reading.place && place
       ? { ...reading, place: "Near you" }
       : reading;
+
+  // Automatically switch the single top bar into Refine mode once a fresh live Search finishes.
+  // A reloaded/restored Search stays in New mode so the original Search words remain in the box.
+  if (
+    phase === "finished" &&
+    hasPoster &&
+    !resumed &&
+    recommendations.length > 0 &&
+    refinedRun !== searchRun
+  ) {
+    setRefinedRun(searchRun);
+    setBarMode("refine");
+    setRefineDraft("");
+  }
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -249,6 +273,9 @@ export function Search() {
     window.scrollTo({ top: 0, behavior: "instant" });
     setActiveExample(0);
     setText("");
+    setRefineDraft("");
+    setBarMode("new");
+    setRefinedRun(0);
     clear();
   }
 
@@ -282,8 +309,19 @@ export function Search() {
 
   function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isRefineMode) {
+      const trimmed = refineDraft.trim();
+      if (trimmed && canSearch) {
+        submitRefinement(trimmed);
+        setRefineDraft("");
+      }
+      return;
+    }
     const trimmed = text.trim();
-    if (trimmed) run({ text: trimmed });
+    if (trimmed) {
+      setRefineDraft("");
+      run({ text: trimmed });
+    }
   }
 
   return (
@@ -333,34 +371,87 @@ export function Search() {
           },
         }}
         onSubmit={submit}
-        className={`search-bar ${text.trim() ? "ready" : ""} ${home ? "" : "compact"}`}
+        className={`search-bar ${(isRefineMode ? refineDraft.trim() : text.trim()) ? "ready" : ""} ${home ? "" : "compact"} ${canRefineBar ? "has-mode" : ""} ${isRefineMode ? "mode-refine" : ""}`}
       >
+        {canRefineBar && (
+          <div className="bar-mode" role="group" aria-label="Search bar mode">
+            <button
+              type="button"
+              className="bar-mode-btn is-refine"
+              aria-pressed={isRefineMode}
+              disabled={phase === "searching" && !refining}
+              onClick={() => {
+                setBarMode("refine");
+                setTimeout(() => input.current?.focus(), 0);
+              }}
+            >
+              <Sparkles aria-hidden size={13} />
+              Refine
+            </button>
+            <button
+              type="button"
+              className="bar-mode-btn"
+              aria-pressed={!isRefineMode}
+              disabled={phase === "searching"}
+              onClick={() => {
+                setBarMode("new");
+                setTimeout(() => {
+                  input.current?.focus();
+                  input.current?.select();
+                }, 0);
+              }}
+            >
+              New
+            </button>
+          </div>
+        )}
         <label htmlFor="search" className="sr-only">
-          Search
+          {isRefineMode ? "Refine this Poster" : "Search"}
         </label>
-        <SearchInput
-          text={text}
-          onText={setText}
-          home={home}
-          inputRef={input}
-        />
-        <Button
-          type="button"
-          className="locate"
-          data-located={place ? "" : undefined}
-          aria-label={locationLabel}
-          title={locationLabel}
-          onClick={toggleLocation}
-        >
-          <LocateFixed aria-hidden size={26} />
-        </Button>
+        {isRefineMode ? (
+          <input
+            id="search"
+            ref={input}
+            type="text"
+            value={refineDraft}
+            maxLength={MAX_REFINEMENT_CHARS}
+            disabled={refining}
+            placeholder="Narrow these results — only weekends, under $50, try Oakland, more like #2…"
+            onChange={(event) => setRefineDraft(event.target.value)}
+          />
+        ) : (
+          <SearchInput
+            text={text}
+            onText={setText}
+            home={home}
+            inputRef={input}
+          />
+        )}
+        {!isRefineMode && (
+          <Button
+            type="button"
+            className="locate"
+            data-located={place ? "" : undefined}
+            aria-label={locationLabel}
+            title={locationLabel}
+            onClick={toggleLocation}
+          >
+            <LocateFixed aria-hidden size={26} />
+          </Button>
+        )}
         <Button
           type="submit"
           className="search-send"
-          aria-label="Search"
-          disabled={!canSearch}
+          aria-label={isRefineMode ? "Refine" : "Search"}
+          disabled={
+            isRefineMode
+              ? !canSearch || refining || !refineDraft.trim()
+              : !canSearch
+          }
         >
-          <span className="send-label">Search</span>
+          <span className="send-label">
+            {isRefineMode ? (refining ? "Refining…" : "Refine") : "Search"}
+          </span>
           <ArrowRight aria-hidden size={22} />
         </Button>
       </motion.form>
@@ -463,6 +554,11 @@ export function Search() {
             >
               <SearchChips reading={searchedFor} />
             </motion.div>
+            <RefineTrail
+              trail={refinements}
+              disabled={!canSearch || refining}
+              onUndo={undoRefinement}
+            />
             {reading && !editing && (
               <Button
                 ref={changeButton}
@@ -498,15 +594,15 @@ export function Search() {
             onCancel={closeEditor}
           />
         )}
-        {(phase === "finished" || refining) && hasPoster && reading && !editing && (
-          <RefineBar
-            trail={refinements}
-            unanswerable={unanswerable}
+        {canRefineBar && reading && !editing && (
+          <RefineExtras
+            reading={reading}
             recommendations={recommendations}
+            unanswerable={unanswerable}
+            showSuggestions={isRefineMode}
             canRefine={canSearch}
             refining={refining}
             onRefine={submitRefinement}
-            onUndo={undoRefinement}
             onDismissNote={dismissUnanswerable}
           />
         )}
@@ -557,8 +653,11 @@ export function Search() {
               status={status}
               step={step}
               onChange={() => {
-                input.current?.focus();
-                input.current?.select();
+                setBarMode("new");
+                setTimeout(() => {
+                  input.current?.focus();
+                  input.current?.select();
+                }, 0);
               }}
               onWiderDates={
                 canSearch && searchedFor ? searchWiderDates : undefined

@@ -134,6 +134,7 @@ test("an emptied box stays blank after a Search until home returns", async ({pag
   await search(page);
   await expect(page.getByRole("link", {name: "Tickets for Contract Concert One"})).toBeVisible();
   await page.getByRole("button", {name:"Close Ticket"}).click();
+  await page.getByRole("group", {name: "Search bar mode"}).getByRole("button", {name: "New", exact: true}).click();
   await input.clear();
   await expect(input).not.toHaveAttribute("placeholder");
   await page.waitForTimeout(350);
