@@ -17,6 +17,7 @@ import { HomeGuide } from "@/components/home-guide";
 import { Listing } from "@/components/listing";
 import { Poster } from "@/components/poster";
 import { SteeringPills } from "@/components/poster-dials";
+import { RefineBar } from "@/components/refine-bar";
 import { SearchFeedback } from "@/components/search-feedback";
 import { SiteHeader } from "@/components/site-header";
 import { SearchExamples } from "@/components/search-examples";
@@ -29,6 +30,11 @@ import { countOf, type ImportOption, TastePanel } from "@/components/taste-panel
 import { forgetPlace, keepPlace, type Place, readPlace } from "@/lib/place";
 import { dateIn, viewerZone } from "@/lib/format";
 import { anywhere, overNextMonths } from "@/lib/reading";
+import {
+  planUndo,
+  posterArtistNames,
+  type RefinementEntry,
+} from "@/lib/refinement";
 import { canSaveReading } from "@/lib/saved-searches";
 import { removeSteeringArtist } from "@/lib/sculpt";
 import { API_URL, type Asked, type Reading } from "@/lib/search";
@@ -92,11 +98,16 @@ export function Search() {
     sculptMeta,
     sculptError,
     sculptVersion,
+    baseReading,
+    refinements,
+    unanswerable,
+    refining,
     search,
     clear,
     showExample,
     applySculpt,
     resetSculpt,
+    dismissUnanswerable,
   } = useSearch();
   // A reloaded Search puts its words back in the box once.
   const [restoredText, setRestoredText] = useState(false);
@@ -159,16 +170,67 @@ export function Search() {
     changeButton.current?.focus();
   }, [editing]);
 
-  function run(request: Asked, near: Place | null = place) {
+  function run(
+    request: Asked,
+    near: Place | null = place,
+    options?: {
+      keepTrail?: RefinementEntry[];
+      keepBaseReading?: Reading | null;
+      scroll?: boolean;
+    },
+  ) {
     if (!token) return;
     // Each token works once, so the next Search needs a fresh one.
     setToken(null);
     botCheck.current?.reset();
     setEditing(false);
     // A typed place wins on the server, so a shared location only fills the gap.
-    search(request, token, taste?.artists ?? [], near);
+    search(request, token, taste?.artists ?? [], near, options);
     input.current?.blur();
-    window.scrollTo({ top: 0, behavior: reduced ? "instant" : "smooth" });
+    if (options?.scroll !== false) {
+      window.scrollTo({ top: 0, behavior: reduced ? "instant" : "smooth" });
+    }
+  }
+
+  function submitRefinement(refinementText: string) {
+    if (!reading) return;
+    run(
+      {
+        reading,
+        refinement: refinementText,
+        poster_artists: posterArtistNames(recommendations),
+        ...(searchId ? { search_id: searchId } : {}),
+      },
+      place,
+      { scroll: false },
+    );
+  }
+
+  function undoRefinement(index: number) {
+    if (!reading) return;
+    const base = baseReading ?? reading;
+    const { nextTrail, restoreReading, replayText } = planUndo(
+      refinements,
+      index,
+      base,
+    );
+    if (replayText) {
+      run(
+        {
+          reading: restoreReading,
+          refinement: replayText,
+          poster_artists: posterArtistNames(recommendations),
+        },
+        place,
+        { keepTrail: nextTrail, keepBaseReading: base, scroll: false },
+      );
+      return;
+    }
+    run({ reading: restoreReading }, place, {
+      keepTrail: nextTrail,
+      keepBaseReading: base,
+      scroll: false,
+    });
   }
 
   function closeEditor() {
@@ -509,6 +571,18 @@ export function Search() {
           </motion.div>
         )}
       </AnimatePresence>
+      {(phase === "finished" || refining) && hasPoster && reading && (
+        <RefineBar
+          trail={refinements}
+          unanswerable={unanswerable}
+          recommendations={recommendations}
+          canRefine={canSearch}
+          refining={refining}
+          onRefine={submitRefinement}
+          onUndo={undoRefinement}
+          onDismissNote={dismissUnanswerable}
+        />
+      )}
       {elsewhere && phase === "finished" && (
         <div id="elsewhere">
           <Board

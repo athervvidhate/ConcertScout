@@ -28,7 +28,7 @@ Terms follow [GLOSSARY.md](../../GLOSSARY.md). Choices with lasting trade-offs l
 | Topic | Decision |
 |---|---|
 | Purpose | Public, usable, non-commercial portfolio piece |
-| Shape | A search product. No chat |
+| Shape | Search with Refinements, no open-ended chat ([ADR 0007](../adr/0007-search-with-refinements-no-chat.md)) |
 | Minimum Search | A Taste or a place. Everything else is optional |
 | Backend | Python FastAPI service |
 | Frontend | Next.js 16, React 19, Tailwind 4, coss ui, Motion |
@@ -65,7 +65,7 @@ FastAPI service --> Supabase Postgres (Saved Concerts, row-level security)
 
 ## Out of scope
 
-Chat, other Concert sources, buying tickets inside the app, ads, and any paid tier.
+Open-ended chat, other Concert sources, buying tickets inside the app, ads, and any paid tier.
 
 ## Open items
 

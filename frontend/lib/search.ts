@@ -65,6 +65,10 @@ export type Reading = {
   descriptors?: string[];
   tags?: string[];
   genres: string[];
+  // Optional source-fact filters set by a Refinement.
+  max_price?: number;
+  weekends_only?: boolean;
+  weekdays?: number[];
 };
 
 // Who made the shortlist. `total` counts Concerts, and an Artist's names appear once.
@@ -102,9 +106,20 @@ export async function refusal(response: Response): Promise<SearchRefused> {
 // Nothing fit the Search's place, so these match its words anywhere.
 export type Elsewhere = { keyword: string; concerts: Concert[] };
 
+export type RefinementApplied = { label: string };
+
+export type Unanswerable = {
+  message: string;
+  artist?: string;
+  source_url?: string;
+  source_label?: string;
+};
+
 export type SearchEvent =
   | { event: "status"; data: { step: string; message: string } }
   | { event: "reading"; data: Reading }
+  | { event: "refinement"; data: RefinementApplied }
+  | { event: "unanswerable"; data: Unanswerable }
   | { event: "pool"; data: { total: number } }
   | { event: "candidates"; data: Candidates }
   | { event: "poster"; data: { recommendations: Recommendation[] } }
@@ -113,8 +128,16 @@ export type SearchEvent =
   | { event: "error"; data: SearchError }
   | { event: "done"; data: Record<string, never> };
 
-// A Search sends its words, or a Reading the person corrected, which skips the interpreter.
-export type Asked = { text: string } | { reading: Reading };
+// A Search sends its words, a corrected Reading, or a typed Refinement against the current Reading.
+export type Asked =
+  | { text: string }
+  | { reading: Reading }
+  | {
+      reading: Reading;
+      refinement: string;
+      poster_artists: string[];
+      search_id?: string;
+    };
 
 export async function* streamSearch(
   asked: Asked,

@@ -1,7 +1,8 @@
 "use client";
 import { motion, useReducedMotion } from "motion/react";
-import { CalendarDays, MapPin, Music2, UserRound } from "lucide-react";
+import { CalendarDays, MapPin, Music2, Tag, UserRound } from "lucide-react";
 import { formatMonthDay } from "@/lib/format";
+import { formatWeekdays } from "@/lib/refinement";
 import type { Reading } from "@/lib/search";
 import { BACK_OUT_CURVE } from "@/lib/choreography";
 
@@ -57,6 +58,35 @@ export function SearchChips({
             label: "When",
             value: whenOf(reading.start, reading.end),
             Icon: CalendarDays,
+          },
+        ]
+      : []),
+    ...(reading.weekdays?.length
+      ? [
+          {
+            kind: "when",
+            label: "Days",
+            value: formatWeekdays(reading.weekdays),
+            Icon: CalendarDays,
+          },
+        ]
+      : reading.weekends_only
+        ? [
+            {
+              kind: "when",
+              label: "Days",
+              value: "Weekends",
+              Icon: CalendarDays,
+            },
+          ]
+        : []),
+    ...(reading.max_price !== undefined
+      ? [
+          {
+            kind: "price",
+            label: "Price",
+            value: `Under $${Math.round(reading.max_price)}`,
+            Icon: Tag,
           },
         ]
       : []),

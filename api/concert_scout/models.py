@@ -172,6 +172,9 @@ MAX_ARTISTS = 20
 MAX_WORDS = 30
 
 
+Weekday = Annotated[int, Field(ge=0, le=6)]
+
+
 class Reading(BaseModel):
     """What a Search was taken to mean. The interpreter writes it, and a person can correct it."""
 
@@ -186,6 +189,10 @@ class Reading(BaseModel):
     radius_miles: Annotated[int, Field(ge=1, le=MAX_RADIUS_MILES)] | None = None
     start: dt.date | None = None
     end: dt.date | None = None
+    # Optional source-fact filters set by a Refinement. Omitted when unset.
+    max_price: Annotated[float, Field(gt=0, le=10_000)] | None = None
+    weekends_only: bool | None = None
+    weekdays: Annotated[list[Weekday], Field(min_length=1, max_length=7)] | None = None
 
     @model_validator(mode="after")
     def holds_together(self) -> Self:
@@ -195,7 +202,26 @@ class Reading(BaseModel):
             raise ValueError("a radius needs a place")
         if self.region and not self.radius_miles:
             raise ValueError("a region needs a radius")
+        if self.weekends_only is False:
+            self.weekends_only = None
+        if self.weekdays is not None:
+            self.weekdays = sorted(set(self.weekdays))
         return self
+
+
+class RefinementApplied(BaseModel):
+    """Concise chip label for a Refinement that updated the Reading."""
+
+    label: str
+
+
+class Unanswerable(BaseModel):
+    """A Refinement the Reading cannot express, answered without inventing facts (ADR 0002)."""
+
+    message: str
+    artist: str | None = None
+    source_url: str | None = None
+    source_label: str | None = None
 
 
 class PoolTotal(BaseModel):

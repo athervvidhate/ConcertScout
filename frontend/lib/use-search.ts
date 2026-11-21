@@ -7,6 +7,7 @@ import {
   type SculptMeta,
   type SculptState,
 } from "@/lib/sculpt";
+import type { RefinementEntry, UnanswerableNote } from "@/lib/refinement";
 import {
   type Asked,
   type Candidates,
@@ -55,6 +56,11 @@ export type SearchState = {
   sculptError: { code: string; message: string } | null;
   sculptVersion: number;
   basePoster: BasePoster | null;
+  // Typed Refinements trail, base Reading for undo, and inline unanswerable note.
+  baseReading: Reading | null;
+  refinements: RefinementEntry[];
+  unanswerable: UnanswerableNote | null;
+  refining: boolean;
 };
 
 const IDLE: SearchState = {
@@ -79,6 +85,10 @@ const IDLE: SearchState = {
   sculptError: null,
   sculptVersion: 0,
   basePoster: null,
+  baseReading: null,
+  refinements: [],
+  unanswerable: null,
+  refining: false,
 };
 
 const DROPPED = "The connection dropped before the Search finished.";
@@ -95,6 +105,10 @@ function resume(kept: SearchState): SearchState {
     sculptError: null,
     sculptVersion: kept.sculptVersion ?? 0,
     basePoster: kept.basePoster ?? null,
+    baseReading: kept.baseReading ?? kept.reading ?? null,
+    refinements: kept.refinements ?? [],
+    unanswerable: null,
+    refining: false,
     resumed: true,
   };
   if (kept.phase !== "searching") return base;
@@ -146,23 +160,57 @@ export function useSearch() {
       token: string,
       taste: string[],
       near: Coordinates | null,
+      options?: {
+        keepTrail?: RefinementEntry[];
+        keepBaseReading?: Reading | null;
+      },
     ) => {
       current.current?.abort();
+      sculptAbort.current?.abort();
       const controller = new AbortController();
       current.current = controller;
-      // A corrected Reading shows at once, so its chips never blink out while it runs.
-      setState(({ run, searched }) => ({
-        ...IDLE,
-        phase: "searching",
-        run: run + 1,
-        searched: "text" in asked ? asked.text : searched,
-        asked,
-        reading: "reading" in asked ? asked.reading : null,
-      }));
+      const isRefinement = "refinement" in asked;
+      const isInPlaceUndo = !isRefinement && options?.keepTrail !== undefined;
+
+      if (isRefinement || isInPlaceUndo) {
+        // Keep the current Poster visible while refining or undoing a Refinement chip.
+        setState((prev) => ({
+          ...prev,
+          phase: "searching",
+          refining: true,
+          asked,
+          status: isRefinement ? "Refining your Search" : "Updating your Poster",
+          step: isRefinement ? "refine" : "resolve",
+          reading: isInPlaceUndo && "reading" in asked ? asked.reading : prev.reading,
+          error: null,
+          unanswerable: null,
+          baseReading:
+            options?.keepBaseReading ?? prev.baseReading ?? prev.reading,
+          refinements: options?.keepTrail ?? prev.refinements,
+        }));
+      } else {
+        // A corrected Reading shows at once, so its chips never blink out while it runs.
+        setState(({ run, searched }) => ({
+          ...IDLE,
+          phase: "searching",
+          run: run + 1,
+          searched: "text" in asked ? asked.text : searched,
+          asked,
+          reading: "reading" in asked ? asked.reading : null,
+          baseReading:
+            options?.keepBaseReading ??
+            ("reading" in asked ? asked.reading : null),
+          refinements: options?.keepTrail ?? [],
+        }));
+      }
 
       let finished = false;
       let error: string | null = null;
       let retryable = true;
+      let refinementLabel = isRefinement ? asked.refinement : "";
+      let refinedReading: Reading | null = null;
+      let gotUnanswerable = false;
+
       try {
         for await (const { event, data } of streamSearch(
           asked,
@@ -177,8 +225,24 @@ export function useSearch() {
               status: data.message,
               step: data.step,
             }));
+          } else if (event === "refinement") {
+            refinementLabel = data.label;
+          } else if (event === "unanswerable") {
+            gotUnanswerable = true;
+            setState((state) => ({
+              ...state,
+              unanswerable: {
+                ...data,
+                text: isRefinement ? asked.refinement : "",
+              },
+            }));
           } else if (event === "reading") {
-            setState((state) => ({ ...state, reading: data }));
+            refinedReading = data;
+            setState((state) => ({
+              ...state,
+              reading: data,
+              baseReading: state.baseReading ?? data,
+            }));
           } else if (event === "candidates") {
             setState((state) => ({ ...state, candidates: data }));
           } else if (event === "poster") {
@@ -186,6 +250,14 @@ export function useSearch() {
               ...state,
               hasPoster: true,
               recommendations: data.recommendations,
+              sculpt: DEFAULT_SCULPT,
+              sculptMeta: null,
+              sculptError: null,
+              sculptVersion:
+                isRefinement || isInPlaceUndo
+                  ? state.sculptVersion + 1
+                  : state.sculptVersion,
+              elsewhere: null,
             }));
           } else if (event === "shareable") {
             setState((state) => ({
@@ -216,17 +288,37 @@ export function useSearch() {
         if (caught instanceof SearchRefused) retryable = caught.retryable;
       }
       if (controller.signal.aborted) return;
-      setState((state) => ({
-        ...state,
-        phase: "finished",
-        status: null,
-        step: null,
-        error,
-        retryable,
-      }));
+      setState((state) => {
+        const nextRefinements =
+          isRefinement && !gotUnanswerable && !error && refinedReading
+            ? [
+                ...state.refinements,
+                {
+                  id: `${Date.now()}-${state.refinements.length}`,
+                  text: asked.refinement,
+                  label: refinementLabel || asked.refinement,
+                  reading: refinedReading,
+                },
+              ]
+            : state.refinements;
+        return {
+          ...state,
+          phase: "finished",
+          refining: false,
+          status: null,
+          step: null,
+          error,
+          retryable,
+          refinements: nextRefinements,
+        };
+      });
     },
     [],
   );
+
+  const dismissUnanswerable = useCallback(() => {
+    setState((prev) => ({ ...prev, unanswerable: null }));
+  }, []);
 
   const clear = useCallback(() => {
     current.current?.abort();
@@ -328,5 +420,13 @@ export function useSearch() {
     [],
   );
 
-  return { ...state, search, clear, showExample, applySculpt, resetSculpt };
+  return {
+    ...state,
+    search,
+    clear,
+    showExample,
+    applySculpt,
+    resetSculpt,
+    dismissUnanswerable,
+  };
 }
