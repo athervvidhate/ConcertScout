@@ -1252,3 +1252,32 @@ button:disabled { opacity:.6; cursor:default; }
 .concerts-grid .concert-card:not(.solo) .sold-out-badge { border:1px solid color-mix(in srgb,var(--accent) 60%,transparent); background:var(--accent); color:var(--on-accent); text-shadow:none; }
 .concerts-list .underground-badge,.ticket .underground-badge { border:1px solid color-mix(in srgb,var(--label) 32%,var(--line)); background:var(--soft); color:var(--label); text-shadow:none; }
 .concerts-list .sold-out-badge,.ticket .sold-out-badge { border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line)); background:color-mix(in srgb,var(--accent) 12%,var(--surface)); color:var(--accent-ink); text-shadow:none; }
+
+/* ---------- Engineering Lab Opt-in Inspector & Baseline ---------- */
+.lab-baseline-strip { margin:0; padding:11px 16px; border-radius:var(--r-sm); background:var(--surface); border:1px solid var(--line); font-size:13.5px; color:var(--ink-2); }
+.lab-baseline-strip strong { color:var(--ink); }
+.lab-switch { display:inline-flex; align-items:center; gap:11px; min-height:44px; padding:6px 14px 6px 10px; border:1px solid var(--line-2); border-radius:999px; background:var(--surface); color:var(--ink); font-size:13.5px; font-weight:600; transition:border-color .18s var(--ease),background .18s var(--ease); }
+.lab-switch:hover { border-color:var(--ink-3); background:var(--soft); }
+.lab-switch-track { position:relative; width:38px; height:22px; flex:none; border-radius:999px; background:var(--sunk); border:1px solid var(--line-2); transition:background .2s var(--ease),border-color .2s var(--ease); }
+.lab-switch-thumb { position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:var(--ink-2); transition:transform .2s var(--ease),background .2s var(--ease); }
+.lab-switch[aria-checked=true] .lab-switch-track { background:var(--band); border-color:var(--band); }
+.lab-switch[aria-checked=true] .lab-switch-thumb { transform:translateX(16px); background:var(--band-ink); }
+.lab-switch-label { text-align:left; }
+.lab-inspector-empty { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px 20px; padding:20px 22px; border-radius:var(--r-md); background:var(--surface); border:1px solid var(--line); }
+.lab-inspector-empty p { margin:0; max-width:62ch; font-size:14.5px; line-height:1.5; color:var(--ink-2); }
+.lab-inspector-empty strong { color:var(--ink); }
+
+/* ---------- Group Scout Live Autocomplete & Room Editors ---------- */
+.group-picker-combo { position:relative; }
+.group-suggest-list { position:absolute; left:0; right:0; top:calc(100% + 6px); z-index:25; list-style:none; margin:0; padding:6px; border-radius:var(--r-md); background:var(--surface); border:1px solid var(--line-2); box-shadow:var(--shadow); max-height:260px; overflow-y:auto; }
+.group-suggest-status { padding:10px 12px; font-size:13.5px; color:var(--ink-2); }
+.group-suggest-option { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:40px; padding:8px 12px; border-radius:var(--r-sm); font-size:14.5px; font-weight:550; color:var(--ink); cursor:pointer; }
+.group-suggest-option:hover,.group-suggest-option.is-active { background:var(--soft); }
+.group-related-block { display:flex; flex-direction:column; gap:8px; margin-top:4px; }
+.group-related-chip { display:inline-flex; align-items:center; gap:5px; }
+.group-edit-card { border-color:var(--line-2); }
+.group-edit-prefs-grid { margin-top:16px; }
+.group-edit-actions { margin-top:18px; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; }
+@media(prefers-reduced-motion:reduce) {
+  .lab-switch,.lab-switch-track,.lab-switch-thumb { transition:none; }
+}

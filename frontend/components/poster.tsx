@@ -50,7 +50,7 @@ import {
 import { useTicketMotion } from "@/lib/use-ticket-motion";
 import { formatDate, formatConcertTime } from "@/lib/format";
 import { gradeLabel } from "@/lib/grade";
-import type { SearchInspect } from "@/lib/lab";
+import { useInspectorEnabled, type SearchInspect } from "@/lib/lab";
 import { removeSaved, saveConcert, useDecisions } from "@/lib/saved";
 import type { Candidates, Reading, Recommendation } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
@@ -141,6 +141,7 @@ export function Poster({
   const arrival = recommendations.findIndex((r) => r.concert.id === openConcert);
   const [selected, setSelected] = useState(Math.max(arrival, 0));
   const [open, setOpen] = useState(arrival >= 0);
+  const inspectorEnabled = useInspectorEnabled();
   const [inspectOpen, setInspectOpen] = useState(false);
   const inspectButton = useRef<HTMLButtonElement>(null);
   const closeInspector = useCallback(() => {
@@ -385,7 +386,7 @@ export function Poster({
                     link={() => shareLink()}
                   />
                 )}
-                {inspect && (
+                {inspect && inspectorEnabled && (
                   <button
                     ref={inspectButton}
                     type="button"
@@ -453,7 +454,7 @@ export function Poster({
                   onChange={onSculpt}
                 />
               )}
-              {inspect && (
+              {inspect && inspectorEnabled && (
                 <RankingInspector
                   inspect={inspect}
                   open={inspectOpen}

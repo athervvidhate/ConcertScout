@@ -1,4 +1,10 @@
+import { useSyncExternalStore } from "react";
+
+import { readSearch } from "@/lib/search-session";
 import { API_URL, type Grade, type Reading } from "@/lib/search";
+
+const INSPECTOR_PREF_KEY = "concert-scout-inspector-enabled";
+const inspectorListeners = new Set<() => void>();
 
 export type MatchSignal =
   | "seed"
@@ -66,18 +72,21 @@ export type EvalSuiteSummary = {
   measurement_note: string;
 };
 
-export type ArchitectureGuarantee = {
-  id: string;
-  adr: string;
-  title: string;
-  summary: string;
-  enforced_by: string;
+export type TelemetryBaseline = {
+  sample_count: number;
+  p50_total_ms: number;
+  p95_total_ms: number;
+  first_date: string;
+  last_date: string;
+  note: string;
 };
 
 export type LabSummary = {
   sample_count: number;
+  all_time_count: number;
   window_size: number;
-  retention_days: number;
+  retention_days?: number | null;
+  storage_backend: "postgres" | "redis";
   p50_total_ms?: number | null;
   p95_total_ms?: number | null;
   avg_cost_usd?: number | null;
@@ -90,8 +99,8 @@ export type LabSummary = {
   avg_picks_total?: number | null;
   latest_bucket?: string | null;
   steps: StepLatency[];
+  baseline?: TelemetryBaseline | null;
   eval_benchmarks: EvalSuiteSummary;
-  guarantees: ArchitectureGuarantee[];
   telemetry_available: boolean;
 };
 
@@ -141,7 +150,7 @@ const STEP_LABELS: Record<string, string> = {
 };
 
 export function formatMs(ms?: number | null): string {
-  if (ms === null || ms === undefined || !Number.isFinite(ms)) return "—";
+  if (ms === null || ms === undefined || !Number.isFinite(ms)) return "-";
   if (ms < 0) return "0 ms";
   if (ms > 0 && ms < 1) return "< 1 ms";
   if (ms < 1000) return `${Math.round(ms)} ms`;
@@ -149,7 +158,7 @@ export function formatMs(ms?: number | null): string {
 }
 
 export function formatCostCents(usd?: number | null): string {
-  if (usd === null || usd === undefined || !Number.isFinite(usd)) return "—";
+  if (usd === null || usd === undefined || !Number.isFinite(usd)) return "-";
   if (usd <= 0) return "0.00¢";
   const cents = usd * 100;
   if (cents < 0.01) return "< 0.01¢";
@@ -158,7 +167,7 @@ export function formatCostCents(usd?: number | null): string {
 }
 
 export function formatPercent(rate?: number | null): string {
-  if (rate === null || rate === undefined || !Number.isFinite(rate)) return "—";
+  if (rate === null || rate === undefined || !Number.isFinite(rate)) return "-";
   return `${Math.round(Math.max(0, Math.min(1, rate)) * 100)}%`;
 }
 
@@ -191,6 +200,85 @@ export function orderedStepTimings(
       return ra === rb ? a.localeCompare(b) : ra - rb;
     })
     .map(([step, ms]) => ({ step, label: stepLabel(step), ms }));
+}
+
+export function readInspectorEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (new URLSearchParams(window.location.search).get("inspect") === "1") {
+      return true;
+    }
+    return localStorage.getItem(INSPECTOR_PREF_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setInspectorEnabled(enabled: boolean): void {
+  try {
+    if (enabled) localStorage.setItem(INSPECTOR_PREF_KEY, "1");
+    else localStorage.removeItem(INSPECTOR_PREF_KEY);
+  } catch {
+    /* Storage unavailable. */
+  }
+  inspectorListeners.forEach((listener) => listener());
+}
+
+function subscribeInspectorPref(listener: () => void): () => void {
+  inspectorListeners.add(listener);
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === INSPECTOR_PREF_KEY) listener();
+  };
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", onStorage);
+  }
+  return () => {
+    inspectorListeners.delete(listener);
+    if (typeof window !== "undefined") {
+      window.removeEventListener("storage", onStorage);
+    }
+  };
+}
+
+/** Whether this browser opted into showing the inline Ranking Inspector toggle on Posters. */
+export function useInspectorEnabled(): boolean {
+  return useSyncExternalStore(
+    subscribeInspectorPref,
+    readInspectorEnabled,
+    () => false,
+  );
+}
+
+let cachedInspectRaw: string | null = null;
+let cachedInspectValue: SearchInspect | null = null;
+
+/** Read the latest Search's inspect breakdown kept in this browser tab, if any. */
+export function readLatestInspect(): SearchInspect | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem("concert-scout-search");
+    if (raw === cachedInspectRaw) return cachedInspectValue;
+    cachedInspectRaw = raw;
+    const kept = readSearch<{ inspect?: SearchInspect | null }>();
+    cachedInspectValue = kept?.inspect ?? null;
+    return cachedInspectValue;
+  } catch {
+    return null;
+  }
+}
+
+function subscribeLatestInspect(listener: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener("focus", listener);
+  return () => window.removeEventListener("focus", listener);
+}
+
+export function useLatestInspect(): SearchInspect | null {
+  return useSyncExternalStore(
+    subscribeLatestInspect,
+    readLatestInspect,
+    () => null,
+  );
 }
 
 export async function fetchLabSummary(

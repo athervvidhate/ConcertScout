@@ -6,14 +6,16 @@ coordinates, IP addresses, usernames, or Spotify data.
 
 import datetime as dt
 import functools
+import json
 import logging
 import math
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, cast
 
+import httpx
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, field_validator
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
@@ -23,7 +25,11 @@ from concert_scout.models import Grade, Reading, Recommendation
 logger = logging.getLogger(__name__)
 
 METRICS_KEY = "lab:search_metrics"
+SUMMARY_CACHE_KEY = "lab:summary:v2"
+SUMMARY_CACHE_TTL = 30
+TELEMETRY_TABLE = "/rest/v1/search_telemetry"
 MAX_SAMPLES = 200
+MAX_HISTORY_SAMPLES = 2000
 RETENTION_DAYS = 7
 METRICS_TTL = RETENTION_DAYS * 24 * 60 * 60
 
@@ -44,12 +50,25 @@ STEP_ORDER: tuple[str, ...] = tuple(STEP_LABELS.keys())
 ALLOWED_STEPS: frozenset[str] = frozenset(STEP_LABELS.keys())
 
 EVAL_SEARCHES_PATH = Path(__file__).resolve().parent.parent / "evals" / "searches.yaml"
+BASELINE_TIMINGS_PATH = Path(__file__).resolve().parent.parent / "evals" / "baseline_timings.json"
 
 
 def hour_bucket(now: dt.datetime | None = None) -> str:
     """UTC hour bucket (`YYYY-MM-DDTHH:00Z`) so telemetry timestamps cannot fingerprint a visit."""
     current = (now or dt.datetime.now(dt.UTC)).astimezone(dt.UTC)
     return current.strftime("%Y-%m-%dT%H:00Z")
+
+
+def _normalize_bucket(value: str) -> str:
+    """Normalize an hour bucket or Postgres ISO timestamp into a UTC hour bucket."""
+    try:
+        dt.datetime.strptime(value, "%Y-%m-%dT%H:00Z")
+        return value
+    except ValueError:
+        parsed = dt.datetime.fromisoformat(value)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=dt.UTC)
+        return hour_bucket(parsed)
 
 
 class SearchMetrics(BaseModel):
@@ -121,18 +140,23 @@ class EvalSuiteSummary(BaseModel):
     measurement_note: str
 
 
-class ArchitectureGuarantee(BaseModel):
-    id: str
-    adr: str
-    title: str
-    summary: str
-    enforced_by: str
+class TelemetryBaseline(BaseModel):
+    """Real cold-capture benchmark timings from recorded offline snapshots."""
+
+    sample_count: int
+    p50_total_ms: float
+    p95_total_ms: float
+    first_date: str
+    last_date: str
+    note: str
 
 
 class LabSummary(BaseModel):
     sample_count: int
-    window_size: int = MAX_SAMPLES
-    retention_days: int = RETENTION_DAYS
+    all_time_count: int = 0
+    window_size: int = MAX_HISTORY_SAMPLES
+    retention_days: int | None = None
+    storage_backend: Literal["postgres", "redis"] = "redis"
     p50_total_ms: float | None = None
     p95_total_ms: float | None = None
     avg_cost_usd: float | None = None
@@ -145,8 +169,8 @@ class LabSummary(BaseModel):
     avg_picks_total: float | None = None
     latest_bucket: str | None = None
     steps: list[StepLatency] = []
+    baseline: TelemetryBaseline | None = None
     eval_benchmarks: EvalSuiteSummary
-    guarantees: list[ArchitectureGuarantee]
     telemetry_available: bool = True
 
 
@@ -264,17 +288,142 @@ def percentile(values: Sequence[float], pct: float) -> float | None:
     return round(float(ordered[low] * (1.0 - weight) + ordered[high] * weight), 1)
 
 
-async def record_search(redis: Redis, metrics: SearchMetrics) -> None:
-    """Append one numeric Search sample to the bounded Redis ring buffer. Never raises."""
+def _supabase_row(
+    metrics: SearchMetrics, source: Literal["live", "backfill"] = "live"
+) -> dict[str, Any]:
+    return {
+        "recorded_at": metrics.recorded_at,
+        "total_ms": metrics.total_ms,
+        "steps_ms": metrics.steps_ms,
+        "cost_usd": metrics.cost_usd,
+        "cost_complete": metrics.cost_complete,
+        "cache_hits": metrics.cache_hits,
+        "cache_misses": metrics.cache_misses,
+        "pool_total": metrics.pool_total,
+        "shortlist_total": metrics.shortlist_total,
+        "picks_total": metrics.picks_total,
+        "source": source,
+    }
+
+
+def _parse_content_range_total(header: str | None) -> int | None:
+    if not header or "/" not in header:
+        return None
+    total_part = header.rsplit("/", 1)[1].strip()
+    if total_part.isdigit():
+        return int(total_part)
+    return None
+
+
+async def insert_telemetry_rows(
+    supabase_client: httpx.AsyncClient,
+    supabase_secret_key: SecretStr,
+    rows: Sequence[SearchMetrics],
+    *,
+    source: Literal["live", "backfill"] = "live",
+) -> int:
+    """Insert strictly numeric SearchMetrics rows into `public.search_telemetry`."""
+    if not rows:
+        return 0
+    payload = [_supabase_row(item, source=source) for item in rows]
+    request = supabase_client.build_request(
+        "POST",
+        TELEMETRY_TABLE,
+        json=payload,
+        headers={
+            "apikey": supabase_secret_key.get_secret_value(),
+            "Prefer": "return=minimal",
+        },
+    )
+    response = await supabase_client.send(request)
+    response.raise_for_status()
+    return len(payload)
+
+
+async def record_search(
+    redis: Redis,
+    metrics: SearchMetrics,
+    *,
+    supabase_client: httpx.AsyncClient | None = None,
+    supabase_secret_key: SecretStr | None = None,
+) -> None:
+    """Persist one numeric Search sample (Postgres when configured, plus Redis ring buffer).
+
+    Never raises, so telemetry cannot block or fail a Search.
+    """
+    if supabase_client and supabase_secret_key:
+        try:
+            await insert_telemetry_rows(
+                supabase_client, supabase_secret_key, [metrics], source="live"
+            )
+        except httpx.HTTPError as exc:
+            logger.warning("Lab Postgres telemetry not recorded: %s", type(exc).__name__)
+
     payload = metrics.model_dump_json()
     try:
         async with redis.pipeline(transaction=True) as pipe:
             pipe.lpush(METRICS_KEY, payload)
             pipe.ltrim(METRICS_KEY, 0, MAX_SAMPLES - 1)
             pipe.expire(METRICS_KEY, METRICS_TTL)
+            pipe.delete(SUMMARY_CACHE_KEY)
             await pipe.execute()
     except RedisError as exc:
-        logger.warning("Lab telemetry not recorded: %s", type(exc).__name__)
+        logger.warning("Lab Redis telemetry not recorded: %s", type(exc).__name__)
+
+
+async def _load_postgres_samples(
+    supabase_client: httpx.AsyncClient,
+    supabase_secret_key: SecretStr,
+    *,
+    limit: int = MAX_HISTORY_SAMPLES,
+) -> tuple[list[SearchMetrics], int]:
+    request = supabase_client.build_request(
+        "GET",
+        TELEMETRY_TABLE,
+        params={
+            "select": (
+                "recorded_at,total_ms,steps_ms,cost_usd,cost_complete,"
+                "cache_hits,cache_misses,pool_total,shortlist_total,picks_total"
+            ),
+            "order": "recorded_at.desc,id.desc",
+            "limit": str(limit),
+        },
+        headers={
+            "apikey": supabase_secret_key.get_secret_value(),
+            "Prefer": "count=exact",
+        },
+    )
+    response = await supabase_client.send(request)
+    response.raise_for_status()
+    raw_rows: Any = response.json()
+    samples: list[SearchMetrics] = []
+    if isinstance(raw_rows, list):
+        for item in cast(list[object], raw_rows):
+            if not isinstance(item, dict):
+                continue
+            try:
+                normalized: dict[str, Any] = dict(cast(dict[str, Any], item))
+                normalized.pop("source", None)
+                recorded = normalized.get("recorded_at")
+                if isinstance(recorded, str):
+                    normalized["recorded_at"] = _normalize_bucket(recorded)
+                samples.append(SearchMetrics.model_validate(normalized))
+            except (ValidationError, ValueError):
+                continue
+    total = _parse_content_range_total(response.headers.get("content-range"))
+    return samples, total if total is not None else len(samples)
+
+
+@functools.lru_cache(maxsize=4)
+def load_baseline(path: Path = BASELINE_TIMINGS_PATH) -> TelemetryBaseline | None:
+    """Load the anonymized cold-capture baseline stats if present."""
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return TelemetryBaseline.model_validate(data)
+    except (OSError, ValueError, ValidationError):
+        return None
 
 
 def _classify_case(case_id: str, text: str) -> str:
@@ -307,58 +456,32 @@ def _eval_tiers() -> list[EvalTier]:
         EvalTier(
             id="tags_only",
             name="Tags + ListenBrainz graph",
-            signals=["seed", "one_hop", "two_hops", "tags", "genre"],
-            ranker="Deterministic shortlist + Jev",
+            signals=["Seed", "1-hop", "2-hop", "Tags", "Genre"],
+            ranker="Shortlist + Jev",
             status="baseline",
-            status_label="Baseline",
-            summary=(
-                "MusicBrainz/ListenBrainz 1-hop & 2-hop similarity with IDF-weighted "
-                "tags and Ticketmaster subgenres."
-            ),
-            notes=(
-                "Strong for mainstream rock/country/pop seeds; struggles with "
-                "underground electronic and sparse local tags."
-            ),
+            status_label="Layer 1",
+            summary="Artist similarity graphs, weighted style tags, and venue genres.",
+            notes="",
         ),
         EvalTier(
             id="cobilling",
             name="+ Live Co-Billing Graph",
-            signals=["seed", "one_hop", "two_hops", "co_billed", "tags", "genre"],
-            ranker="Shortlist (CO_BILLED_WEIGHT=0.72) + Jev",
+            signals=["Co-billed", "Club bills"],
+            ranker="Shortlist + Jev",
             status="shipped_offline_ready",
-            status_label="Shipped · Offline ready",
-            summary=(
-                "Mines real club/theater bill co-appearances (2–40 Artists, "
-                "mega-festivals excluded) during Catalog sync."
-            ),
-            notes=(
-                "Captures live booking scenes that streaming popularity misses; "
-                "unit-tested offline in test_cobilling.py."
-            ),
+            status_label="Layer 2",
+            summary="Club and theater lineups showing which Artists actually share bills.",
+            notes="",
         ),
         EvalTier(
             id="hybrid_pgvector_jev",
             name="Hybrid pgvector + Jev",
-            signals=[
-                "seed",
-                "one_hop",
-                "two_hops",
-                "co_billed",
-                "semantic",
-                "tags",
-                "genre",
-            ],
-            ranker="Pool-scoped pgvector cosine (512d) + Jev 1.14 + Haiku reasons",
+            signals=["Semantic", "512d embeddings", "Jev grade"],
+            ranker="pgvector cosine + Jev",
             status="pending_live_eval",
-            status_label="Pending live eval",
-            summary=(
-                "Source-grounded Sonic Cards & graph-propagated centroids scored "
-                "in parallel with zero extra critical-path latency."
-            ),
-            notes=(
-                "Code, migration, and fallback contracts are shipped; full before/after "
-                "eval run awaits paid-tier Gemini embedding backfill."
-            ),
+            status_label="Layer 3",
+            summary="Artist embeddings and learned relevance grading scored in parallel.",
+            notes="",
         ),
     ]
 
@@ -409,69 +532,63 @@ def load_eval_benchmarks(path: Path = EVAL_SEARCHES_PATH) -> EvalSuiteSummary:
             "p95_poster_latency": "< 15s time to poster (p95)",
         },
         tiers=_eval_tiers(),
-        measurement_note=(
-            "Suite counts are computed live from api/evals/searches.yaml. Offline snapshot "
-            "replays run with zero API keys; comparative before/after live scores for Hybrid "
-            "pgvector + Jev are explicitly marked pending until the paid-tier embedding "
-            "backfill completes."
-        ),
+        measurement_note="",
     )
 
 
-def architectural_guarantees() -> list[ArchitectureGuarantee]:
-    return [
-        ArchitectureGuarantee(
-            id="source-facts",
-            adr="ADR 0002",
-            title="Facts never pass through the LLM",
-            summary=(
-                "Concert names, dates, venues, prices, URLs, and images come strictly from "
-                "Ticketmaster and JamBase records. Jev grades shortlisted IDs; code drops unknown "
-                "IDs and attaches verified source facts."
-            ),
-            enforced_by="concert_scout/assemble.py · tests/test_app.py",
-        ),
-        ArchitectureGuarantee(
-            id="spotify-isolation",
-            adr="ADR 0003",
-            title="Official Spotify OAuth & strict LLM isolation",
-            summary=(
-                "Connected Spotify accounts use official OAuth only and power a separate "
-                "exact-name shelf. Spotify data never enters LLM prompts, Search telemetry, "
-                "or shared Posters."
-            ),
-            enforced_by="concert_scout/spotify.py · tests/test_spotify.py",
-        ),
-        ArchitectureGuarantee(
-            id="privacy-spend-gates",
-            adr="Spec 05 & 13",
-            title="Zero-PII telemetry & bounded spend gates",
-            summary=(
-                "Engineering Lab stores only numeric timings, costs, cache counts, and funnel "
-                "sizes in a 200-entry Redis ring buffer (7-day TTL). Searches are guarded by "
-                "Turnstile, hashed IP hourly limits, and daily/monthly spend caps."
-            ),
-            enforced_by="concert_scout/lab.py · concert_scout/limits.py · tests/test_lab.py",
-        ),
-    ]
+async def summarize(
+    redis: Redis,
+    *,
+    supabase_client: httpx.AsyncClient | None = None,
+    supabase_secret_key: SecretStr | None = None,
+    eval_path: Path = EVAL_SEARCHES_PATH,
+    baseline_path: Path = BASELINE_TIMINGS_PATH,
+) -> LabSummary:
+    """Summarize anonymized Search metrics from Postgres (or Redis fallback) plus eval metadata."""
+    use_postgres = bool(supabase_client and supabase_secret_key)
+    use_default_paths = eval_path == EVAL_SEARCHES_PATH and baseline_path == BASELINE_TIMINGS_PATH
 
-
-async def summarize(redis: Redis, *, eval_path: Path = EVAL_SEARCHES_PATH) -> LabSummary:
-    """Summarize anonymized Search metrics from Redis alongside eval suite metadata."""
-    telemetry_available = True
-    raw_items: list[bytes | str] = []
-    try:
-        raw_items = await redis.lrange(METRICS_KEY, 0, MAX_SAMPLES - 1)  # type: ignore[misc]
-    except RedisError as exc:
-        logger.warning("Lab telemetry unavailable: %s", type(exc).__name__)
-        telemetry_available = False
-
-    samples: list[SearchMetrics] = []
-    for raw in raw_items:
+    if use_postgres and use_default_paths:
         try:
-            samples.append(SearchMetrics.model_validate_json(raw))
-        except ValidationError:
-            continue
+            cached = await redis.get(SUMMARY_CACHE_KEY)
+            if cached:
+                return LabSummary.model_validate_json(cached)
+        except (RedisError, ValidationError):
+            pass
+
+    telemetry_available = True
+    storage_backend: Literal["postgres", "redis"] = "redis"
+    samples: list[SearchMetrics] = []
+    all_time_count = 0
+    window_size = MAX_SAMPLES
+    retention_days: int | None = RETENTION_DAYS
+
+    if supabase_client and supabase_secret_key:
+        try:
+            samples, all_time_count = await _load_postgres_samples(
+                supabase_client, supabase_secret_key
+            )
+            storage_backend = "postgres"
+            window_size = MAX_HISTORY_SAMPLES
+            retention_days = None
+        except (httpx.HTTPError, ValueError) as exc:
+            logger.warning("Lab Postgres telemetry unavailable: %s", type(exc).__name__)
+            use_postgres = False
+
+    if storage_backend == "redis":
+        raw_items: list[bytes | str] = []
+        try:
+            raw_items = await redis.lrange(METRICS_KEY, 0, MAX_SAMPLES - 1)  # type: ignore[misc]
+        except RedisError as exc:
+            logger.warning("Lab Redis telemetry unavailable: %s", type(exc).__name__)
+            telemetry_available = False
+
+        for raw in raw_items:
+            try:
+                samples.append(SearchMetrics.model_validate_json(raw))
+            except ValidationError:
+                continue
+        all_time_count = len(samples)
 
     totals = [s.total_ms for s in samples]
     complete_costs = [s.cost_usd for s in samples if s.cost_complete]
@@ -498,10 +615,12 @@ async def summarize(redis: Redis, *, eval_path: Path = EVAL_SEARCHES_PATH) -> La
             )
 
     count = len(samples)
-    return LabSummary(
+    summary = LabSummary(
         sample_count=count,
-        window_size=MAX_SAMPLES,
-        retention_days=RETENTION_DAYS,
+        all_time_count=all_time_count,
+        window_size=window_size,
+        retention_days=retention_days,
+        storage_backend=storage_backend,
         p50_total_ms=percentile(totals, 50),
         p95_total_ms=percentile(totals, 95),
         avg_cost_usd=round(sum(complete_costs) / len(complete_costs), 6)
@@ -518,7 +637,15 @@ async def summarize(redis: Redis, *, eval_path: Path = EVAL_SEARCHES_PATH) -> La
         avg_picks_total=round(sum(s.picks_total for s in samples) / count, 1) if count else None,
         latest_bucket=max((s.recorded_at for s in samples), default=None),
         steps=steps,
+        baseline=load_baseline(baseline_path),
         eval_benchmarks=load_eval_benchmarks(eval_path),
-        guarantees=architectural_guarantees(),
         telemetry_available=telemetry_available,
     )
+
+    if use_postgres and use_default_paths and storage_backend == "postgres":
+        try:
+            await redis.set(SUMMARY_CACHE_KEY, summary.model_dump_json(), ex=SUMMARY_CACHE_TTL)
+        except RedisError:
+            pass
+
+    return summary

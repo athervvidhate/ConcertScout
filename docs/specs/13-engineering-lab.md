@@ -6,34 +6,26 @@ Concert Scout exposes its runtime behavior, evaluation coverage, and ranking sig
 
 `GET /lab` returns a `LabSummary` JSON payload with `Cache-Control: public, max-age=30` and renders at `/lab`.
 
-### Anonymized rolling telemetry
-- Every completed or interrupted Search records one numeric-only `SearchMetrics` entry into a bounded Redis list (`lab:search_metrics`) using `LPUSH`, `LTRIM 0 199` (latest 200 Searches), and a 7-day `EXPIRE`.
+### Permanent anonymized telemetry
+- Every completed or interrupted Search records one strictly numeric `SearchMetrics` row into `public.search_telemetry` (`supabase/migrations/20261122020000_search_telemetry.sql`) so historical production Searches accumulate permanently without expiring.
 - Recorded fields are strictly numeric plus an hour-bucketed UTC timestamp (`recorded_at`, e.g. `2026-11-22T20:00Z`): `total_ms`, `steps_ms` (allowlisted pipeline step names only), `cost_usd`, `cost_complete`, `cache_hits`, `cache_misses`, `pool_total`, `shortlist_total`, and `picks_total`.
 - **Strict privacy invariant**: Telemetry never stores or exposes Search text, Artist names, Reading values, coordinates, IP addresses, usernames, or Spotify data.
-- `GET /lab` aggregates `sample_count`, `p50_total_ms`, `p95_total_ms`, `avg_cost_usd` (over `cost_complete` samples), `cache_hit_rate`, average funnel counts, and per-step `p50_ms` / `p95_ms`.
-- When Redis has zero samples or is unreachable, `GET /lab` still returns `200` with null numeric aggregates and an honest empty state.
+- `GET /lab` aggregates up to the latest 2,000 Postgres rows alongside exact `all_time_count` (cached in Redis for 30s) and falls back cleanly to a 200-Search Redis ring buffer when Supabase is unconfigured.
+- An anonymized cold-capture baseline (`api/evals/baseline_timings.json`, measured from 158 unwarmed snapshots) sits alongside live metrics, and `api/scripts/backfill_lab_telemetry.py` can backfill historical `search span=...` log lines into `public.search_telemetry`.
 
 ### Eval suite & architecture comparison
-- `eval_benchmarks` reads `api/evals/searches.yaml` deterministically at runtime to report real case counts, human-judged counts, snapshot coverage, `must`/`good`/`bad` label totals, category counts, and the quality targets from [06-evals](06-evals.md).
+- `eval_benchmarks` reads `api/evals/searches.yaml` deterministically at runtime to report real case counts, human-judged counts, snapshot coverage, `must`/`good`/`bad` label totals, category counts, and quality targets from [06-evals](06-evals.md).
 - Three retrieval tiers are compared transparently: `tags-only` (baseline), `co-billing` (shipped, offline-ready), and `hybrid pgvector + Jev` (pending live comparative run after paid-tier embedding backfill per [09-hybrid-retrieval](09-hybrid-retrieval.md)). No benchmark score is ever fabricated.
 
-### Architectural invariants
-`/lab` documents the core guarantees enforced by contract tests:
-- **ADR 0002**: Concert facts come only from Ticketmaster and JamBase records; unknown ranker IDs are dropped.
-- **ADR 0003**: Spotify is reached only via official OAuth on a separate exact-name shelf; Spotify account data never reaches an LLM or Search telemetry.
-- **Cost & abuse gates**: Same-origin checks, Turnstile bot verification, hashed per-visitor hourly limits, and daily/monthly spend caps guard every Search.
+## 2. Under-the-Hood Ranking Inspector (Opt-in)
 
-## 2. Under-the-Hood Ranking Inspector
+Each live Search (and cached-session filter-only Refinement) emits an additive `inspect` SSE event immediately before `poster` containing `reading`, `pool_total`, `shortlist_total`, `steps_ms`, and per-pick signals/grades (`InspectPick`).
 
-Each live Search (and cached-session filter-only Refinement) emits an additive `inspect` SSE event immediately before `poster`:
-- `reading`: the active Reading.
-- `pool_total` and `shortlist_total`: Concert pool size and shortlisted candidate count.
-- `steps_ms`: per-step millisecond timings captured during this Search.
-- `picks`: one `InspectPick` per Recommendation on the Poster, reporting `concert_id`, `artist`, `concert_name`, primary `signal` (`seed`, `one_hop`, `two_hops`, `co_billed`, `semantic`, `tags`, `genre`), `via` seed, shared `styles`, `match_score`, cumulative `support`, effective `grade`, raw `jev_level`, `lineup_match_count`, and `source`.
-
-On the Poster, a compact **Inspect ranking** toggle sits beside Grid/List/Share only when `inspect` metadata is present. It is closed by default so the Poster and Tickets remain free of numeric scores ([04-interface](04-interface.md)), opens an accessible X-ray panel with smooth reduced-motion-aware transitions, and closes cleanly via its button or `Escape`.
+- **Clean default Posters**: Everyday visitors never see an "Inspect ranking" button on Posters or a developer toggle in the header menu.
+- **Inspect inside `/lab`**: Opening `/lab` automatically renders the Ranking Inspector for the latest Search kept in that browser tab.
+- **Opt-in inline toggle**: `/lab` includes a browser-local switch (`Show Inspect button on Posters`) that unlocks the compact **Inspect ranking** drawer beside Grid/List/Share on Posters (also unlockable via `?inspect=1`).
 
 ## 3. Zero-Overhead & Failure Isolation
 
-- `lab.record_search` runs inside `run_search`'s shielded `finally` block and catches `RedisError` silently. Telemetry recording can never fail or block a Search.
+- `lab.record_search` runs inside `run_search`'s shielded `finally` block and catches database/Redis errors silently so telemetry can never fail or block a Search.
 - `SearchMetrics` forbids extra fields (`extra="forbid"`) and restricts `steps_ms` keys to fixed pipeline step names.

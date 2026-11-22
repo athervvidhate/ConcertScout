@@ -62,7 +62,7 @@ ROOM_TTL = dt.timedelta(days=30)
 FURTHEST_AHEAD = dt.timedelta(days=400)
 
 GROUPS_CREATE_PER_HOUR = 30
-GROUPS_READ_PER_HOUR = 300
+GROUPS_READ_PER_HOUR = 1200
 GROUPS_MUTATE_PER_HOUR = 180
 
 ROOMS_TABLE = "/rest/v1/group_rooms"
@@ -218,6 +218,56 @@ class JoinGroupRequest(BaseModel):
         return self
 
 
+class UpdateGroupRequest(BaseModel):
+    """Update a room's search location, title, date range, or budget cap."""
+
+    place: Name | None = None
+    title: RoomTitle | None = None
+    start_date: dt.date | None = None
+    end_date: dt.date | None = None
+    max_price: Annotated[float, Field(gt=0, le=10_000)] | None = None
+    clear_dates: bool = False
+    clear_max_price: bool = False
+    time_zone: Annotated[str, StringConstraints(max_length=64)] = "UTC"
+
+    @model_validator(mode="after")
+    def dates_hold_together(self) -> Self:
+        if (
+            not self.clear_dates
+            and self.start_date
+            and self.end_date
+            and self.end_date < self.start_date
+        ):
+            raise ValueError("end_date is before start_date")
+        furthest = clock.now_in(self.time_zone).date() + FURTHEST_AHEAD
+        for day in (self.start_date, self.end_date):
+            if day and day > furthest:
+                raise ValueError("dates too far ahead")
+        return self
+
+
+class UpdateMemberRequest(BaseModel):
+    """Update a friend's Artists or personal date/budget preferences inside a room."""
+
+    artists: Annotated[list[Name], Field(min_length=1, max_length=MAX_TASTE)]
+    start_date: dt.date | None = None
+    end_date: dt.date | None = None
+    max_price: Annotated[float, Field(gt=0, le=10_000)] | None = None
+    clear_dates: bool = False
+    clear_max_price: bool = False
+
+    @model_validator(mode="after")
+    def dates_hold_together(self) -> Self:
+        if (
+            not self.clear_dates
+            and self.start_date
+            and self.end_date
+            and self.end_date < self.start_date
+        ):
+            raise ValueError("end_date is before start_date")
+        return self
+
+
 class VoteRequest(BaseModel):
     member_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
     concert_id: ConcertId
@@ -251,6 +301,10 @@ class GroupStore(Protocol):
     ) -> tuple[StoredRoom, list[GroupMember], list[GroupVote]] | None: ...
 
     async def add_member(self, room_id: str, member: GroupMember) -> GroupMember: ...
+
+    async def update_room(self, room: StoredRoom) -> None: ...
+
+    async def update_member(self, room_id: str, member: GroupMember) -> GroupMember | None: ...
 
     async def upsert_vote(
         self, room_id: str, member_id: str, concert_id: str, vote: VoteChoice, now: dt.datetime
@@ -584,6 +638,45 @@ class SupabaseGroupStore:
             raise GroupStoreError("no member returned")
         return saved[0]
 
+    async def update_room(self, room: StoredRoom) -> None:
+        row = {
+            "title": room.title,
+            "place": room.place.model_dump(mode="json", exclude_none=True),
+            "start_date": room.start_date.isoformat() if room.start_date else None,
+            "end_date": room.end_date.isoformat() if room.end_date else None,
+            "max_price": room.max_price,
+            "concerts": [c.model_dump(mode="json", exclude_none=True) for c in room.concerts],
+        }
+        request = self._client.build_request(
+            "PATCH",
+            ROOMS_TABLE,
+            params={"id": f"eq.{room.id}"},
+            json=row,
+            headers=_server_headers(self._secret) | {"Prefer": "return=minimal"},
+        )
+        await _send_supabase(self._client, request)
+
+    async def update_member(self, room_id: str, member: GroupMember) -> GroupMember | None:
+        row = {
+            "artists": member.artists,
+            "start_date": member.start_date.isoformat() if member.start_date else None,
+            "end_date": member.end_date.isoformat() if member.end_date else None,
+            "max_price": member.max_price,
+        }
+        request = self._client.build_request(
+            "PATCH",
+            MEMBERS_TABLE,
+            params={"room_id": f"eq.{room_id}", "id": f"eq.{member.id}"},
+            json=row,
+            headers=_server_headers(self._secret) | {"Prefer": "return=representation"},
+        )
+        response = await _send_supabase(self._client, request)
+        try:
+            saved = [GroupMember.model_validate(r) for r in response.json()]
+        except ValueError as exc:
+            raise GroupStoreError(f"unreadable member: {type(exc).__name__}") from None
+        return saved[0] if saved else None
+
     async def upsert_vote(
         self, room_id: str, member_id: str, concert_id: str, vote: VoteChoice, now: dt.datetime
     ) -> None:
@@ -664,6 +757,33 @@ class RedisGroupStore:
         if record is None:
             raise GroupStoreError("room missing")
         record.members.append(member)
+        await self._write(record)
+        return member
+
+    async def update_room(self, room: StoredRoom) -> None:
+        record = await self._read(room.id)
+        if record is None:
+            raise GroupStoreError("room missing")
+        record.room = room
+        valid_ids = {c.id for c in room.concerts}
+        record.votes = [v for v in record.votes if v.concert_id in valid_ids]
+        await self._write(record)
+
+    async def update_member(self, room_id: str, member: GroupMember) -> GroupMember | None:
+        record = await self._read(room_id)
+        if record is None:
+            return None
+        updated = False
+        next_members: list[GroupMember] = []
+        for existing in record.members:
+            if existing.id == member.id:
+                next_members.append(member)
+                updated = True
+            else:
+                next_members.append(existing)
+        if not updated:
+            return None
+        record.members = next_members
         await self._write(record)
         return member
 
@@ -999,6 +1119,166 @@ def router(
         now_utc = dt.datetime.now(dt.UTC)
         room, members, votes = await load_room(room_id, now_utc)
         return await _assemble_state(room, members, votes, services, now_utc.date())
+
+    @routes.patch("/{room_id}", response_model=GroupRoomState, response_model_exclude_none=True)
+    async def update_group(
+        request: Request, room_id: str, body: UpdateGroupRequest
+    ) -> GroupRoomState:
+        await limit(request, "groups_mutate", GROUPS_MUTATE_PER_HOUR)
+        now_utc = dt.datetime.now(dt.UTC)
+        now_local = clock.now_in(body.time_zone)
+        room, members, votes = await load_room(room_id, now_utc)
+
+        next_place = room.place
+        place_changed = False
+        if body.place is not None and body.place.strip().casefold() != room.place.name.casefold():
+            try:
+                geocoded = await geocoder.geocode(services.geocoder, services.redis, body.place)
+            except geocoder.GeocoderError as exc:
+                logger.warning("Group Scout geocode failed: %s", exc)
+                raise Refused(
+                    503,
+                    "geocoder_unavailable",
+                    "Place lookup is not answering. Try again soon.",
+                ) from None
+            if geocoded is None:
+                raise Refused(
+                    404, "place_not_found", "We could not find that place. Try a city name."
+                )
+            next_place = geocoded
+            place_changed = True
+
+        next_start = (
+            None
+            if body.clear_dates
+            else (body.start_date if "start_date" in body.model_fields_set else room.start_date)
+        )
+        next_end = (
+            None
+            if body.clear_dates
+            else (body.end_date if "end_date" in body.model_fields_set else room.end_date)
+        )
+        if next_start and next_end and next_end < next_start:
+            raise Refused(422, "invalid_group", "End date must be on or after the start date.")
+
+        next_price = (
+            None
+            if body.clear_max_price
+            else (body.max_price if "max_price" in body.model_fields_set else room.max_price)
+        )
+        next_title = body.title or (
+            next_place.name if place_changed and room.title == room.place.name else room.title
+        )
+
+        dates_changed = next_start != room.start_date or next_end != room.end_date
+        next_concerts = room.concerts
+        if place_changed or dates_changed:
+            seed_artists = distinct_artists(
+                [artist for member in members for artist in member.artists[:IMPORTED_SEEDS]]
+            )[:IMPORTED_SEEDS]
+            try:
+                fetched = await pool.find_concerts(
+                    services.ticketmaster,
+                    services.musicbrainz,
+                    services.redis,
+                    next_place,
+                    seed_artists,
+                    next_start,
+                    next_end,
+                    now_local,
+                )
+            except ticketmaster.TicketmasterError:
+                raise Refused(
+                    503,
+                    "ticketmaster_unavailable",
+                    "Ticketmaster is not responding. Try again soon.",
+                ) from None
+            except limits.DailyLimitReached as exc:
+                raise Refused(
+                    429,
+                    "ticketmaster_limit",
+                    "We have used today's Ticketmaster allowance. Try again tomorrow.",
+                    exc.retry_after,
+                ) from None
+            next_concerts = list(fetched[:MAX_POOL_CONCERTS])
+
+        updated_room = room.model_copy(
+            update={
+                "title": next_title,
+                "place": next_place,
+                "start_date": next_start,
+                "end_date": next_end,
+                "max_price": next_price,
+                "concerts": next_concerts,
+            }
+        )
+        try:
+            await active_store.update_room(updated_room)
+        except GroupStoreError as exc:
+            logger.warning("Group Scout room update failed: %s", exc)
+            raise unavailable from None
+
+        valid_ids = {c.id for c in next_concerts}
+        kept_votes = [v for v in votes if v.concert_id in valid_ids]
+        return await _assemble_state(updated_room, members, kept_votes, services, now_local.date())
+
+    @routes.patch(
+        "/{room_id}/members/{member_id}",
+        response_model=GroupRoomState,
+        response_model_exclude_none=True,
+    )
+    async def update_member_profile(
+        request: Request, room_id: str, member_id: str, body: UpdateMemberRequest
+    ) -> GroupRoomState:
+        await limit(request, "groups_mutate", GROUPS_MUTATE_PER_HOUR)
+        if not UUID_RE.fullmatch(member_id):
+            raise Refused(404, "member_not_found", "That friend is not in this room.")
+        cleaned_artists = distinct_artists(body.artists)
+        if not cleaned_artists:
+            raise Refused(422, "invalid_group", "Add at least one Artist to your Taste.")
+
+        now_utc = dt.datetime.now(dt.UTC)
+        room, members, votes = await load_room(room_id, now_utc)
+        existing = next((m for m in members if m.id == member_id), None)
+        if existing is None:
+            raise Refused(404, "member_not_found", "That friend is not in this room.")
+
+        next_start = (
+            None
+            if body.clear_dates
+            else (body.start_date if "start_date" in body.model_fields_set else existing.start_date)
+        )
+        next_end = (
+            None
+            if body.clear_dates
+            else (body.end_date if "end_date" in body.model_fields_set else existing.end_date)
+        )
+        if next_start and next_end and next_end < next_start:
+            raise Refused(422, "invalid_group", "End date must be on or after the start date.")
+        next_price = (
+            None
+            if body.clear_max_price
+            else (body.max_price if "max_price" in body.model_fields_set else existing.max_price)
+        )
+
+        candidate = existing.model_copy(
+            update={
+                "artists": cleaned_artists,
+                "start_date": next_start,
+                "end_date": next_end,
+                "max_price": next_price,
+            }
+        )
+        try:
+            saved = await active_store.update_member(room.id, candidate)
+        except GroupStoreError as exc:
+            logger.warning("Group Scout member update failed: %s", exc)
+            raise unavailable from None
+        if saved is None:
+            raise Refused(404, "member_not_found", "That friend is not in this room.")
+
+        updated_members = [saved if m.id == member_id else m for m in members]
+        return await _assemble_state(room, updated_members, votes, services, now_utc.date())
 
     @routes.post(
         "/{room_id}/members",

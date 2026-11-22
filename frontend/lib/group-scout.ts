@@ -102,6 +102,25 @@ export type JoinGroupInput = {
   max_price?: number;
 };
 
+export type UpdateGroupInput = {
+  place?: string;
+  title?: string;
+  start_date?: string;
+  end_date?: string;
+  max_price?: number;
+  clear_dates?: boolean;
+  clear_max_price?: boolean;
+};
+
+export type UpdateMemberInput = {
+  artists: string[];
+  start_date?: string;
+  end_date?: string;
+  max_price?: number;
+  clear_dates?: boolean;
+  clear_max_price?: boolean;
+};
+
 export const QUICK_PICK_ARTISTS = [
   "Khruangbin",
   "Tame Impala",
@@ -273,6 +292,36 @@ export async function leaveGroupRoom(
   return response.json();
 }
 
+export async function updateGroupRoom(
+  roomId: string,
+  input: UpdateGroupInput,
+): Promise<GroupRoomState> {
+  const response = await fetch(`${API_URL}/groups/${encodeURIComponent(roomId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...input, time_zone: viewerZone() }),
+  });
+  if (!response.ok) throw await refusal(response);
+  return response.json();
+}
+
+export async function updateGroupMember(
+  roomId: string,
+  memberId: string,
+  input: UpdateMemberInput,
+): Promise<GroupRoomState> {
+  const response = await fetch(
+    `${API_URL}/groups/${encodeURIComponent(roomId)}/members/${encodeURIComponent(memberId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!response.ok) throw await refusal(response);
+  return response.json();
+}
+
 let realtimeClient: SupabaseClient | null = null;
 let realtimeLoading: Promise<SupabaseClient | null> | null = null;
 
@@ -323,6 +372,18 @@ export function subscribeGroupRoom(
     }
     const channel = client
       .channel(`group-room:${roomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "group_rooms",
+          filter: `id=eq.${roomId}`,
+        },
+        () => {
+          if (!closed) onChange();
+        },
+      )
       .on(
         "postgres_changes",
         {

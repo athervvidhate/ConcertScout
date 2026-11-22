@@ -6,7 +6,7 @@ import { SiteHeader } from "@/components/site-header";
 export const metadata: Metadata = {
   title: "Engineering Lab · Concert Scout",
   description:
-    "Live anonymized Search telemetry, hybrid retrieval benchmarks, and architectural invariants.",
+    "Live Search speed, cost, cache numbers, and how Concert Scout ranks shows.",
 };
 
 export default function LabPage() {

@@ -6,8 +6,8 @@ Every Concert fact stays strictly source-backed from Ticketmaster and JamBase ([
 
 ## 1. Rooms and guest participation
 
-- **Create (`/g`)**: A visitor chooses a place (geocoded via Geoapify), optional start/end dates, an optional per-ticket budget cap, their display name, and their Taste (typed/picked Artists or prefilled from their local Taste). The API fetches the place's Concert pool once (bounded and cached) and creates a room with a 128-bit unguessable capability ID (`[A-Za-z0-9_-]{22}`), expiring after 30 days.
-- **Join (`/g/[id]`)**: Friends open the invite link with no sign-in required, enter a display name, their Taste (up to 100 Artists), optional available dates, and an optional max price. Rooms cap membership at 6 friends; leaving removes the member and cascades their votes.
+- **Create (`/g`)**: A visitor chooses a place (geocoded via Geoapify), optional start/end dates, an optional per-ticket budget cap, their display name, and their Taste using live `/suggest` Artist autocomplete with cascading related-Artist suggestions (or prefilled from their local Taste). The API fetches the place's Concert pool once (bounded and cached) and creates a room with a 128-bit unguessable capability ID (`[A-Za-z0-9_-]{22}`), expiring after 30 days.
+- **Join & edit live (`/g/[id]`)**: Friends open the invite link with no sign-in required, enter a display name, pick Artists with the same autocomplete + related-Artist cascade (up to 100 Artists), optional available dates, and an optional max price. Anyone in the room can edit the room's location, date range, or budget (`PATCH /groups/{id}`, refreshing the Concert pool when place or dates change), and joined friends can add/remove Artists or adjust personal constraints at any time (`PATCH /groups/{id}/members/{member_id}`). Rooms cap membership at 6 friends; leaving removes the member and cascades their votes.
 
 ## 2. Schema, RLS and live sync
 

@@ -447,6 +447,75 @@ async def test_group_create_uses_source_concerts_unchanged(
     assert returned_ids == {c.id for c in CONCERTS}
 
 
+async def test_group_edit_room_and_member_artists_live(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created = await client.post(
+        "/groups",
+        json={
+            "place": "San Francisco, CA",
+            "title": "Friday Crew",
+            "member_name": "Maya",
+            "artists": ["Contract Artist"],
+        },
+    )
+    assert created.status_code == 200
+    room_id = created.json()["room"]["id"]
+    maya_id = created.json()["member_id"]
+
+    # Edit Maya's Artists inside the room without leaving -> new artist appears and re-ranks.
+    edited_member = await client.patch(
+        f"/groups/{room_id}/members/{maya_id}",
+        json={"artists": ["Contract Artist", "Second Contract Artist"]},
+    )
+    assert edited_member.status_code == 200
+    assert edited_member.json()["members"][0]["artists"] == [
+        "Contract Artist",
+        "Second Contract Artist",
+    ]
+    pick_two = next(
+        p for p in edited_member.json()["picks"] if p["concert"]["id"] == "contract-two"
+    )
+    assert any(m["name"] == "Maya" and m["badge"] == "Named" for m in pick_two["member_matches"])
+
+    # Edit room budget only -> does not re-fetch pool, filters strictly by ADR 0002 price.
+    find_spy = AsyncMock(return_value=CONCERTS)
+    monkeypatch.setattr(pool, "find_concerts", find_spy)
+    budget_updated = await client.patch(
+        f"/groups/{room_id}",
+        json={"max_price": 40.0},
+    )
+    assert budget_updated.status_code == 200
+    assert budget_updated.json()["max_price"] == 40.0
+    assert find_spy.await_count == 0
+
+    from concert_scout.models import Place
+
+    # Edit room location & dates -> geocodes and refreshes Concert pool.
+    new_place = Place(
+        name="Brooklyn, New York",
+        lat=40.6782,
+        lon=-73.9442,
+        state_code="NY",
+        country_code="US",
+    )
+    monkeypatch.setattr(geocoder, "geocode", AsyncMock(return_value=new_place))
+    moved = await client.patch(
+        f"/groups/{room_id}",
+        json={
+            "place": "Brooklyn, NY",
+            "start_date": DAY.isoformat(),
+            "end_date": (DAY + dt.timedelta(days=14)).isoformat(),
+            "clear_max_price": True,
+        },
+    )
+    assert moved.status_code == 200
+    assert moved.json()["place"]["name"] == "Brooklyn, New York"
+    assert moved.json()["start_date"] == DAY.isoformat()
+    assert "max_price" not in moved.json()
+    assert find_spy.await_count == 1
+
+
 # ---------------------------------------------------------------------------
 # Real Supabase Postgres + RLS integration tests
 # ---------------------------------------------------------------------------

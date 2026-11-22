@@ -365,7 +365,7 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_credentials=True,
         allow_headers=["Content-Type", "Authorization"],
     )
@@ -514,7 +514,11 @@ def create_app(
     @app.get("/lab", response_model=lab.LabSummary)
     async def engineering_lab(response: Response) -> lab.LabSummary:
         response.headers["Cache-Control"] = "public, max-age=30"
-        return await lab.summarize(services.redis)
+        return await lab.summarize(
+            services.redis,
+            supabase_client=services.supabase,
+            supabase_secret_key=services.supabase_secret_key,
+        )
 
     @app.get("/examples", response_model=home.Examples, response_model_exclude_none=True)
     async def examples() -> home.Examples:

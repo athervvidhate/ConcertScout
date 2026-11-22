@@ -161,7 +161,9 @@ async def test_get_lab_returns_200_when_redis_is_empty_or_fails() -> None:
         "cobilling",
         "hybrid_pgvector_jev",
     ]
-    assert len(body["guarantees"]) >= 3
+    assert "guarantees" not in body
+    assert body["baseline"]["sample_count"] == 158
+    assert body["baseline"]["p50_total_ms"] > 0
 
     broken = FakeAsyncRedis()
     broken.lrange = AsyncMock(side_effect=RedisConnectionError("down"))  # type: ignore[method-assign]
@@ -379,3 +381,92 @@ def test_build_inspect_preserves_cobilled_semantic_and_tags_signals() -> None:
     assert inspected.picks[0].via == "Four Tet"
     assert inspected.picks[1].support == 0.6
     assert inspected.picks[2].styles == ["uk garage", "2-step"]
+
+
+async def test_postgres_telemetry_persists_all_time_count_and_caches_summary() -> None:
+    import httpx
+    from pydantic import SecretStr
+
+    stored_rows: list[dict[str, Any]] = []
+    get_calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal get_calls
+        if request.method == "POST" and request.url.path == lab.TELEMETRY_TABLE:
+            batch = json.loads(request.content.decode("utf-8"))
+            stored_rows.extend(batch)
+            return httpx.Response(201)
+        if request.method == "GET" and request.url.path == lab.TELEMETRY_TABLE:
+            get_calls += 1
+            total = len(stored_rows)
+            selected = [
+                {k: v for k, v in row.items() if k != "source"} for row in reversed(stored_rows)
+            ]
+            return httpx.Response(
+                200,
+                json=selected,
+                headers={"content-range": f"0-{max(0, total - 1)}/{total}"},
+            )
+        raise AssertionError(f"unexpected request {request.method} {request.url}")
+
+    redis = FakeAsyncRedis()
+    secret = SecretStr("test-secret")
+    async with httpx.AsyncClient(
+        base_url="https://supabase.test", transport=httpx.MockTransport(handler)
+    ) as sb:
+        await lab.record_search(
+            redis,
+            lab.SearchMetrics(
+                total_ms=820.0,
+                steps_ms={"interpret": 110.0, "pool": 400.0},
+                cost_usd=0.0025,
+                cost_complete=True,
+                cache_hits=1,
+                cache_misses=2,
+                pool_total=50,
+                shortlist_total=20,
+                picks_total=6,
+                recorded_at="2026-11-22T15:00Z",
+            ),
+            supabase_client=sb,
+            supabase_secret_key=secret,
+        )
+        first = await lab.summarize(redis, supabase_client=sb, supabase_secret_key=secret)
+        second = await lab.summarize(redis, supabase_client=sb, supabase_secret_key=secret)
+
+    assert first.storage_backend == "postgres"
+    assert first.sample_count == 1
+    assert first.all_time_count == 1
+    assert first.p50_total_ms == 820.0
+    assert second.sample_count == 1
+    # Second call within 30s hits Redis summary cache instead of re-querying Postgres.
+    assert get_calls == 1
+
+
+def test_backfill_script_parses_span_logs_without_pii() -> None:
+    from scripts.backfill_lab_telemetry import parse_log_lines
+
+    trace_a = "a" * 32
+    lines = [
+        (
+            f"2026-11-20T18:12:01Z search span=interpret trace={trace_a} "
+            "duration_ms=145.20 attributes={'input_tokens': 100}"
+        ),
+        (
+            f"2026-11-20T18:12:02Z search span=pool trace={trace_a} "
+            "duration_ms=910.50 attributes={}"
+        ),
+        (
+            f"2026-11-20T18:12:03Z search span=search trace={trace_a} "
+            "duration_ms=1420.75 attributes={'cost_complete': True, 'cost_usd': 0.0031}"
+        ),
+        "unrelated log line with secret query text that must be ignored",
+    ]
+    rows = parse_log_lines(lines)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.total_ms == 1420.8
+    assert row.steps_ms == {"interpret": 145.2, "pool": 910.5}
+    assert row.cost_usd == 0.0031
+    assert row.cost_complete is True
+    assert row.recorded_at == "2026-11-20T18:00Z"
