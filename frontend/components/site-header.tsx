@@ -42,6 +42,7 @@ export function SiteHeader({ onHome, hideBrand, onTaste, tasteLabel }: Props) {
   const { saved } = useSavedConcerts();
   const [signingIn, setSigningIn] = useState(false);
   const showSaved = path !== "/saved";
+  const showGroup = !path.startsWith("/g");
   const showSignIn = account.status === "guest";
   const showAccount = account.status === "signed-in" && path !== "/account";
 
@@ -70,7 +71,7 @@ export function SiteHeader({ onHome, hideBrand, onTaste, tasteLabel }: Props) {
             <SavedCount value={saved.length} />
           </Link>
         )}
-        {(onTaste || showSaved || showSignIn || showAccount) && (
+        {(onTaste || showSaved || showGroup || showSignIn || showAccount) && (
           <Menu.Root modal={false}>
             <Menu.Trigger className="site-menu" aria-label="Menu">
               <MenuIcon aria-hidden size={26} />
@@ -88,6 +89,11 @@ export function SiteHeader({ onHome, hideBrand, onTaste, tasteLabel }: Props) {
                   {showSaved && (
                     <Menu.LinkItem render={<Link href="/saved" />} closeOnClick>
                       Saved Concerts <SavedCount value={saved.length} />
+                    </Menu.LinkItem>
+                  )}
+                  {showGroup && (
+                    <Menu.LinkItem render={<Link href="/g" />} closeOnClick>
+                      Group Scout
                     </Menu.LinkItem>
                   )}
                   {onTaste && (
