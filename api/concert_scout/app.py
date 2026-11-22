@@ -23,6 +23,7 @@ from concert_scout import (
     cache,
     clock,
     feedback,
+    group_scout,
     home,
     interpreter,
     limits,
@@ -431,6 +432,9 @@ def create_app(
         if request.url.path.startswith("/search/") and request.url.path.endswith("/sculpt"):
             message = "Check your Poster filters and try again."
             return _failure(422, SearchError(code="invalid_sculpt", message=message))
+        if request.url.path.startswith("/groups"):
+            message = "Check your Group Scout details and try again."
+            return _failure(422, SearchError(code="invalid_group", message=message))
         if request.url.path.startswith("/share"):
             message = "That is not a Search you can share."
             return _failure(422, SearchError(code="invalid_share", message=message))
@@ -482,6 +486,7 @@ def create_app(
         )
     )
     app.include_router(feedback.router(settings, services.redis, transport))
+    app.include_router(group_scout.router(settings, services))
     app.include_router(taste_profile.guest_router(settings, services))
     if accounts_client:
         app.include_router(accounts.router(settings, accounts_client, services))
