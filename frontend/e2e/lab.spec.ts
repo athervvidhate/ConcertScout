@@ -22,10 +22,15 @@ test("Engineering Lab renders telemetry, cold baseline and eval suite without AD
     page.getByRole("heading", { name: "Retrieval Eval Suite" }),
   ).toBeVisible();
 
-  // Architectural Invariants / ADRs section is removed.
+  // Architectural Invariants / ADRs section is removed, and no em-dashes or internal repo paths appear.
   await expect(
     page.getByRole("heading", { name: "Architectural Invariants" }),
   ).toHaveCount(0);
+  const bodyText = await page.evaluate(() => document.body.innerText);
+  expect(bodyText).not.toContain("—");
+  expect(bodyText).not.toContain("Spec 06");
+  expect(bodyText).not.toContain("searches.yaml");
+  expect(bodyText).not.toContain("test_cobilling.py");
 
   // Eval architecture tiers are visible without fabricating scores.
   await expect(

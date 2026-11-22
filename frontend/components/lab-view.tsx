@@ -108,14 +108,12 @@ export function LabView() {
         <div className="lab-hero-copy">
           <p className="lab-eyebrow">
             <Activity aria-hidden size={14} />
-            Public telemetry · Zero PII
+            Live telemetry · No personal data
           </p>
           <h1 id="lab-title">Engineering Lab</h1>
           <p className="lab-lead">
-            Anonymized latency, cost, and cache metrics from Concert Scout&apos;s
-            Search pipeline, paired with our evaluation suite and an under-the-hood
-            ranking inspector. Search text, Artist names, coordinates, and Spotify
-            data never enter telemetry.
+            Live speed, cost, and cache numbers from Concert Scout&apos;s Search
+            pipeline, plus a look at how shows get ranked.
           </p>
         </div>
         <div className="lab-hero-actions">
@@ -134,7 +132,7 @@ export function LabView() {
               size={16}
               className={refreshing ? "lab-spin" : undefined}
             />
-            {refreshing ? "Refreshing…" : "Refresh"}
+            {refreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
       </section>
@@ -153,8 +151,8 @@ export function LabView() {
           <div className="lab-kpis">
             {[0, 1, 2, 3].map((slot) => (
               <div key={slot} className="lab-kpi lab-skeleton">
-                <span className="lab-kpi-label">Loading…</span>
-                <strong className="lab-kpi-value">—</strong>
+                <span className="lab-kpi-label">Loading...</span>
+                <strong className="lab-kpi-value">-</strong>
               </div>
             ))}
           </div>
@@ -167,30 +165,13 @@ export function LabView() {
                 <div>
                   <h2 id="lab-telemetry-h">Search Telemetry</h2>
                   <p>
-                    {summary.storage_backend === "postgres" ? (
-                      <>
-                        Persisted in Postgres (aggregating up to the latest{" "}
-                        <span className="lab-num">{summary.window_size}</span>{" "}
-                        Searches out of{" "}
-                        <span className="lab-num">{summary.all_time_count}</span>{" "}
-                        all-time). Numeric counts and timings only.
-                      </>
-                    ) : (
-                      <>
-                        Bounded Redis ring buffer (latest{" "}
-                        <span className="lab-num">{summary.window_size}</span>{" "}
-                        Searches,{" "}
-                        <span className="lab-num">
-                          {summary.retention_days ?? 7}
-                        </span>
-                        -day TTL). Numeric counts and timings only.
-                      </>
-                    )}
+                    Counts and timings only. Search text, Artist names, and
+                    account data are never logged.
                   </p>
                 </div>
                 {summary.latest_bucket && (
                   <p className="lab-bucket">
-                    Latest hour bucket:{" "}
+                    Updated:{" "}
                     <span className="lab-num">{summary.latest_bucket}</span>
                   </p>
                 )}
@@ -198,16 +179,16 @@ export function LabView() {
 
               {!summary.telemetry_available && (
                 <p role="status" className="lab-note">
-                  Live telemetry counters are temporarily unavailable. Eval suite
-                  coverage and recorded baseline metrics below remain available.
+                  Live counters are temporarily unavailable. Baseline timings
+                  and eval coverage are shown below.
                 </p>
               )}
 
               {summary.telemetry_available && summary.sample_count === 0 && (
                 <p role="status" className="lab-note">
                   {baseline
-                    ? `No new live Searches persisted yet — showing the ${baseline.sample_count}-Search cold-capture baseline (${baseline.first_date} to ${baseline.last_date}) below until live production runs accumulate.`
-                    : "No live Searches recorded yet. Run a Search on the home page to populate real p50/p95 step timings and cache rates."}
+                    ? `No live Searches logged yet. Showing the ${baseline.sample_count}-run cold baseline until new Searches come in.`
+                    : "No live Searches logged yet. Run a Search on the home page to populate live timings."}
                 </p>
               )}
 
@@ -224,7 +205,7 @@ export function LabView() {
                   <span className="lab-kpi-sub">
                     p50 total · p95 {formatMs(displayedP95)}
                     {!hasLiveSamples && baseline
-                      ? ` (${baseline.sample_count} cold captures)`
+                      ? ` (${baseline.sample_count} cold runs)`
                       : ""}
                   </span>
                 </article>
@@ -235,8 +216,8 @@ export function LabView() {
                   </strong>
                   <span className="lab-kpi-sub">
                     {summary.cost_complete_samples > 0
-                      ? `${summary.cost_complete_samples} priced samples`
-                      : "Awaiting live priced runs"}
+                      ? `${summary.cost_complete_samples} priced runs`
+                      : "Waiting for priced runs"}
                   </span>
                 </article>
                 <article className="lab-kpi">
@@ -246,7 +227,7 @@ export function LabView() {
                   </strong>
                   <span className="lab-kpi-sub">
                     {summary.cache_hits + summary.cache_misses > 0
-                      ? `${summary.cache_hits} hits / ${summary.cache_hits + summary.cache_misses} model checks`
+                      ? `${summary.cache_hits} hits / ${summary.cache_hits + summary.cache_misses} checks`
                       : "No cache checks yet"}
                   </span>
                 </article>
@@ -265,7 +246,7 @@ export function LabView() {
                     summary.avg_pool_total !== undefined
                       ? `Avg ${summary.avg_pool_total} pool → ${summary.avg_shortlist_total ?? 0} shortlist → ${summary.avg_picks_total ?? 0} picks`
                       : baseline
-                        ? `${baseline.sample_count} cold baseline captures`
+                        ? `${baseline.sample_count} cold baseline runs`
                         : "Pool → shortlist → Poster"}
                   </span>
                 </article>
@@ -273,12 +254,8 @@ export function LabView() {
 
               {hasLiveSamples && baseline && (
                 <p className="lab-baseline-strip">
-                  <strong>Cold-capture baseline</strong> ({baseline.sample_count}{" "}
-                  unwarmed snapshots,{" "}
-                  <span className="lab-num">
-                    {baseline.first_date} – {baseline.last_date}
-                  </span>
-                  ): p50{" "}
+                  <strong>Cold-cache baseline</strong> ({baseline.sample_count}{" "}
+                  runs): p50{" "}
                   <span className="lab-num">
                     {formatMs(baseline.p50_total_ms)}
                   </span>{" "}
@@ -295,9 +272,8 @@ export function LabView() {
                 <div>
                   <h2 id="lab-steps-h">Pipeline Step Latency</h2>
                   <p>
-                    Median (p50) and tail (p95) milliseconds per stage. Place,
-                    Artist graph, co-billing, and Taste embedding run in
-                    parallel behind the Concert pool fetch.
+                    Median (p50) and tail (p95) time per step. Place lookup,
+                    Artist graphs, and embeddings run in parallel.
                   </p>
                 </div>
                 <div className="lab-legend" aria-hidden="true">
@@ -363,8 +339,8 @@ export function LabView() {
                       </div>
                       <div className="lab-bar-track" aria-hidden="true" />
                       <div className="lab-bar-nums">
-                        <span>—</span>
-                        <span className="lab-bar-nums-p95">—</span>
+                        <span>-</span>
+                        <span className="lab-bar-nums-p95">-</span>
                       </div>
                     </div>
                   ))}
@@ -380,9 +356,8 @@ export function LabView() {
                     Search Ranking Inspector
                   </h2>
                   <p>
-                    Inspect the exact Reading, pool funnel, match signals, and
-                    Jev grade levels for your latest Search in this tab—kept out
-                    of everyday Posters unless you opt in below.
+                    See how your latest Search in this tab was parsed, matched,
+                    and graded.
                   </p>
                 </div>
                 <button
@@ -396,7 +371,7 @@ export function LabView() {
                     <span className="lab-switch-thumb" />
                   </span>
                   <span className="lab-switch-label">
-                    Show Inspect button on Posters (this browser)
+                    Show Inspect button on Posters
                   </span>
                 </button>
               </div>
@@ -411,10 +386,8 @@ export function LabView() {
               ) : (
                 <div className="lab-inspector-empty">
                   <p>
-                    Run any Search on the home page in this tab, then return
-                    here to inspect its Reading, match signals, and Jev grades—or
-                    flip the switch above to show the inline{" "}
-                    <strong>Inspect ranking</strong> toggle directly on Posters.
+                    Run a Search on the home page in this tab, then come back
+                    here to inspect how each pick was ranked.
                   </p>
                   <Link href="/" className="lab-cta">
                     Run a Search
@@ -432,10 +405,8 @@ export function LabView() {
                     Retrieval Eval Suite
                   </h2>
                   <p>
-                    Human-judged Searches in{" "}
-                    <code>{summary.eval_benchmarks.source_file}</code> covering
-                    seed Artists, sparse electronic scenes, plain descriptions,
-                    and edge cases.
+                    Human-judged Searches testing recommendations across
+                    mainstream, niche, and sparse local scenes.
                   </p>
                 </div>
               </div>
@@ -448,10 +419,6 @@ export function LabView() {
                 <div className="lab-stat-pill">
                   <strong>{summary.eval_benchmarks.judged_cases}</strong>
                   <span>human-judged</span>
-                </div>
-                <div className="lab-stat-pill">
-                  <strong>{summary.eval_benchmarks.snapshot_cases}</strong>
-                  <span>frozen snapshots</span>
                 </div>
                 <div className="lab-stat-pill">
                   <strong>{summary.eval_benchmarks.must_labels}</strong>
@@ -500,17 +467,16 @@ export function LabView() {
                         </dd>
                       </div>
                       <div>
-                        <dt>Ranking stage</dt>
+                        <dt>Ranking</dt>
                         <dd>{tier.ranker}</dd>
                       </div>
                     </dl>
-                    <p className="lab-tier-notes">{tier.notes}</p>
                   </article>
                 ))}
               </div>
 
               <div className="lab-targets">
-                <h3>Quality targets (Spec 06)</h3>
+                <h3>Quality targets</h3>
                 <ul>
                   {Object.entries(summary.eval_benchmarks.targets).map(
                     ([key, target]) => (
@@ -518,9 +484,6 @@ export function LabView() {
                     ),
                   )}
                 </ul>
-                <p className="lab-measurement-note">
-                  {summary.eval_benchmarks.measurement_note}
-                </p>
               </div>
             </section>
           </>

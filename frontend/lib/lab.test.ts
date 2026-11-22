@@ -12,8 +12,8 @@ import {
 
 describe("lab formatters", () => {
   it("formats latency in milliseconds and seconds", () => {
-    expect(formatMs(null)).toBe("—");
-    expect(formatMs(undefined)).toBe("—");
+    expect(formatMs(null)).toBe("-");
+    expect(formatMs(undefined)).toBe("-");
     expect(formatMs(0)).toBe("0 ms");
     expect(formatMs(0.4)).toBe("< 1 ms");
     expect(formatMs(142.6)).toBe("143 ms");
@@ -22,7 +22,7 @@ describe("lab formatters", () => {
   });
 
   it("formats Search cost in USD cents and dollars", () => {
-    expect(formatCostCents(null)).toBe("—");
+    expect(formatCostCents(null)).toBe("-");
     expect(formatCostCents(0)).toBe("0.00¢");
     expect(formatCostCents(0.00001)).toBe("< 0.01¢");
     expect(formatCostCents(0.0014)).toBe("0.14¢");
@@ -31,7 +31,7 @@ describe("lab formatters", () => {
   });
 
   it("formats cache hit rate percentage", () => {
-    expect(formatPercent(null)).toBe("—");
+    expect(formatPercent(null)).toBe("-");
     expect(formatPercent(0)).toBe("0%");
     expect(formatPercent(0.6667)).toBe("67%");
     expect(formatPercent(1)).toBe("100%");

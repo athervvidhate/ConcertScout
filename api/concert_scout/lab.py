@@ -456,58 +456,32 @@ def _eval_tiers() -> list[EvalTier]:
         EvalTier(
             id="tags_only",
             name="Tags + ListenBrainz graph",
-            signals=["seed", "one_hop", "two_hops", "tags", "genre"],
-            ranker="Deterministic shortlist + Jev",
+            signals=["Seed", "1-hop", "2-hop", "Tags", "Genre"],
+            ranker="Shortlist + Jev",
             status="baseline",
-            status_label="Baseline",
-            summary=(
-                "MusicBrainz/ListenBrainz 1-hop & 2-hop similarity with IDF-weighted "
-                "tags and Ticketmaster subgenres."
-            ),
-            notes=(
-                "Strong for mainstream rock/country/pop seeds; struggles with "
-                "underground electronic and sparse local tags."
-            ),
+            status_label="Layer 1",
+            summary="Artist similarity graphs, weighted style tags, and venue genres.",
+            notes="",
         ),
         EvalTier(
             id="cobilling",
             name="+ Live Co-Billing Graph",
-            signals=["seed", "one_hop", "two_hops", "co_billed", "tags", "genre"],
-            ranker="Shortlist (CO_BILLED_WEIGHT=0.72) + Jev",
+            signals=["Co-billed", "Club bills"],
+            ranker="Shortlist + Jev",
             status="shipped_offline_ready",
-            status_label="Shipped · Offline ready",
-            summary=(
-                "Mines real club/theater bill co-appearances (2–40 Artists, "
-                "mega-festivals excluded) during Catalog sync."
-            ),
-            notes=(
-                "Captures live booking scenes that streaming popularity misses; "
-                "unit-tested offline in test_cobilling.py."
-            ),
+            status_label="Layer 2",
+            summary="Club and theater lineups showing which Artists actually share bills.",
+            notes="",
         ),
         EvalTier(
             id="hybrid_pgvector_jev",
             name="Hybrid pgvector + Jev",
-            signals=[
-                "seed",
-                "one_hop",
-                "two_hops",
-                "co_billed",
-                "semantic",
-                "tags",
-                "genre",
-            ],
-            ranker="Pool-scoped pgvector cosine (512d) + Jev 1.14 + Haiku reasons",
+            signals=["Semantic", "512d embeddings", "Jev grade"],
+            ranker="pgvector cosine + Jev",
             status="pending_live_eval",
-            status_label="Pending live eval",
-            summary=(
-                "Source-grounded Sonic Cards & graph-propagated centroids scored "
-                "in parallel with zero extra critical-path latency."
-            ),
-            notes=(
-                "Code, migration, and fallback contracts are shipped; full before/after "
-                "eval run awaits paid-tier Gemini embedding backfill."
-            ),
+            status_label="Layer 3",
+            summary="Artist embeddings and learned relevance grading scored in parallel.",
+            notes="",
         ),
     ]
 
@@ -558,12 +532,7 @@ def load_eval_benchmarks(path: Path = EVAL_SEARCHES_PATH) -> EvalSuiteSummary:
             "p95_poster_latency": "< 15s time to poster (p95)",
         },
         tiers=_eval_tiers(),
-        measurement_note=(
-            "Suite counts are computed live from api/evals/searches.yaml. Offline snapshot "
-            "replays run with zero API keys; comparative before/after live scores for Hybrid "
-            "pgvector + Jev are explicitly marked pending until the paid-tier embedding "
-            "backfill completes."
-        ),
+        measurement_note="",
     )
 
 

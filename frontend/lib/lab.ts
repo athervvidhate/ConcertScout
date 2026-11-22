@@ -150,7 +150,7 @@ const STEP_LABELS: Record<string, string> = {
 };
 
 export function formatMs(ms?: number | null): string {
-  if (ms === null || ms === undefined || !Number.isFinite(ms)) return "—";
+  if (ms === null || ms === undefined || !Number.isFinite(ms)) return "-";
   if (ms < 0) return "0 ms";
   if (ms > 0 && ms < 1) return "< 1 ms";
   if (ms < 1000) return `${Math.round(ms)} ms`;
@@ -158,7 +158,7 @@ export function formatMs(ms?: number | null): string {
 }
 
 export function formatCostCents(usd?: number | null): string {
-  if (usd === null || usd === undefined || !Number.isFinite(usd)) return "—";
+  if (usd === null || usd === undefined || !Number.isFinite(usd)) return "-";
   if (usd <= 0) return "0.00¢";
   const cents = usd * 100;
   if (cents < 0.01) return "< 0.01¢";
@@ -167,7 +167,7 @@ export function formatCostCents(usd?: number | null): string {
 }
 
 export function formatPercent(rate?: number | null): string {
-  if (rate === null || rate === undefined || !Number.isFinite(rate)) return "—";
+  if (rate === null || rate === undefined || !Number.isFinite(rate)) return "-";
   return `${Math.round(Math.max(0, Math.min(1, rate)) * 100)}%`;
 }
 

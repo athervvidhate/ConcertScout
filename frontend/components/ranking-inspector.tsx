@@ -256,7 +256,7 @@ export function RankingInspector({
                           <strong>
                             {pick.support !== null && pick.support !== undefined
                               ? pick.support.toFixed(2)
-                              : "—"}
+                              : "-"}
                           </strong>
                         </div>
                         <div
