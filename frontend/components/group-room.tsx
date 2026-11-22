@@ -56,7 +56,7 @@ import {
 import { SearchRefused } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
 
-const POLL_MS = 2500;
+const POLL_MS = 5000;
 
 const AVATAR_TONES = [
   "tone-0",
@@ -144,12 +144,19 @@ export function GroupRoom({ roomId }: { roomId: string }) {
   }, []);
 
   const refreshRoom = useCallback(
-    async (signal?: AbortSignal) => {
+    async (signal?: AbortSignal, background = false) => {
       try {
         const next = await fetchGroupRoom(roomId, signal);
         if (!signal?.aborted) applyLoadedRoom(next);
       } catch (caught) {
-        if (!signal?.aborted) applyLoadError(caught);
+        if (signal?.aborted) return;
+        if (
+          background &&
+          !(caught instanceof SearchRefused && caught.code === "group_not_found")
+        ) {
+          return;
+        }
+        applyLoadError(caught);
       } finally {
         if (!signal?.aborted) setLoading(false);
       }
@@ -184,14 +191,14 @@ export function GroupRoom({ roomId }: { roomId: string }) {
       if (pollInterval) return;
       pollInterval = setInterval(() => {
         if (document.visibilityState === "visible") {
-          void refreshRoom();
+          void refreshRoom(undefined, true);
         }
       }, POLL_MS);
     };
 
     const unsubscribe = subscribeGroupRoom(
       activeRoomId,
-      () => void refreshRoom(),
+      () => void refreshRoom(undefined, true),
       startPolling,
       () => setSyncMode("live"),
     );
