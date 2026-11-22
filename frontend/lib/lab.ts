@@ -21,7 +21,7 @@ export type InspectPick = {
   grade?: Grade | null;
   jev_level?: number | null;
   lineup_match_count?: number;
-  source?: "ticketmaster" | "jambase";
+  source?: "ticketmaster" | "jambase" | "venue_calendar" | "eventbrite";
 };
 
 export type SearchInspect = {

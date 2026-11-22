@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from concert_scout import cache, catalog, clock
+from concert_scout import cache, catalog, clock, underground
 from concert_scout.models import Artist, Concert, Place
 from concert_scout.names import normalize, title_names
 from concert_scout.sources import musicbrainz, ticketmaster
@@ -38,6 +38,14 @@ async def find_concert(client: httpx.AsyncClient, redis: Redis, concert_id: str)
     if catalog.holds(concert_id):
         try:
             found = await catalog.find(redis, concert_id)
+        except RedisError as exc:
+            raise SourceUnavailable(type(exc).__name__) from None
+        if found is None:
+            raise ConcertNotFound
+        return found
+    if underground.holds(concert_id):
+        try:
+            found = await underground.find(redis, concert_id)
         except RedisError as exc:
             raise SourceUnavailable(type(exc).__name__) from None
         if found is None:
@@ -141,8 +149,15 @@ async def find_concerts(
     if on_refresh and refreshed_ids:
         if fresh := [c for c in primary if c.id in refreshed_ids]:
             on_refresh(fresh)
-    # The JamBase catalog is local, so this never waits on JamBase.
-    extra = await catalog.concerts_near(redis, place, start, end, now) if place else []
+    # The JamBase and underground stores are local Redis reads, so this never waits on them.
+    if place:
+        jambase_extra, underground_extra = await asyncio.gather(
+            catalog.concerts_near(redis, place, start, end, now),
+            underground.concerts_near(redis, place, start, end, now),
+        )
+        extra = [*jambase_extra, *underground_extra]
+    else:
+        extra = []
     merged = merge_sources(primary, extra)
     if on_found and (added := merged[len(primary) :]):
         on_found(added)
@@ -158,6 +173,14 @@ _VENUE_FILLER = frozenset(
 _SAME_SET = dt.timedelta(minutes=90)
 
 
+# Words that only pad a venue-level title; stripped when matching non-Lineup duplicates.
+_TITLE_FILLER = frozenset("the a an at of and in live music presents night show".split())
+# Words that signal a distinct kind of event (e.g. an afterparty vs the main Concert).
+_EVENT_KIND_WORDS = frozenset(
+    "afterparty after afters tribute early late matinee preparty vip".split()
+)
+
+
 def _venue_words(venue: str | None) -> set[str]:
     return {w for w in normalize(venue or "").split() if w not in _VENUE_FILLER}
 
@@ -170,37 +193,80 @@ def _same_set(a: dt.time | None, b: dt.time | None) -> bool:
     return abs(gap) <= _SAME_SET
 
 
+def _same_title(a: str, b: str, venue_words: set[str]) -> bool:
+    """Conservative title match for non-Lineup listings at the same venue and set time."""
+    na, nb = normalize(a), normalize(b)
+    if not na or not nb:
+        return False
+    if na == nb:
+        return True
+    words_a, words_b = na.split(), nb.split()
+    if (set(words_a) & _EVENT_KIND_WORDS) != (set(words_b) & _EVENT_KIND_WORDS):
+        return False
+    core_a = [w for w in words_a if w not in venue_words and w not in _TITLE_FILLER]
+    core_b = [w for w in words_b if w not in venue_words and w not in _TITLE_FILLER]
+    return bool(core_a) and core_a == core_b
+
+
 def merge_sources(primary: Sequence[Concert], extra: Sequence[Concert]) -> list[Concert]:
     """Prefer the primary source's listing of a performance; keep other sets, rooms and dates.
 
-    Sources spell venues and cities differently, so a duplicate is the same date, the extra
-    headliner anywhere in the primary Lineup, a shared distinctive venue word and a nearby
-    start time. A primary listing without a photo takes its duplicate's.
+    Sources spell venues and cities differently, so a duplicate is the same date, a shared
+    Lineup Artist, a shared distinctive venue word and a nearby start time. A non-Lineup
+    listing (such as Eventbrite) deduplicates conservatively only by same date, shared
+    distinctive venue word, nearby start time and matching normalized title. A primary listing
+    without a photo takes its duplicate's.
     """
     merged = list(primary)
     by_artist: dict[tuple[dt.date, str], list[int]] = {}
+    by_date: dict[dt.date, list[int]] = {}
+
+    def index(at: int, concert: Concert) -> None:
+        if concert.date is None:
+            return
+        by_date.setdefault(concert.date, []).append(at)
+        for artist in concert.artists:
+            by_artist.setdefault((concert.date, normalize(artist.name)), []).append(at)
+
     for at, concert in enumerate(merged):
-        if concert.date:
-            for artist in concert.artists:
-                by_artist.setdefault((concert.date, normalize(artist.name)), []).append(at)
+        index(at, concert)
+
     for concert in extra:
-        matches = (
-            by_artist.get((concert.date, normalize(concert.artists[0].name)), [])
-            if concert.date and concert.artists
-            else []
-        )
         words = _venue_words(concert.venue)
-        same = next(
-            (
-                at
-                for at in matches
-                if words & _venue_words(merged[at].venue)
-                and _same_set(concert.time, merged[at].time)
-            ),
-            None,
-        )
+        same: int | None = None
+        if concert.date and words:
+            if concert.artists:
+                seen_candidates: set[int] = set()
+                matches: list[int] = []
+                for artist in concert.artists:
+                    for at in by_artist.get((concert.date, normalize(artist.name)), []):
+                        if at not in seen_candidates:
+                            seen_candidates.add(at)
+                            matches.append(at)
+                same = next(
+                    (
+                        at
+                        for at in matches
+                        if words & _venue_words(merged[at].venue)
+                        and _same_set(concert.time, merged[at].time)
+                    ),
+                    None,
+                )
+            else:
+                same = next(
+                    (
+                        at
+                        for at in by_date.get(concert.date, [])
+                        if (shared := words & _venue_words(merged[at].venue))
+                        and _same_set(concert.time, merged[at].time)
+                        and _same_title(concert.name, merged[at].name, shared)
+                    ),
+                    None,
+                )
         if same is None:
+            at = len(merged)
             merged.append(concert)
+            index(at, concert)
         elif concert.image and not merged[same].image:
             merged[same] = merged[same].model_copy(update={"image": concert.image})
     return merged

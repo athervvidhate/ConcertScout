@@ -1241,3 +1241,14 @@ button:disabled { opacity:.6; cursor:default; }
 @media(prefers-reduced-motion:reduce) {
   .lab-spin { animation:none; }
 }
+
+/* ---------- Underground Venues & Curated Promoters ---------- */
+.card-badges { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 6px; }
+.card-badges .card-grade { margin:0; }
+.ticket-eyebrow { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; }
+.underground-badges { display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.underground-badge,.sold-out-badge { display:inline-flex; align-items:center; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:650; line-height:1.35; letter-spacing:.01em; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.concerts-grid .concert-card:not(.solo) .underground-badge { border:1px solid rgb(255 255 255/.26); background:rgb(18 38 31/.72); color:#eef4ef; -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); text-shadow:none; }
+.concerts-grid .concert-card:not(.solo) .sold-out-badge { border:1px solid color-mix(in srgb,var(--accent) 60%,transparent); background:var(--accent); color:var(--on-accent); text-shadow:none; }
+.concerts-list .underground-badge,.ticket .underground-badge { border:1px solid color-mix(in srgb,var(--label) 32%,var(--line)); background:var(--soft); color:var(--label); text-shadow:none; }
+.concerts-list .sold-out-badge,.ticket .sold-out-badge { border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line)); background:color-mix(in srgb,var(--accent) 12%,var(--surface)); color:var(--accent-ink); text-shadow:none; }

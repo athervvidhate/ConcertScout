@@ -1,4 +1,4 @@
-"""Bounded organizer API adapter. Not enabled in production Search or any scheduled job.
+"""Bounded organizer API adapter for vetted promoters harvested by `/sync-underground`.
 
 An Eventbrite title is not a performer list: afterparties often name absent Artists.
 """
@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from concert_scout import clock
 from concert_scout.models import Concert, Price
-from concert_scout.sources.http import USER_AGENT
+from concert_scout.sources import http
 
 BASE_URL = "https://www.eventbriteapi.com/v3/"
 PAGE_LIMIT = 5
@@ -36,11 +36,13 @@ class Listing(BaseModel):
 
 
 def make_client(token: str, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
-    return httpx.AsyncClient(
-        base_url=BASE_URL,
-        headers={"Authorization": f"Bearer {token}", "User-Agent": USER_AGENT},
-        timeout=10,
-        transport=transport,
+    return http.make_client(
+        BASE_URL,
+        {},
+        transport,
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10.0,
+        retries=0,
     )
 
 
@@ -81,11 +83,15 @@ def parse_listing(record: dict[str, Any], now: dt.datetime) -> Listing | None:
     image: str | None = logo.get("url")
     if image and urlsplit(image).scheme != "https":
         image = None
+    raw_sold_out: Any = tickets.get("is_sold_out")
+    sold_out = raw_sold_out if isinstance(raw_sold_out, bool) else None
     return Listing(
         concert=Concert(
             id=f"eventbrite:{record['id']}",
             name=record["name"]["text"],
             url=record["url"],
+            source="eventbrite",
+            sold_out=sold_out,
             artists=[],
             date=local.date(),
             time=local.time(),
@@ -101,7 +107,7 @@ def parse_listing(record: dict[str, Any], now: dt.datetime) -> Listing | None:
         longitude=venue.get("longitude"),
         country=address.get("country"),
         ends_at=ends_at,
-        sold_out=tickets.get("is_sold_out"),
+        sold_out=sold_out,
     )
 
 

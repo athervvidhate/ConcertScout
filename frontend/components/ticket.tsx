@@ -16,6 +16,7 @@ import { ListenButton, ListenStage } from "@/components/listen";
 import { WatchLiveButton, WatchLiveStage } from "@/components/watch-live";
 import { Paged } from "@/components/paged";
 import { SetlistDnaPane } from "@/components/setlist-dna";
+import { UndergroundBadge } from "@/components/underground-badge";
 import { VenueBadge } from "@/components/venue-badge";
 import {
   byVenue,
@@ -30,6 +31,7 @@ import { gradeLabel } from "@/lib/grade";
 import { headlinerOf, listenTo, nameOf } from "@/lib/lineup";
 import type { Concert, Recommendation } from "@/lib/search";
 import { artistMbid } from "@/lib/setlist";
+import { hasUndergroundBadge } from "@/lib/underground";
 
 // The festival Artists named on the details pane, so it keeps its size. The Lineup holds the rest.
 const NAMED_MATCHES = 3;
@@ -237,14 +239,19 @@ export function Ticket({
               exit={{ opacity: 0, x: reduced ? 0 : -16 }}
               transition={{ duration: reduced ? 0 : 0.18 }}
             >
-              {concert.date && (
-                <time
-                  className="date"
-                  dateTime={concert.date}
-                  aria-label={formatDate(concert.date)}
-                >
-                  {formatMonthDay(concert.date)}
-                </time>
+              {(concert.date || hasUndergroundBadge(concert)) && (
+                <div className="ticket-eyebrow">
+                  {concert.date && (
+                    <time
+                      className="date"
+                      dateTime={concert.date}
+                      aria-label={formatDate(concert.date)}
+                    >
+                      {formatMonthDay(concert.date)}
+                    </time>
+                  )}
+                  <UndergroundBadge concert={concert} variant="ticket" />
+                </div>
               )}
               <h2>
                 {headliner ? (
