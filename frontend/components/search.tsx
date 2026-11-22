@@ -90,6 +90,7 @@ export function Search() {
     step,
     reading,
     candidates,
+    inspect,
     recommendations,
     hasPoster,
     searchId,
@@ -678,6 +679,7 @@ export function Search() {
               onRerunSearch={
                 canSearch ? () => run(asked ?? { text: searched }) : undefined
               }
+              inspect={inspect}
             />
           </motion.div>
         )}
