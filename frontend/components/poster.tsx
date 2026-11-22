@@ -1,7 +1,7 @@
 "use client";
 
 import { Dialog } from "@base-ui/react/dialog";
-import { LayoutGrid, List, X } from "lucide-react";
+import { LayoutGrid, List, SlidersHorizontal, X } from "lucide-react";
 import {
   AnimatePresence,
   type HTMLMotionProps,
@@ -23,6 +23,7 @@ import {
 import { AnimatedCount } from "@/components/animated-count";
 import { AddToCalendar } from "@/components/add-to-calendar";
 import { PosterDials } from "@/components/poster-dials";
+import { RankingInspector } from "@/components/ranking-inspector";
 import { Ticket } from "@/components/ticket";
 import { listenTo, matchLine, nameOf } from "@/lib/lineup";
 import { WorkingSearch } from "@/components/working-search";
@@ -48,6 +49,7 @@ import {
 import { useTicketMotion } from "@/lib/use-ticket-motion";
 import { formatDate, formatConcertTime } from "@/lib/format";
 import { gradeLabel } from "@/lib/grade";
+import type { SearchInspect } from "@/lib/lab";
 import { removeSaved, saveConcert, useDecisions } from "@/lib/saved";
 import type { Candidates, Reading, Recommendation } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
@@ -88,6 +90,8 @@ type Props = {
   onSculpt?: (next: SculptState) => void;
   onResetSculpt?: () => void;
   onRerunSearch?: () => void;
+  /** Optional under-the-hood ranking signals from the `inspect` SSE event. */
+  inspect?: SearchInspect | null;
 };
 export function Poster({
   candidates,
@@ -112,6 +116,7 @@ export function Poster({
   onSculpt,
   onResetSculpt,
   onRerunSearch,
+  inspect = null,
 }: Props) {
   const reduced = useReducedMotion();
   const [cached] = useState(!searching && hasPoster);
@@ -134,6 +139,12 @@ export function Poster({
   const arrival = recommendations.findIndex((r) => r.concert.id === openConcert);
   const [selected, setSelected] = useState(Math.max(arrival, 0));
   const [open, setOpen] = useState(arrival >= 0);
+  const [inspectOpen, setInspectOpen] = useState(false);
+  const inspectButton = useRef<HTMLButtonElement>(null);
+  const closeInspector = useCallback(() => {
+    setInspectOpen(false);
+    inspectButton.current?.focus();
+  }, []);
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState<Set<string>>(() => new Set());
@@ -372,6 +383,19 @@ export function Poster({
                     link={() => shareLink()}
                   />
                 )}
+                {inspect && (
+                  <button
+                    ref={inspectButton}
+                    type="button"
+                    className="inspector-toggle"
+                    aria-expanded={inspectOpen}
+                    aria-controls="ranking-inspector"
+                    onClick={() => setInspectOpen((was) => !was)}
+                  >
+                    <SlidersHorizontal aria-hidden size={17} />
+                    <span>Inspect ranking</span>
+                  </button>
+                )}
                 <div
                   className="views"
                   role="group"
@@ -425,6 +449,13 @@ export function Poster({
                   meta={sculptMeta}
                   busy={sculpting}
                   onChange={onSculpt}
+                />
+              )}
+              {inspect && (
+                <RankingInspector
+                  inspect={inspect}
+                  open={inspectOpen}
+                  onClose={closeInspector}
                 />
               )}
               <Dialog.Root

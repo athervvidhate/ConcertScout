@@ -7,6 +7,7 @@ import {
   type SculptMeta,
   type SculptState,
 } from "@/lib/sculpt";
+import type { SearchInspect } from "@/lib/lab";
 import type { RefinementEntry, UnanswerableNote } from "@/lib/refinement";
 import {
   type Asked,
@@ -40,6 +41,7 @@ export type SearchState = {
   step: string | null;
   reading: Reading | null;
   candidates: Candidates | null;
+  inspect: SearchInspect | null;
   recommendations: Recommendation[];
   hasPoster: boolean;
   // Names this Poster to the server, which alone can turn it into a Shared Poster or Sculpt it.
@@ -72,6 +74,7 @@ const IDLE: SearchState = {
   step: null,
   reading: null,
   candidates: null,
+  inspect: null,
   recommendations: [],
   hasPoster: false,
   searchId: null,
@@ -99,6 +102,7 @@ function resume(kept: SearchState): SearchState {
   const base = {
     ...IDLE,
     ...kept,
+    inspect: kept.inspect ?? null,
     sculpt: kept.sculpt ?? DEFAULT_SCULPT,
     sculpting: false,
     sculptMeta: kept.sculptMeta ?? null,
@@ -246,6 +250,8 @@ export function useSearch() {
             }));
           } else if (event === "candidates") {
             setState((state) => ({ ...state, candidates: data }));
+          } else if (event === "inspect") {
+            setState((state) => ({ ...state, inspect: data }));
           } else if (event === "poster") {
             setState((state) => ({
               ...state,

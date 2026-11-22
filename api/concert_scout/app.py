@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Literal, Self
 
 import httpx
-from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -26,6 +26,7 @@ from concert_scout import (
     group_scout,
     home,
     interpreter,
+    lab,
     limits,
     live_index,
     sculpt,
@@ -496,6 +497,11 @@ def create_app(
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/lab", response_model=lab.LabSummary)
+    async def engineering_lab(response: Response) -> lab.LabSummary:
+        response.headers["Cache-Control"] = "public, max-age=30"
+        return await lab.summarize(services.redis)
 
     @app.get("/examples", response_model=home.Examples, response_model_exclude_none=True)
     async def examples() -> home.Examples:
