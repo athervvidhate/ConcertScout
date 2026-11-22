@@ -1,7 +1,13 @@
+import logging
+
 import httpx
 from httpx_retries import Retry, RetryTransport
 
 USER_AGENT = "ConcertScout (+https://github.com/athervvidhate/ConcertScoutAI)"
+
+# httpx logs every request URL at INFO, and several sources take their API key as a query
+# parameter, so those logs would carry the keys. Only its warnings and errors are kept.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def make_client(
