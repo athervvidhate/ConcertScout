@@ -59,9 +59,10 @@ async function moveDeviceSaves(): Promise<Moved | undefined> {
   const device = readList<Recommendation>(SAVED_KEY);
   if (device.length === 0) return undefined;
   try {
-    const saves = device.map(({ concert, reason }) => ({
+    const saves = device.map(({ concert, reason, grade }) => ({
       concert_id: concert.id,
       reason,
+      grade,
     }));
     const response = await accountFetch("/saved/import", {
       method: "POST",
@@ -156,7 +157,10 @@ export function saveConcert(recommendation: Recommendation): Saving {
     try {
       const response = await accountFetch(`/saved/${encodeURIComponent(id)}`, {
         method: "PUT",
-        body: JSON.stringify({ reason: recommendation.reason }),
+        body: JSON.stringify({
+          reason: recommendation.reason,
+          grade: recommendation.grade,
+        }),
       });
       const kept: Recommendation = await response.json();
       if (account?.owner === owner) {

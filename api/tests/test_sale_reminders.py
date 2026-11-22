@@ -455,7 +455,7 @@ async def test_sale_reminder_settings_validation_rls_and_cascade(
         resend.make_client("re_test", transport) as mail_client,
     ):
         account = supabase.Account(owner.id, owner.token, 0)
-        await supabase.save(client, secret, account, [(upcoming, None)])
+        await supabase.save(client, secret, account, [supabase.SavedConcert(concert=upcoming)])
 
         async def alert_run() -> alerts.Outcome:
             return await alerts.run(
