@@ -36,6 +36,7 @@ from concert_scout import (
     suggest,
     sync,
     taste_profile,
+    underground,
     warm,
 )
 from concert_scout.config import Settings
@@ -59,9 +60,11 @@ from concert_scout.refinement import MAX_POSTER_ARTISTS, MAX_REFINEMENT_CHARS
 from concert_scout.security import Refused, SecurityHeaders
 from concert_scout.sources import (
     embedder,
+    eventbrite,
     geocoder,
     jambase,
     jev,
+    jsonld_venues,
     lastfm,
     listenbrainz,
     musicbrainz,
@@ -319,6 +322,13 @@ def create_app(
         if settings.youtube_api_key
         else None
     )
+    underground_client = jsonld_venues.make_client(transport)
+    eventbrite_client = (
+        eventbrite.make_client(settings.eventbrite_token.get_secret_value(), transport)
+        if settings.eventbrite_token
+        else None
+    )
+    eventbrite_organizers = underground.parse_organizer_ids(settings.eventbrite_organizer_ids)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -345,6 +355,9 @@ def create_app(
             await setlistfm_client.aclose()
         if youtube_client:
             await youtube_client.aclose()
+        await underground_client.aclose()
+        if eventbrite_client:
+            await eventbrite_client.aclose()
 
     app = FastAPI(title="Concert Scout", lifespan=lifespan)
     app.add_middleware(OneCallerPerRequest)
@@ -535,6 +548,18 @@ def create_app(
         @scheduled.get("/sync")
         async def sync_catalog() -> list[sync.Step]:
             return await sync.run(services, dt.datetime.now(dt.UTC))
+
+        # Curated underground venue calendars and vetted Eventbrite promoters.
+        @scheduled.post("/sync-underground")
+        async def sync_underground() -> list[underground.Step]:
+            return await underground.run(
+                underground_client,
+                services.musicbrainz,
+                services.redis,
+                dt.datetime.now(dt.UTC),
+                eventbrite_client=eventbrite_client,
+                organizer_ids=eventbrite_organizers,
+            )
 
         # Once a week: the live sessions that Watch Live opens from (1 YouTube unit per 50 videos).
         if youtube_client:

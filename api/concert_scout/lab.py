@@ -164,7 +164,7 @@ class InspectPick(BaseModel):
     grade: Grade | None = None
     jev_level: int | None = None
     lineup_match_count: int = 0
-    source: Literal["ticketmaster", "jambase"] = "ticketmaster"
+    source: Literal["ticketmaster", "jambase", "venue_calendar", "eventbrite"] = "ticketmaster"
 
 
 class SearchInspect(BaseModel):

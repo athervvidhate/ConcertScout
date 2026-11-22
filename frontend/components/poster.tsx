@@ -25,6 +25,7 @@ import { AddToCalendar } from "@/components/add-to-calendar";
 import { PosterDials } from "@/components/poster-dials";
 import { RankingInspector } from "@/components/ranking-inspector";
 import { Ticket } from "@/components/ticket";
+import { UndergroundBadge } from "@/components/underground-badge";
 import { listenTo, matchLine, nameOf } from "@/lib/lineup";
 import { WorkingSearch } from "@/components/working-search";
 import { SaveButton } from "@/components/save-button";
@@ -53,6 +54,7 @@ import type { SearchInspect } from "@/lib/lab";
 import { removeSaved, saveConcert, useDecisions } from "@/lib/saved";
 import type { Candidates, Reading, Recommendation } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
+import { hasUndergroundBadge } from "@/lib/underground";
 
 type View = "grid" | "list";
 const VIEW_KEY = "concert-scout-view";
@@ -587,10 +589,15 @@ export function Poster({
                           )}
                           {bookmark(r)}
                           <div className="card-body">
-                            {gradeText && (
-                              <p className="card-grade" data-grade={r.grade}>
-                                {gradeText}
-                              </p>
+                            {(gradeText || hasUndergroundBadge(concert)) && (
+                              <div className="card-badges">
+                                {gradeText && (
+                                  <p className="card-grade" data-grade={r.grade}>
+                                    {gradeText}
+                                  </p>
+                                )}
+                                <UndergroundBadge concert={concert} variant="card" />
+                              </div>
                             )}
                             <h3 className="card-name">{name}</h3>
                             {bill && <p className="card-bill">{bill}</p>}

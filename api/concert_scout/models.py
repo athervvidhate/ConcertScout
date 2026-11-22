@@ -62,7 +62,8 @@ class Concert(BaseModel):
     name: Text
     url: str
     artists: list[Artist]
-    source: Literal["ticketmaster", "jambase"] = "ticketmaster"
+    source: Literal["ticketmaster", "jambase", "venue_calendar", "eventbrite"] = "ticketmaster"
+    sold_out: bool | None = None
     date: dt.date | None = None
     time: dt.time | None = None
     # The venue's IANA zone. `date` and `time` already read in it.
