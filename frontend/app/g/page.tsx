@@ -1,24 +1,17 @@
 "use client";
 
-import { ArrowRight, Calendar, DollarSign, MapPin, Plus, Sparkles, Users, X } from "lucide-react";
+import { ArrowRight, Calendar, DollarSign, MapPin, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
+import { GroupArtistPicker } from "@/components/group-artist-picker";
 import { SiteHeader } from "@/components/site-header";
 import { dateIn, viewerZone } from "@/lib/format";
-import {
-  QUICK_PICK_ARTISTS,
-  createGroupRoom,
-  mergeArtists,
-  parseArtistsInput,
-  rememberRoomMemberId,
-} from "@/lib/group-scout";
+import { createGroupRoom, rememberRoomMemberId } from "@/lib/group-scout";
 import { SearchRefused } from "@/lib/search";
-import { useImportedTaste } from "@/lib/taste";
 
 export default function GroupCreatePage() {
   const router = useRouter();
-  const savedTaste = useImportedTaste();
   const today = dateIn(viewerZone(), new Date());
 
   const [place, setPlace] = useState("");
@@ -28,42 +21,11 @@ export default function GroupCreatePage() {
   const [maxPrice, setMaxPrice] = useState("");
   const [memberName, setMemberName] = useState("");
   const [artists, setArtists] = useState<string[]>([]);
-  const [artistInput, setArtistInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function addTypedArtists() {
-    const parsed = parseArtistsInput(artistInput);
-    if (parsed.length === 0) return;
-    setArtists((current) => mergeArtists(current, parsed));
-    setArtistInput("");
-    setError(null);
-  }
-
-  function toggleQuickArtist(name: string) {
-    const lower = name.toLowerCase();
-    setArtists((current) => {
-      if (current.some((a) => a.toLowerCase() === lower)) {
-        return current.filter((a) => a.toLowerCase() !== lower);
-      }
-      return mergeArtists(current, [name]);
-    });
-    setError(null);
-  }
-
-  function removeArtist(name: string) {
-    setArtists((current) => current.filter((a) => a !== name));
-  }
-
-  function applySavedTaste() {
-    if (!savedTaste || savedTaste.artists.length === 0) return;
-    setArtists((current) => mergeArtists(current, savedTaste.artists));
-    setError(null);
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const combinedArtists = mergeArtists(artists, parseArtistsInput(artistInput));
     if (!place.trim()) {
       setError("Enter a city or place for your group.");
       return;
@@ -72,7 +34,7 @@ export default function GroupCreatePage() {
       setError("Enter your name so friends know whose picks these are.");
       return;
     }
-    if (combinedArtists.length === 0) {
+    if (artists.length === 0) {
       setError("Add at least one Artist to your Taste.");
       return;
     }
@@ -96,7 +58,7 @@ export default function GroupCreatePage() {
         end_date: endDate || undefined,
         max_price: parsedPrice,
         member_name: memberName.trim(),
-        artists: combinedArtists,
+        artists,
       });
       rememberRoomMemberId(created.room.id, created.member_id);
       router.push(`/g/${created.room.id}`);
@@ -216,81 +178,15 @@ export default function GroupCreatePage() {
             </div>
           </div>
 
-          <div className="group-taste-block">
-            <div className="group-taste-head">
-              <label htmlFor="group-artists">Your Taste (Artists you love)</label>
-              {savedTaste && savedTaste.artists.length > 0 && (
-                <button
-                  type="button"
-                  className="group-prefill-btn"
-                  onClick={applySavedTaste}
-                >
-                  <Sparkles aria-hidden size={15} />
-                  Use saved Taste ({savedTaste.artists.length})
-                </button>
-              )}
-            </div>
-
-            <div className="group-artist-entry">
-              <input
-                id="group-artists"
-                type="text"
-                placeholder="Paste or type Artists (e.g. Khruangbin, Bonobo, Parcels)"
-                value={artistInput}
-                onChange={(e) => setArtistInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addTypedArtists();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="group-add-btn"
-                onClick={addTypedArtists}
-                aria-label="Add Artists"
-              >
-                <Plus aria-hidden size={18} />
-                Add
-              </button>
-            </div>
-
-            {artists.length > 0 && (
-              <ul className="group-artist-chips" aria-label="Selected Artists">
-                {artists.map((artist) => (
-                  <li key={artist} className="group-artist-chip">
-                    <span>{artist}</span>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${artist}`}
-                      onClick={() => removeArtist(artist)}
-                    >
-                      <X aria-hidden size={14} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <div className="group-quick-picks">
-              <span className="group-quick-label">Quick picks:</span>
-              {QUICK_PICK_ARTISTS.map((artist) => {
-                const active = artists.some((a) => a.toLowerCase() === artist.toLowerCase());
-                return (
-                  <button
-                    key={artist}
-                    type="button"
-                    className="group-quick-chip"
-                    aria-pressed={active}
-                    onClick={() => toggleQuickArtist(artist)}
-                  >
-                    {artist}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <GroupArtistPicker
+            id="group-artists"
+            label="Your Taste (Artists you love)"
+            artists={artists}
+            onChange={(next) => {
+              setArtists(next);
+              setError(null);
+            }}
+          />
 
           {error && (
             <p className="group-error" role="alert">

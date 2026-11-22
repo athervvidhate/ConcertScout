@@ -1,14 +1,18 @@
 "use client";
 
-import { Activity, ArrowRight, RefreshCw, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { Activity, ArrowRight, RefreshCw, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { RankingInspector } from "@/components/ranking-inspector";
 import {
   fetchLabSummary,
   formatCostCents,
   formatMs,
   formatPercent,
+  setInspectorEnabled,
+  useInspectorEnabled,
+  useLatestInspect,
   type LabSummary,
 } from "@/lib/lab";
 
@@ -29,6 +33,8 @@ export function LabView() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const latestInspect = useLatestInspect();
+  const inspectorEnabled = useInspectorEnabled();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -87,6 +93,15 @@ export function LabView() {
     ...(summary?.steps.map((step) => Math.max(step.p95_ms, step.p50_ms)) ?? [1]),
   );
 
+  const hasLiveSamples = (summary?.sample_count ?? 0) > 0;
+  const baseline = summary?.baseline ?? null;
+  const displayedP50 = hasLiveSamples
+    ? summary?.p50_total_ms
+    : baseline?.p50_total_ms;
+  const displayedP95 = hasLiveSamples
+    ? summary?.p95_total_ms
+    : baseline?.p95_total_ms;
+
   return (
     <div className="lab-wrap">
       <section className="lab-hero" aria-labelledby="lab-title">
@@ -97,14 +112,10 @@ export function LabView() {
           </p>
           <h1 id="lab-title">Engineering Lab</h1>
           <p className="lab-lead">
-            Live anonymized latency, cost, and cache counters from Concert
-            Scout&apos;s rolling{" "}
-            <span className="lab-num">
-              {summary?.window_size ?? 200}-Search
-            </span>{" "}
-            window, paired with our evaluation suite and architectural
-            guarantees. Search text, Artist names, coordinates, and Spotify data
-            never enter telemetry.
+            Anonymized latency, cost, and cache metrics from Concert Scout&apos;s
+            Search pipeline, paired with our evaluation suite and an under-the-hood
+            ranking inspector. Search text, Artist names, coordinates, and Spotify
+            data never enter telemetry.
           </p>
         </div>
         <div className="lab-hero-actions">
@@ -154,13 +165,27 @@ export function LabView() {
             <section className="lab-section" aria-labelledby="lab-telemetry-h">
               <div className="lab-section-head">
                 <div>
-                  <h2 id="lab-telemetry-h">Rolling Search Telemetry</h2>
+                  <h2 id="lab-telemetry-h">Search Telemetry</h2>
                   <p>
-                    Bounded Redis ring buffer (latest{" "}
-                    <span className="lab-num">{summary.window_size}</span>{" "}
-                    Searches,{" "}
-                    <span className="lab-num">{summary.retention_days}</span>
-                    -day TTL). Numeric counts and timings only.
+                    {summary.storage_backend === "postgres" ? (
+                      <>
+                        Persisted in Postgres (aggregating up to the latest{" "}
+                        <span className="lab-num">{summary.window_size}</span>{" "}
+                        Searches out of{" "}
+                        <span className="lab-num">{summary.all_time_count}</span>{" "}
+                        all-time). Numeric counts and timings only.
+                      </>
+                    ) : (
+                      <>
+                        Bounded Redis ring buffer (latest{" "}
+                        <span className="lab-num">{summary.window_size}</span>{" "}
+                        Searches,{" "}
+                        <span className="lab-num">
+                          {summary.retention_days ?? 7}
+                        </span>
+                        -day TTL). Numeric counts and timings only.
+                      </>
+                    )}
                   </p>
                 </div>
                 {summary.latest_bucket && (
@@ -173,28 +198,34 @@ export function LabView() {
 
               {!summary.telemetry_available && (
                 <p role="status" className="lab-note">
-                  Live Redis counters are temporarily unavailable. Eval suite
-                  coverage and architectural invariants below remain live.
+                  Live telemetry counters are temporarily unavailable. Eval suite
+                  coverage and recorded baseline metrics below remain available.
                 </p>
               )}
 
               {summary.telemetry_available && summary.sample_count === 0 && (
                 <p role="status" className="lab-note">
-                  No live Searches recorded in the current{" "}
-                  {summary.retention_days}-day window yet. Run a Search on the
-                  home page to populate real p50/p95 step timings and cache
-                  rates.
+                  {baseline
+                    ? `No new live Searches persisted yet — showing the ${baseline.sample_count}-Search cold-capture baseline (${baseline.first_date} to ${baseline.last_date}) below until live production runs accumulate.`
+                    : "No live Searches recorded yet. Run a Search on the home page to populate real p50/p95 step timings and cache rates."}
                 </p>
               )}
 
               <div className="lab-kpis">
                 <article className="lab-kpi">
-                  <span className="lab-kpi-label">Search latency</span>
+                  <span className="lab-kpi-label">
+                    {hasLiveSamples
+                      ? "Search latency"
+                      : "Cold baseline latency"}
+                  </span>
                   <strong className="lab-kpi-value">
-                    {formatMs(summary.p50_total_ms)}
+                    {formatMs(displayedP50)}
                   </strong>
                   <span className="lab-kpi-sub">
-                    p50 total · p95 {formatMs(summary.p95_total_ms)}
+                    p50 total · p95 {formatMs(displayedP95)}
+                    {!hasLiveSamples && baseline
+                      ? ` (${baseline.sample_count} cold captures)`
+                      : ""}
                   </span>
                 </article>
                 <article className="lab-kpi">
@@ -205,7 +236,7 @@ export function LabView() {
                   <span className="lab-kpi-sub">
                     {summary.cost_complete_samples > 0
                       ? `${summary.cost_complete_samples} priced samples`
-                      : "Awaiting priced runs"}
+                      : "Awaiting live priced runs"}
                   </span>
                 </article>
                 <article className="lab-kpi">
@@ -222,19 +253,41 @@ export function LabView() {
                 <article className="lab-kpi">
                   <span className="lab-kpi-label">Searches observed</span>
                   <strong className="lab-kpi-value">
-                    {summary.sample_count}
-                    <span className="lab-kpi-denom">
-                      /{summary.window_size}
-                    </span>
+                    {summary.all_time_count || summary.sample_count}
+                    {summary.storage_backend === "redis" && (
+                      <span className="lab-kpi-denom">
+                        /{summary.window_size}
+                      </span>
+                    )}
                   </strong>
                   <span className="lab-kpi-sub">
                     {summary.avg_pool_total !== null &&
                     summary.avg_pool_total !== undefined
                       ? `Avg ${summary.avg_pool_total} pool → ${summary.avg_shortlist_total ?? 0} shortlist → ${summary.avg_picks_total ?? 0} picks`
-                      : "Pool → shortlist → Poster"}
+                      : baseline
+                        ? `${baseline.sample_count} cold baseline captures`
+                        : "Pool → shortlist → Poster"}
                   </span>
                 </article>
               </div>
+
+              {hasLiveSamples && baseline && (
+                <p className="lab-baseline-strip">
+                  <strong>Cold-capture baseline</strong> ({baseline.sample_count}{" "}
+                  unwarmed snapshots,{" "}
+                  <span className="lab-num">
+                    {baseline.first_date} – {baseline.last_date}
+                  </span>
+                  ): p50{" "}
+                  <span className="lab-num">
+                    {formatMs(baseline.p50_total_ms)}
+                  </span>{" "}
+                  · p95{" "}
+                  <span className="lab-num">
+                    {formatMs(baseline.p95_total_ms)}
+                  </span>
+                </p>
+              )}
             </section>
 
             <section className="lab-section" aria-labelledby="lab-steps-h">
@@ -315,6 +368,58 @@ export function LabView() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </section>
+
+            <section className="lab-section" aria-labelledby="lab-inspector-h">
+              <div className="lab-section-head">
+                <div>
+                  <h2 id="lab-inspector-h">
+                    <SlidersHorizontal aria-hidden size={22} />
+                    Search Ranking Inspector
+                  </h2>
+                  <p>
+                    Inspect the exact Reading, pool funnel, match signals, and
+                    Jev grade levels for your latest Search in this tab—kept out
+                    of everyday Posters unless you opt in below.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={inspectorEnabled}
+                  className="lab-switch"
+                  onClick={() => setInspectorEnabled(!inspectorEnabled)}
+                >
+                  <span className="lab-switch-track" aria-hidden="true">
+                    <span className="lab-switch-thumb" />
+                  </span>
+                  <span className="lab-switch-label">
+                    Show Inspect button on Posters (this browser)
+                  </span>
+                </button>
+              </div>
+
+              {latestInspect ? (
+                <RankingInspector
+                  inspect={latestInspect}
+                  open
+                  embedded
+                  onClose={() => {}}
+                />
+              ) : (
+                <div className="lab-inspector-empty">
+                  <p>
+                    Run any Search on the home page in this tab, then return
+                    here to inspect its Reading, match signals, and Jev grades—or
+                    flip the switch above to show the inline{" "}
+                    <strong>Inspect ranking</strong> toggle directly on Posters.
+                  </p>
+                  <Link href="/" className="lab-cta">
+                    Run a Search
+                    <ArrowRight aria-hidden size={18} />
+                  </Link>
                 </div>
               )}
             </section>
@@ -416,31 +521,6 @@ export function LabView() {
                 <p className="lab-measurement-note">
                   {summary.eval_benchmarks.measurement_note}
                 </p>
-              </div>
-            </section>
-
-            <section className="lab-section" aria-labelledby="lab-invariants-h">
-              <div className="lab-section-head">
-                <div>
-                  <h2 id="lab-invariants-h">
-                    <ShieldCheck aria-hidden size={22} />
-                    Architectural Invariants
-                  </h2>
-                  <p>
-                    Promises enforced in application code and verified by
-                    contract tests on every commit.
-                  </p>
-                </div>
-              </div>
-              <div className="lab-guarantees">
-                {summary.guarantees.map((item) => (
-                  <article key={item.id} className="lab-guarantee">
-                    <span className="lab-guarantee-adr">{item.adr}</span>
-                    <h3>{item.title}</h3>
-                    <p>{item.summary}</p>
-                    <p className="lab-guarantee-code">{item.enforced_by}</p>
-                  </article>
-                ))}
               </div>
             </section>
           </>

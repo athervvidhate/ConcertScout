@@ -61,7 +61,7 @@ test("two friends create a Group Scout room, join as guests, vote live and expor
 
   await samPage.getByLabel("Your name").fill("Sam");
   await samPage.getByLabel("Your Taste (Artists)").fill("Second Contract Artist");
-  await samPage.getByRole("button", { name: "Add Artists to join" }).click();
+  await samPage.getByRole("button", { name: "Add Artists", exact: true }).click();
   await samPage.getByRole("button", { name: "Join room & rank picks" }).click();
 
   await expect(samPage.getByText(/2 of 6 friends/)).toBeVisible();
@@ -115,6 +115,24 @@ test("two friends create a Group Scout room, join as guests, vote live and expor
   for await (const chunk of stream) ics += chunk.toString();
   expect(ics).toContain("BEGIN:VCALENDAR");
   expect(ics).toContain("SUMMARY:Contract Concert One");
+
+  // Maya can edit her Artists and room search directly inside the room.
+  await page.getByRole("button", { name: "Edit my artists" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Edit your Artists & preferences" }),
+  ).toBeVisible();
+  await page.getByLabel("Your Taste (Artists)").fill("Third Contract Artist");
+  await page.getByRole("button", { name: "Add Artists", exact: true }).click();
+  await page.getByRole("button", { name: "Save & re-rank" }).click();
+  await expect(page.getByText("2 Artists")).toBeVisible();
+
+  await page.getByRole("button", { name: "Edit search" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Edit room search" }),
+  ).toBeVisible();
+  await page.getByLabel("Max ticket price $ (optional)").fill("120");
+  await page.getByRole("button", { name: "Update search" }).click();
+  await expect(page.getByText("Under $120")).toBeVisible();
 
   // Verify light and dark themes have zero horizontal overflow at current viewport (1280px & 390px).
   await assertNoOverflow(page);

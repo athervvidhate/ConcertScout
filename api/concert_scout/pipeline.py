@@ -696,7 +696,12 @@ async def run_search(
                 logger.warning("Search cost is incomplete")
             with anyio.CancelScope(shield=True):
                 await limits.record_spend(services.redis, usage.cost)
-                await lab.record_search(services.redis, lab.from_usage(usage))
+                await lab.record_search(
+                    services.redis,
+                    lab.from_usage(usage),
+                    supabase_client=services.supabase,
+                    supabase_secret_key=services.supabase_secret_key,
+                )
 
 
 async def stream_search(

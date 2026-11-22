@@ -19,9 +19,29 @@ type Props = {
   inspect: SearchInspect;
   open: boolean;
   onClose: () => void;
+  /** When embedded inside `/lab`, renders inline without a close button or self-link. */
+  embedded?: boolean;
 };
 
-export function RankingInspector({ inspect, open, onClose }: Props) {
+function sourceLabel(source?: SearchInspect["picks"][number]["source"]): string {
+  switch (source) {
+    case "jambase":
+      return "JamBase";
+    case "venue_calendar":
+      return "Underground room";
+    case "eventbrite":
+      return "Curated promoter";
+    default:
+      return "Ticketmaster";
+  }
+}
+
+export function RankingInspector({
+  inspect,
+  open,
+  onClose,
+  embedded = false,
+}: Props) {
   const reduced = useReducedMotion();
   const timings = orderedStepTimings(inspect.steps_ms);
   const maxSupport = Math.max(
@@ -30,7 +50,7 @@ export function RankingInspector({ inspect, open, onClose }: Props) {
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || embedded) return;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       // Leave Escape to a Ticket or Artist dialog if one is open above the Poster.
@@ -40,7 +60,7 @@ export function RankingInspector({ inspect, open, onClose }: Props) {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  }, [open, embedded, onClose]);
 
   const readingParts: Array<{ label: string; value: string }> = [];
   if (inspect.reading.artists.length > 0) {
@@ -110,20 +130,22 @@ export function RankingInspector({ inspect, open, onClose }: Props) {
               </span>
               <h3>Ranking Inspector</h3>
             </div>
-            <div className="inspector-head-actions">
-              <Link href="/lab" className="inspector-lab-link">
-                Engineering Lab
-                <ArrowUpRight aria-hidden size={15} />
-              </Link>
-              <button
-                type="button"
-                className="inspector-close"
-                aria-label="Close ranking inspector"
-                onClick={onClose}
-              >
-                <X aria-hidden size={18} />
-              </button>
-            </div>
+            {!embedded && (
+              <div className="inspector-head-actions">
+                <Link href="/lab" className="inspector-lab-link">
+                  Engineering Lab
+                  <ArrowUpRight aria-hidden size={15} />
+                </Link>
+                <button
+                  type="button"
+                  className="inspector-close"
+                  aria-label="Close ranking inspector"
+                  onClick={onClose}
+                >
+                  <X aria-hidden size={18} />
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="inspector-summary">
@@ -221,9 +243,7 @@ export function RankingInspector({ inspect, open, onClose }: Props) {
                             </span>
                           ) : null}
                           <span className="inspector-source">
-                            {pick.source === "jambase"
-                              ? "JamBase"
-                              : "Ticketmaster"}
+                            {sourceLabel(pick.source)}
                           </span>
                         </div>
                       </div>

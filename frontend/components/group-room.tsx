@@ -7,21 +7,21 @@ import {
   Copy,
   DollarSign,
   ExternalLink,
+  HelpCircle,
   LogOut,
   MapPin,
-  Plus,
-  Sparkles,
+  Music2,
+  SlidersHorizontal,
   ThumbsDown,
   ThumbsUp,
-  HelpCircle,
   UserPlus,
   Users,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { AddToCalendar } from "@/components/add-to-calendar";
+import { GroupArtistPicker } from "@/components/group-artist-picker";
 import { SiteHeader } from "@/components/site-header";
 import {
   countOf,
@@ -34,7 +34,6 @@ import {
 } from "@/lib/format";
 import {
   MAX_GROUP_MEMBERS,
-  QUICK_PICK_ARTISTS,
   castGroupVote,
   fetchGroupRoom,
   forgetRoomMemberId,
@@ -43,12 +42,12 @@ import {
   joinGroupRoom,
   leaveGroupRoom,
   memberInitials,
-  mergeArtists,
-  parseArtistsInput,
   readRoomMemberId,
   rememberRoomMemberId,
   sortGroupPicks,
   subscribeGroupRoom,
+  updateGroupMember,
+  updateGroupRoom,
   type GroupPick,
   type GroupRoomState,
   type GroupSort,
@@ -56,7 +55,6 @@ import {
 } from "@/lib/group-scout";
 import { SearchRefused } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
-import { useImportedTaste } from "@/lib/taste";
 
 const POLL_MS = 2500;
 
@@ -70,7 +68,6 @@ const AVATAR_TONES = [
 ] as const;
 
 export function GroupRoom({ roomId }: { roomId: string }) {
-  const savedTaste = useImportedTaste();
   const today = dateIn(viewerZone(), new Date());
 
   const [room, setRoom] = useState<GroupRoomState | null>(null);
@@ -87,12 +84,29 @@ export function GroupRoom({ roomId }: { roomId: string }) {
   // Guest join form state
   const [joinName, setJoinName] = useState("");
   const [joinArtists, setJoinArtists] = useState<string[]>([]);
-  const [joinArtistInput, setJoinArtistInput] = useState("");
   const [joinStart, setJoinStart] = useState("");
   const [joinEnd, setJoinEnd] = useState("");
   const [joinMaxPrice, setJoinMaxPrice] = useState("");
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
+
+  // Room search editor state (place, dates, budget)
+  const [editingRoom, setEditingRoom] = useState(false);
+  const [editPlace, setEditPlace] = useState("");
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
+  const [editMaxPrice, setEditMaxPrice] = useState("");
+  const [savingRoom, setSavingRoom] = useState(false);
+  const [roomEditError, setRoomEditError] = useState<string | null>(null);
+
+  // Member artists & personal prefs editor state
+  const [editingMember, setEditingMember] = useState(false);
+  const [myArtists, setMyArtists] = useState<string[]>([]);
+  const [myStart, setMyStart] = useState("");
+  const [myEnd, setMyEnd] = useState("");
+  const [myMaxPrice, setMyMaxPrice] = useState("");
+  const [savingMember, setSavingMember] = useState(false);
+  const [memberEditError, setMemberEditError] = useState<string | null>(null);
 
   const [votingConcertId, setVotingConcertId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -210,6 +224,120 @@ export function GroupRoom({ roomId }: { roomId: string }) {
     [room, sort],
   );
 
+  function openRoomEditor() {
+    if (!room) return;
+    if (editingRoom) {
+      setEditingRoom(false);
+      return;
+    }
+    setEditPlace(room.place.name);
+    setEditStart(room.start_date ?? "");
+    setEditEnd(room.end_date ?? "");
+    setEditMaxPrice(room.max_price !== undefined ? String(Math.round(room.max_price)) : "");
+    setRoomEditError(null);
+    setEditingMember(false);
+    setEditingRoom(true);
+  }
+
+  function openMemberEditor() {
+    if (!currentMember) return;
+    if (editingMember) {
+      setEditingMember(false);
+      return;
+    }
+    setMyArtists([...currentMember.artists]);
+    setMyStart(currentMember.start_date ?? "");
+    setMyEnd(currentMember.end_date ?? "");
+    setMyMaxPrice(
+      currentMember.max_price !== undefined ? String(Math.round(currentMember.max_price)) : "",
+    );
+    setMemberEditError(null);
+    setEditingRoom(false);
+    setEditingMember(true);
+  }
+
+  async function handleSaveRoom(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!room) return;
+    if (!editPlace.trim()) {
+      setRoomEditError("Enter a city or place for your group.");
+      return;
+    }
+    if (editStart && editEnd && editEnd < editStart) {
+      setRoomEditError("End date must be on or after the start date.");
+      return;
+    }
+    const parsedPrice = editMaxPrice.trim() ? Number(editMaxPrice) : undefined;
+    if (parsedPrice !== undefined && (!Number.isFinite(parsedPrice) || parsedPrice <= 0)) {
+      setRoomEditError("Max price must be greater than $0.");
+      return;
+    }
+
+    setSavingRoom(true);
+    setRoomEditError(null);
+    try {
+      const updated = await updateGroupRoom(roomId, {
+        place: editPlace.trim(),
+        start_date: editStart || undefined,
+        end_date: editEnd || undefined,
+        clear_dates: !editStart && !editEnd,
+        max_price: parsedPrice,
+        clear_max_price: parsedPrice === undefined,
+      });
+      setRoom(updated);
+      setEditingRoom(false);
+    } catch (caught) {
+      setRoomEditError(
+        caught instanceof SearchRefused
+          ? caught.message
+          : "Could not update the room search. Try again.",
+      );
+    } finally {
+      setSavingRoom(false);
+    }
+  }
+
+  async function handleSaveMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!currentMember) return;
+    if (myArtists.length === 0) {
+      setMemberEditError("Keep at least one Artist in your Taste.");
+      return;
+    }
+    if (myStart && myEnd && myEnd < myStart) {
+      setMemberEditError("End date must be on or after the start date.");
+      return;
+    }
+    const parsedPrice = myMaxPrice.trim() ? Number(myMaxPrice) : undefined;
+    if (parsedPrice !== undefined && (!Number.isFinite(parsedPrice) || parsedPrice <= 0)) {
+      setMemberEditError("Max price must be greater than $0.");
+      return;
+    }
+
+    setSavingMember(true);
+    setMemberEditError(null);
+    try {
+      const updated = await updateGroupMember(roomId, currentMember.id, {
+        artists: myArtists,
+        start_date: myStart || undefined,
+        end_date: myEnd || undefined,
+        clear_dates: !myStart && !myEnd,
+        max_price: parsedPrice,
+        clear_max_price: parsedPrice === undefined,
+      });
+      setRoom(updated);
+      setEditingMember(false);
+    } catch (caught) {
+      setMemberEditError(
+        caught instanceof SearchRefused
+          ? caught.message
+          : "Could not update your Artists. Try again.",
+      );
+    } finally {
+      setSavingMember(false);
+    }
+  }
+
   async function handleCopyInvite() {
     setCopyError(null);
     const url = groupShareUrl(roomId);
@@ -223,32 +351,13 @@ export function GroupRoom({ roomId }: { roomId: string }) {
     }
   }
 
-  function addJoinArtists() {
-    const parsed = parseArtistsInput(joinArtistInput);
-    if (parsed.length === 0) return;
-    setJoinArtists((current) => mergeArtists(current, parsed));
-    setJoinArtistInput("");
-    setJoinError(null);
-  }
-
-  function toggleJoinQuickArtist(name: string) {
-    const lower = name.toLowerCase();
-    setJoinArtists((current) =>
-      current.some((a) => a.toLowerCase() === lower)
-        ? current.filter((a) => a.toLowerCase() !== lower)
-        : mergeArtists(current, [name]),
-    );
-    setJoinError(null);
-  }
-
   async function handleJoin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const combined = mergeArtists(joinArtists, parseArtistsInput(joinArtistInput));
     if (!joinName.trim()) {
       setJoinError("Enter your name to join this room.");
       return;
     }
-    if (combined.length === 0) {
+    if (joinArtists.length === 0) {
       setJoinError("Add at least one Artist to your Taste.");
       return;
     }
@@ -267,7 +376,7 @@ export function GroupRoom({ roomId }: { roomId: string }) {
     try {
       const joined = await joinGroupRoom(roomId, {
         name: joinName.trim(),
-        artists: combined,
+        artists: joinArtists,
         start_date: joinStart || undefined,
         end_date: joinEnd || undefined,
         max_price: parsedPrice,
@@ -277,7 +386,6 @@ export function GroupRoom({ roomId }: { roomId: string }) {
       setRoom(joined.room);
       setJoinName("");
       setJoinArtists([]);
-      setJoinArtistInput("");
       setJoinStart("");
       setJoinEnd("");
       setJoinMaxPrice("");
@@ -314,6 +422,7 @@ export function GroupRoom({ roomId }: { roomId: string }) {
       const updated = await leaveGroupRoom(roomId, currentMember.id);
       forgetRoomMemberId(roomId);
       setMemberId(null);
+      setEditingMember(false);
       setRoom(updated);
     } catch (caught) {
       setActionError(
@@ -429,6 +538,26 @@ export function GroupRoom({ roomId }: { roomId: string }) {
                 {copied ? <Check aria-hidden size={17} /> : <Copy aria-hidden size={17} />}
                 {copied ? "Link copied" : "Copy invite link"}
               </button>
+              <button
+                type="button"
+                className="group-leave-btn"
+                aria-expanded={editingRoom}
+                onClick={openRoomEditor}
+              >
+                <SlidersHorizontal aria-hidden size={16} />
+                Edit search
+              </button>
+              {currentMember && (
+                <button
+                  type="button"
+                  className="group-leave-btn"
+                  aria-expanded={editingMember}
+                  onClick={openMemberEditor}
+                >
+                  <Music2 aria-hidden size={16} />
+                  Edit my artists
+                </button>
+              )}
               {currentMember && (
                 <button
                   type="button"
@@ -489,6 +618,191 @@ export function GroupRoom({ roomId }: { roomId: string }) {
       </header>
 
       <div className="group-room-body">
+        {editingRoom && (
+          <section className="group-join-card group-edit-card" aria-labelledby="group-edit-search-h">
+            <div className="group-join-head">
+              <h2 id="group-edit-search-h">
+                <SlidersHorizontal aria-hidden size={20} />
+                Edit room search
+              </h2>
+              <p>
+                Change the place, date range, or budget cap for everyone in this room.
+              </p>
+            </div>
+            <form className="group-join-form" onSubmit={handleSaveRoom} noValidate>
+              <div className="group-join-grid">
+                <div className="group-field">
+                  <label htmlFor="edit-room-place">
+                    <MapPin aria-hidden size={15} />
+                    Place
+                  </label>
+                  <input
+                    id="edit-room-place"
+                    type="text"
+                    required
+                    maxLength={200}
+                    value={editPlace}
+                    onChange={(e) => setEditPlace(e.target.value)}
+                  />
+                </div>
+                <div className="group-field">
+                  <label htmlFor="edit-room-price">
+                    <DollarSign aria-hidden size={15} />
+                    Max ticket price $ (optional)
+                  </label>
+                  <input
+                    id="edit-room-price"
+                    type="number"
+                    min={1}
+                    max={10000}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder="No limit"
+                    value={editMaxPrice}
+                    onChange={(e) => setEditMaxPrice(e.target.value)}
+                  />
+                </div>
+                <div className="group-field">
+                  <label htmlFor="edit-room-start">
+                    <Calendar aria-hidden size={15} />
+                    From date (optional)
+                  </label>
+                  <input
+                    id="edit-room-start"
+                    type="date"
+                    min={today}
+                    value={editStart}
+                    onChange={(e) => setEditStart(e.target.value)}
+                  />
+                </div>
+                <div className="group-field">
+                  <label htmlFor="edit-room-end">Until date (optional)</label>
+                  <input
+                    id="edit-room-end"
+                    type="date"
+                    min={editStart || today}
+                    value={editEnd}
+                    onChange={(e) => setEditEnd(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {roomEditError && (
+                <p className="group-error" role="alert">
+                  {roomEditError}
+                </p>
+              )}
+
+              <div className="group-edit-actions">
+                {(editStart || editEnd) && (
+                  <button
+                    type="button"
+                    className="group-quiet-btn"
+                    onClick={() => {
+                      setEditStart("");
+                      setEditEnd("");
+                    }}
+                  >
+                    Clear dates
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="group-quiet-btn"
+                  onClick={() => setEditingRoom(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="group-primary-btn" disabled={savingRoom}>
+                  {savingRoom ? "Updating room..." : "Update search"}
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        {editingMember && currentMember && (
+          <section className="group-join-card group-edit-card" aria-labelledby="group-edit-member-h">
+            <div className="group-join-head">
+              <h2 id="group-edit-member-h">
+                <Music2 aria-hidden size={20} />
+                Edit your Artists &amp; preferences
+              </h2>
+              <p>
+                Add more Artists—related Artists appear right away so you can build out your Taste
+                in seconds.
+              </p>
+            </div>
+            <form className="group-join-form" onSubmit={handleSaveMember} noValidate>
+              <GroupArtistPicker
+                id="edit-my-artists"
+                label="Your Taste (Artists)"
+                artists={myArtists}
+                onChange={(next) => {
+                  setMyArtists(next);
+                  setMemberEditError(null);
+                }}
+              />
+
+              <div className="group-join-grid group-edit-prefs-grid">
+                <div className="group-field">
+                  <label htmlFor="edit-my-start">Available from (optional)</label>
+                  <input
+                    id="edit-my-start"
+                    type="date"
+                    min={today}
+                    value={myStart}
+                    onChange={(e) => setMyStart(e.target.value)}
+                  />
+                </div>
+                <div className="group-field">
+                  <label htmlFor="edit-my-end">Available until (optional)</label>
+                  <input
+                    id="edit-my-end"
+                    type="date"
+                    min={myStart || today}
+                    value={myEnd}
+                    onChange={(e) => setMyEnd(e.target.value)}
+                  />
+                </div>
+                <div className="group-field">
+                  <label htmlFor="edit-my-price">Your max price $ (optional)</label>
+                  <input
+                    id="edit-my-price"
+                    type="number"
+                    min={1}
+                    max={10000}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder="No limit"
+                    value={myMaxPrice}
+                    onChange={(e) => setMyMaxPrice(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {memberEditError && (
+                <p className="group-error" role="alert">
+                  {memberEditError}
+                </p>
+              )}
+
+              <div className="group-edit-actions">
+                <button
+                  type="button"
+                  className="group-quiet-btn"
+                  onClick={() => setEditingMember(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="group-primary-btn" disabled={savingMember}>
+                  {savingMember ? "Saving..." : "Save & re-rank"}
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+
         {canJoin && (
           <section className="group-join-card" aria-labelledby="group-join-heading">
             <div className="group-join-head">
@@ -549,88 +863,15 @@ export function GroupRoom({ roomId }: { roomId: string }) {
                 </div>
               </div>
 
-              <div className="group-taste-block">
-                <div className="group-taste-head">
-                  <label htmlFor="join-artists">Your Taste (Artists)</label>
-                  {savedTaste && savedTaste.artists.length > 0 && (
-                    <button
-                      type="button"
-                      className="group-prefill-btn"
-                      onClick={() => {
-                        setJoinArtists((c) => mergeArtists(c, savedTaste.artists));
-                        setJoinError(null);
-                      }}
-                    >
-                      <Sparkles aria-hidden size={15} />
-                      Use saved Taste ({savedTaste.artists.length})
-                    </button>
-                  )}
-                </div>
-
-                <div className="group-artist-entry">
-                  <input
-                    id="join-artists"
-                    type="text"
-                    placeholder="Type Artists (comma separated)"
-                    value={joinArtistInput}
-                    onChange={(e) => setJoinArtistInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addJoinArtists();
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="group-add-btn"
-                    onClick={addJoinArtists}
-                    aria-label="Add Artists to join"
-                  >
-                    <Plus aria-hidden size={18} />
-                    Add
-                  </button>
-                </div>
-
-                {joinArtists.length > 0 && (
-                  <ul className="group-artist-chips" aria-label="Your selected Artists">
-                    {joinArtists.map((artist) => (
-                      <li key={artist} className="group-artist-chip">
-                        <span>{artist}</span>
-                        <button
-                          type="button"
-                          aria-label={`Remove ${artist}`}
-                          onClick={() =>
-                            setJoinArtists((c) => c.filter((item) => item !== artist))
-                          }
-                        >
-                          <X aria-hidden size={14} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                <div className="group-quick-picks">
-                  <span className="group-quick-label">Quick picks:</span>
-                  {QUICK_PICK_ARTISTS.map((artist) => {
-                    const active = joinArtists.some(
-                      (a) => a.toLowerCase() === artist.toLowerCase(),
-                    );
-                    return (
-                      <button
-                        key={artist}
-                        type="button"
-                        className="group-quick-chip"
-                        aria-pressed={active}
-                        onClick={() => toggleJoinQuickArtist(artist)}
-                      >
-                        {artist}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <GroupArtistPicker
+                id="join-artists"
+                label="Your Taste (Artists)"
+                artists={joinArtists}
+                onChange={(next) => {
+                  setJoinArtists(next);
+                  setJoinError(null);
+                }}
+              />
 
               {joinError && (
                 <p className="group-error" role="alert">
@@ -698,11 +939,11 @@ export function GroupRoom({ roomId }: { roomId: string }) {
               <h3>No Concerts fit the current dates and budget</h3>
               <p>
                 Every Concert fact comes from Ticketmaster &amp; JamBase. Try widening the dates or
-                starting a fresh room.
+                updating the room search.
               </p>
-              <Link href="/g" className="group-primary-btn">
-                Start another Group Room
-              </Link>
+              <button type="button" className="group-primary-btn" onClick={openRoomEditor}>
+                Edit room search
+              </button>
             </div>
           ) : (
             <ol className="group-grid">

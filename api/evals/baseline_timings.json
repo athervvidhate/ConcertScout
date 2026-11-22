@@ -1,0 +1,8 @@
+{
+  "sample_count": 158,
+  "p50_total_ms": 12194.7,
+  "p95_total_ms": 19160.3,
+  "first_date": "2026-11-05",
+  "last_date": "2026-11-09",
+  "note": "Measured cold-capture Searches recorded in api/evals/snapshots/ (unwarmed provider caches)."
+}
