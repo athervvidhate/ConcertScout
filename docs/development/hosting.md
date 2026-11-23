@@ -80,8 +80,8 @@ The build refuses missing API URLs, invalid or local API bases and published bot
 
 ## Deploying
 
-- Both `concert-scout-ai` (root `frontend`) and `concert-scout-api` (root `api`) are connected to `athervvidhate/ConcertScout` on GitHub. Merging into `main` deploys Production for both services (`frontend/vercel.json` also deploys `development` to `https://dev.concertscout.app`; `api/vercel.json` deploys `main` only).
-- `api/vercel.json` keeps `evals/searches.yaml` and `evals/baseline_timings.json` for `/lab` while excluding `evals/snapshots/**`, eval scripts, tests, and `.env*` from the function bundle.
+- API: run `vercel deploy --prod --yes -p concert-scout-api` from `api/` (or connect `concert-scout-api` to GitHub with root `api`, where `api/vercel.json` enables `main` only). `api/vercel.json` and `api/.vercelignore` keep `evals/searches.yaml` and `evals/baseline_timings.json` for `/lab` while excluding `evals/snapshots/**`, eval scripts, tests, and `.env*` from the upload.
+- Frontend: `concert-scout-ai` is connected to Git, and Vercel blocks CLI uploads from it on a commit-author check. Merging into `main` deploys Production.
 
 ## Inventory and current evidence — November 6, 2026
 
