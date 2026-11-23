@@ -5,4 +5,7 @@
 .pytest_cache
 .ruff_cache
 tests
-evals
+evals/snapshots
+evals/*.py
+evals/*.html
+evals/__pycache__
