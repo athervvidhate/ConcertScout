@@ -62,7 +62,8 @@ class Concert(BaseModel):
     name: Text
     url: str
     artists: list[Artist]
-    source: Literal["ticketmaster", "jambase"] = "ticketmaster"
+    source: Literal["ticketmaster", "jambase", "venue_calendar", "eventbrite"] = "ticketmaster"
+    sold_out: bool | None = None
     date: dt.date | None = None
     time: dt.time | None = None
     # The venue's IANA zone. `date` and `time` already read in it.
@@ -79,6 +80,10 @@ class Concert(BaseModel):
     festival: bool = False
 
 
+# The effective ranking level assembly gave a Recommendation, shown as a short label in the UI.
+Grade = Literal["seed", "strong", "fair"]
+
+
 class Recommendation(BaseModel):
     """One Artist on a Poster. `also` holds the same Artist's other source-backed dates."""
 
@@ -86,6 +91,8 @@ class Recommendation(BaseModel):
     reason: str
     # The ranker's level, 0 to 3. A seed or a fallback Recommendation has none.
     score: int | None = None
+    # The effective ranking level assembly ranked by, or None when ungraded.
+    grade: Grade | None = None
     also: list[Concert] = []
     # A festival's Lineup entries that suit the Search, best first, named as the source names them.
     lineup_match: list[str] = []

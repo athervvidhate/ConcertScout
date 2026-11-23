@@ -1,6 +1,7 @@
 import { EventSourceParserStream } from "eventsource-parser/stream";
 
 import { viewerZone } from "@/lib/format";
+import type { SearchInspect } from "@/lib/lab";
 
 // Locally the API sits on the same machine as the page, so a phone on the network finds it too.
 function localApi(): string {
@@ -25,7 +26,8 @@ export type Concert = {
   name: string;
   url: string;
   artists: Artist[];
-  source?: "ticketmaster" | "jambase";
+  source?: "ticketmaster" | "jambase" | "venue_calendar" | "eventbrite";
+  sold_out?: boolean;
   date?: string;
   time?: string;
   // The venue's IANA zone. `date` and `time` already read in it.
@@ -41,11 +43,15 @@ export type Concert = {
   festival?: boolean;
 };
 
+// The effective ranking level assembly gave a Recommendation, or absent when ungraded.
+export type Grade = "seed" | "strong" | "fair";
+
 // `also` holds the same Artist's other dates. `lineup_match` names a festival's Artists who suit the
 // Search, best first, and `reason` describes the first of them.
 export type Recommendation = {
   concert: Concert;
   score?: number;
+  grade?: Grade;
   reason?: string;
   also?: Concert[];
   lineup_match?: string[];
@@ -122,6 +128,7 @@ export type SearchEvent =
   | { event: "unanswerable"; data: Unanswerable }
   | { event: "pool"; data: { total: number } }
   | { event: "candidates"; data: Candidates }
+  | { event: "inspect"; data: SearchInspect }
   | { event: "poster"; data: { recommendations: Recommendation[] } }
   | { event: "shareable"; data: { search_id: string } }
   | { event: "elsewhere"; data: Elsewhere }

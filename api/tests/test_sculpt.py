@@ -357,6 +357,9 @@ async def test_rocchio_boost_and_exclude_grades_only_new_candidates_and_explains
         "pool_scores",
         AsyncMock(return_value={"steered twin": 0.95}),
     )
+    from concert_scout import lab
+
+    monkeypatch.setattr(lab, "insert_telemetry_rows", AsyncMock(return_value=1))
 
     redis = FakeAsyncRedis()
     app = create_app(

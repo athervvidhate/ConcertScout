@@ -1,7 +1,7 @@
 "use client";
 
 import { Dialog } from "@base-ui/react/dialog";
-import { LayoutGrid, List, X } from "lucide-react";
+import { LayoutGrid, List, SlidersHorizontal, X } from "lucide-react";
 import {
   AnimatePresence,
   type HTMLMotionProps,
@@ -23,7 +23,9 @@ import {
 import { AnimatedCount } from "@/components/animated-count";
 import { AddToCalendar } from "@/components/add-to-calendar";
 import { PosterDials } from "@/components/poster-dials";
+import { RankingInspector } from "@/components/ranking-inspector";
 import { Ticket } from "@/components/ticket";
+import { UndergroundBadge } from "@/components/underground-badge";
 import { listenTo, matchLine, nameOf } from "@/lib/lineup";
 import { WorkingSearch } from "@/components/working-search";
 import { SaveButton } from "@/components/save-button";
@@ -47,9 +49,12 @@ import {
 } from "@/lib/sculpt";
 import { useTicketMotion } from "@/lib/use-ticket-motion";
 import { formatDate, formatConcertTime } from "@/lib/format";
+import { gradeLabel } from "@/lib/grade";
+import { useInspectorEnabled, type SearchInspect } from "@/lib/lab";
 import { removeSaved, saveConcert, useDecisions } from "@/lib/saved";
 import type { Candidates, Reading, Recommendation } from "@/lib/search";
 import { showTitle } from "@/lib/show-title";
+import { hasUndergroundBadge } from "@/lib/underground";
 
 type View = "grid" | "list";
 const VIEW_KEY = "concert-scout-view";
@@ -87,6 +92,8 @@ type Props = {
   onSculpt?: (next: SculptState) => void;
   onResetSculpt?: () => void;
   onRerunSearch?: () => void;
+  /** Optional under-the-hood ranking signals from the `inspect` SSE event. */
+  inspect?: SearchInspect | null;
 };
 export function Poster({
   candidates,
@@ -111,6 +118,7 @@ export function Poster({
   onSculpt,
   onResetSculpt,
   onRerunSearch,
+  inspect = null,
 }: Props) {
   const reduced = useReducedMotion();
   const [cached] = useState(!searching && hasPoster);
@@ -133,6 +141,13 @@ export function Poster({
   const arrival = recommendations.findIndex((r) => r.concert.id === openConcert);
   const [selected, setSelected] = useState(Math.max(arrival, 0));
   const [open, setOpen] = useState(arrival >= 0);
+  const inspectorEnabled = useInspectorEnabled();
+  const [inspectOpen, setInspectOpen] = useState(false);
+  const inspectButton = useRef<HTMLButtonElement>(null);
+  const closeInspector = useCallback(() => {
+    setInspectOpen(false);
+    inspectButton.current?.focus();
+  }, []);
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState<Set<string>>(() => new Set());
@@ -371,6 +386,19 @@ export function Poster({
                     link={() => shareLink()}
                   />
                 )}
+                {inspect && inspectorEnabled && (
+                  <button
+                    ref={inspectButton}
+                    type="button"
+                    className="inspector-toggle"
+                    aria-expanded={inspectOpen}
+                    aria-controls="ranking-inspector"
+                    onClick={() => setInspectOpen((was) => !was)}
+                  >
+                    <SlidersHorizontal aria-hidden size={17} />
+                    <span>Inspect ranking</span>
+                  </button>
+                )}
                 <div
                   className="views"
                   role="group"
@@ -426,6 +454,13 @@ export function Poster({
                   onChange={onSculpt}
                 />
               )}
+              {inspect && inspectorEnabled && (
+                <RankingInspector
+                  inspect={inspect}
+                  open={inspectOpen}
+                  onClose={closeInspector}
+                />
+              )}
               <Dialog.Root
                 open={open}
                 onOpenChange={(next) => {
@@ -460,6 +495,7 @@ export function Poster({
                         .filter(Boolean)
                         .join(" · ");
                       const bill = matchLine(r) ?? showTitle(concert, name);
+                      const gradeText = gradeLabel(r.grade);
                       if (recommendations.length === 1 && view === "grid")
                         return (
                           <article
@@ -554,6 +590,16 @@ export function Poster({
                           )}
                           {bookmark(r)}
                           <div className="card-body">
+                            {(gradeText || hasUndergroundBadge(concert)) && (
+                              <div className="card-badges">
+                                {gradeText && (
+                                  <p className="card-grade" data-grade={r.grade}>
+                                    {gradeText}
+                                  </p>
+                                )}
+                                <UndergroundBadge concert={concert} variant="card" />
+                              </div>
+                            )}
                             <h3 className="card-name">{name}</h3>
                             {bill && <p className="card-bill">{bill}</p>}
                             <p className="card-meta">{meta}</p>

@@ -22,6 +22,7 @@ from concert_scout import (
     cobilling,
     embeddings,
     interpreter,
+    lab,
     limits,
     matching,
     pool,
@@ -194,7 +195,9 @@ async def _interpreted(text: str, today: dt.date, services: Services) -> Reading
     words = " ".join(text.split()).casefold()
     key = _answer_key("interpret", interpreter.INSTRUCTIONS, today.isoformat(), words)
     if cached := await cache.read(services.redis, key, Reading):
+        telemetry.record_cache(True)
         return cached
+    telemetry.record_cache(False)
     reading = await interpret(text, today, services.model)
     await cache.write(services.redis, key, reading, ANSWER_TTL)
     return reading
@@ -215,7 +218,9 @@ async def _graded(
     taste = str(ranker.taste(reading))
     key = _answer_key("grade", jev.MODEL, jev.GUIDE, jev.QUESTION, *jev.LEVELS, taste, *as_json)
     if cached := await cache.read(services.redis, key, Levels):
+        telemetry.record_cache(True)
         return cached.levels
+    telemetry.record_cache(False)
     levels = await ranker.grade(services.jev, reading, rows)
     await cache.write(services.redis, key, Levels(levels=levels), ANSWER_TTL)
     return levels
@@ -226,7 +231,9 @@ async def _explained(
 ) -> list[str]:
     key = _answer_key("explain", ranker.REASONS, ranker.reasons_prompt(reading, shown))
     if cached := await cache.read(services.redis, key, Explained):
+        telemetry.record_cache(True)
         return cached.reasons
+    telemetry.record_cache(False)
     reasons = await ranker.explain(reading, shown, services.model)
     await cache.write(services.redis, key, Explained(reasons=reasons), ANSWER_TTL)
     return reasons
@@ -337,6 +344,7 @@ async def _filter_only_from_session(
         Candidates(names=matching.candidate_names(shortlist), total=len(shortlist)),
     )
 
+    shortlist_grades: dict[str, int] = {}
     if not shortlist:
         recommendations: list[Recommendation] = []
     elif not session.has_taste:
@@ -359,6 +367,12 @@ async def _filter_only_from_session(
             for rec in poster_recs
         ]
 
+    telemetry.record_funnel(
+        pool_total=len(filtered),
+        shortlist_total=len(shortlist),
+        picks_total=len(recommendations),
+    )
+
     sid = search_id or share.new_search_id()
     updated_session = session.model_copy(update={"reading": reading})
     try:
@@ -366,6 +380,17 @@ async def _filter_only_from_session(
     except RedisError as exc:
         logger.warning("Refined pool session not kept: %s", type(exc).__name__)
 
+    yield _event(
+        "inspect",
+        lab.build_inspect(
+            reading,
+            len(filtered),
+            shortlist,
+            recommendations,
+            shortlist_grades,
+            telemetry.step_timings_ms(),
+        ),
+    )
     yield _event("poster", Poster(recommendations=recommendations))
 
 
@@ -618,6 +643,22 @@ async def _steps(
             except RedisError as exc:
                 logger.warning("Pool session not kept for sculpting: %s", type(exc).__name__)
 
+        telemetry.record_funnel(
+            pool_total=len(concerts),
+            shortlist_total=len(shortlist),
+            picks_total=len(recommendations),
+        )
+        yield _event(
+            "inspect",
+            lab.build_inspect(
+                reading,
+                len(concerts),
+                shortlist,
+                recommendations,
+                grades,
+                telemetry.step_timings_ms(),
+            ),
+        )
         yield _event("poster", Poster(recommendations=recommendations))
         if place and taste and not recommendations:
             elsewhere = await _find_elsewhere(reading, place, services, now)
@@ -655,6 +696,12 @@ async def run_search(
                 logger.warning("Search cost is incomplete")
             with anyio.CancelScope(shield=True):
                 await limits.record_spend(services.redis, usage.cost)
+                await lab.record_search(
+                    services.redis,
+                    lab.from_usage(usage),
+                    supabase_client=services.supabase,
+                    supabase_secret_key=services.supabase_secret_key,
+                )
 
 
 async def stream_search(

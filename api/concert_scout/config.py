@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     google_api_key: SecretStr | None = None
     # How far ahead the national JamBase catalog reaches. The Developer plan allows 180.
     jambase_days: int = Field(default=90, ge=1, le=180)
+    # Curated Eventbrite promoter feeds for /sync-underground. Unset, Eventbrite harvest is off.
+    eventbrite_token: SecretStr | None = None
+    eventbrite_organizer_ids: str = ""
 
     redis_url: str = "redis://127.0.0.1:6379/0"
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]

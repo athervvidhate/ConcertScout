@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Literal, Self
 
 import httpx
-from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -23,8 +23,10 @@ from concert_scout import (
     cache,
     clock,
     feedback,
+    group_scout,
     home,
     interpreter,
+    lab,
     limits,
     live_index,
     sculpt,
@@ -34,6 +36,7 @@ from concert_scout import (
     suggest,
     sync,
     taste_profile,
+    underground,
     warm,
 )
 from concert_scout.config import Settings
@@ -57,9 +60,11 @@ from concert_scout.refinement import MAX_POSTER_ARTISTS, MAX_REFINEMENT_CHARS
 from concert_scout.security import Refused, SecurityHeaders
 from concert_scout.sources import (
     embedder,
+    eventbrite,
     geocoder,
     jambase,
     jev,
+    jsonld_venues,
     lastfm,
     listenbrainz,
     musicbrainz,
@@ -317,6 +322,13 @@ def create_app(
         if settings.youtube_api_key
         else None
     )
+    underground_client = jsonld_venues.make_client(transport)
+    eventbrite_client = (
+        eventbrite.make_client(settings.eventbrite_token.get_secret_value(), transport)
+        if settings.eventbrite_token
+        else None
+    )
+    eventbrite_organizers = underground.parse_organizer_ids(settings.eventbrite_organizer_ids)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -343,6 +355,9 @@ def create_app(
             await setlistfm_client.aclose()
         if youtube_client:
             await youtube_client.aclose()
+        await underground_client.aclose()
+        if eventbrite_client:
+            await eventbrite_client.aclose()
 
     app = FastAPI(title="Concert Scout", lifespan=lifespan)
     app.add_middleware(OneCallerPerRequest)
@@ -350,7 +365,7 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_credentials=True,
         allow_headers=["Content-Type", "Authorization"],
     )
@@ -431,6 +446,9 @@ def create_app(
         if request.url.path.startswith("/search/") and request.url.path.endswith("/sculpt"):
             message = "Check your Poster filters and try again."
             return _failure(422, SearchError(code="invalid_sculpt", message=message))
+        if request.url.path.startswith("/groups"):
+            message = "Check your Group Scout details and try again."
+            return _failure(422, SearchError(code="invalid_group", message=message))
         if request.url.path.startswith("/share"):
             message = "That is not a Search you can share."
             return _failure(422, SearchError(code="invalid_share", message=message))
@@ -482,6 +500,7 @@ def create_app(
         )
     )
     app.include_router(feedback.router(settings, services.redis, transport))
+    app.include_router(group_scout.router(settings, services))
     app.include_router(taste_profile.guest_router(settings, services))
     if accounts_client:
         app.include_router(accounts.router(settings, accounts_client, services))
@@ -491,6 +510,15 @@ def create_app(
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/lab", response_model=lab.LabSummary)
+    async def engineering_lab(response: Response) -> lab.LabSummary:
+        response.headers["Cache-Control"] = "public, max-age=30"
+        return await lab.summarize(
+            services.redis,
+            supabase_client=services.supabase,
+            supabase_secret_key=services.supabase_secret_key,
+        )
 
     @app.get("/examples", response_model=home.Examples, response_model_exclude_none=True)
     async def examples() -> home.Examples:
@@ -524,6 +552,18 @@ def create_app(
         @scheduled.get("/sync")
         async def sync_catalog() -> list[sync.Step]:
             return await sync.run(services, dt.datetime.now(dt.UTC))
+
+        # Curated underground venue calendars and vetted Eventbrite promoters.
+        @scheduled.post("/sync-underground")
+        async def sync_underground() -> list[underground.Step]:
+            return await underground.run(
+                underground_client,
+                services.musicbrainz,
+                services.redis,
+                dt.datetime.now(dt.UTC),
+                eventbrite_client=eventbrite_client,
+                organizer_ids=eventbrite_organizers,
+            )
 
         # Once a week: the live sessions that Watch Live opens from (1 YouTube unit per 50 videos).
         if youtube_client:

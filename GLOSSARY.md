@@ -40,8 +40,8 @@ _Avoid_: Bill
 The Artists in a festival's Lineup who suit the Search, named best first. _Avoid_: score, overlap.
 
 **Recommendation**:
-Concert Scout's judgment that a Concert suits one Search, with the reason why. The same Concert can have different Recommendations in different Searches.
-_Avoid_: Result, suggestion, match
+Concert Scout's judgment that a Concert suits one Search, with its grade label ("You named them" for a seed Artist, "Close match" for strong, "Worth a listen" for fair; none when ungraded) and the reason why. The same Concert can have different Recommendations in different Searches.
+_Avoid_: Result, suggestion, match, score
 
 **Reading**:
 What a Search was taken to mean: its Taste, place, Region and dates. The interpreter writes it, and a person can correct it.
